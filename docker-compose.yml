@@ -1,0 +1,89 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-monopoly}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-monopoly}
+      POSTGRES_DB: ${POSTGRES_DB:-monopoly}
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-monopoly}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  api:
+    build:
+      context: .
+      dockerfile: api/Dockerfile
+    restart: unless-stopped
+    environment:
+      NODE_ENV: ${NODE_ENV:-development}
+      PORT: 3000
+      DATABASE_URL: postgres://${POSTGRES_USER:-monopoly}:${POSTGRES_PASSWORD:-monopoly}@postgres:5432/${POSTGRES_DB:-monopoly}
+      REDIS_URL: redis://redis:6379
+      BOT_TOKEN: ${BOT_TOKEN}
+      BOT_URL: http://bot:3001
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:5173}
+    ports:
+      - "3000:3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./api/src:/app/api/src
+      - ./shared:/app/shared
+
+  bot:
+    build:
+      context: .
+      dockerfile: bot/Dockerfile
+    restart: unless-stopped
+    environment:
+      NODE_ENV: ${NODE_ENV:-development}
+      BOT_TOKEN: ${BOT_TOKEN}
+      WEBAPP_URL: ${WEBAPP_URL:-http://localhost:5173}
+      API_URL: http://api:3000
+      PORT: 3001
+    ports:
+      - "3001:3001"
+    depends_on:
+      - api
+    volumes:
+      - ./bot/src:/app/bot/src
+
+  web:
+    build:
+      context: .
+      dockerfile: web/Dockerfile
+    restart: unless-stopped
+    environment:
+      VITE_API_URL: ${VITE_API_URL:-http://localhost:3000}
+      VITE_WS_URL: ${VITE_WS_URL:-ws://localhost:3000/ws}
+    ports:
+      - "5174:5173"
+    volumes:
+      - ./web/src:/app/web/src
+      - ./web/public:/app/web/public
+      - ./web/index.html:/app/web/index.html
+      - ./shared:/app/shared
+
+volumes:
+  pg_data:
