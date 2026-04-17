@@ -184,7 +184,8 @@ export type ClientMessage =
   | { type: "payJail" }
   | { type: "useJailCard" }
   | { type: "chat"; text: string }
-  | { type: "selectToken"; tokenId: string };
+  | { type: "selectToken"; tokenId: string }
+  | { type: "leave" };
 
 // ---------- Server → Client messages ----------
 export type ServerMessage =

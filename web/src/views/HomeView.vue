@@ -14,6 +14,12 @@ const { haptic, userName, setUserName, tg } = useTelegram();
 const editingName = ref(false);
 const nameDraft = ref(userName.value);
 
+const { close: closeMiniApp } = useTelegram();
+
+function closeApp() {
+  closeMiniApp();
+}
+
 function go(name: string) {
   haptic("light");
   router.push({ name });
@@ -105,6 +111,9 @@ function saveName() {
 
     <footer class="home__footer">
       <p>{{ t("home.hint") }}</p>
+      <button v-if="tg" class="btn btn--ghost close-app" @click="closeApp">
+        🚪 {{ locale === "ru" ? "Закрыть" : "Close Mini App" }}
+      </button>
     </footer>
   </div>
 </template>
@@ -214,6 +223,15 @@ function saveName() {
   color: var(--text-mute);
   font-size: 12px;
   line-height: 1.5;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+.close-app {
+  font-size: 13px;
+  padding: 10px 20px;
+  margin-top: 8px;
 }
 
 .name-bar {

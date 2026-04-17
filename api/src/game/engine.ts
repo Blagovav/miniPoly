@@ -128,6 +128,37 @@ export function removePlayer(room: RoomState, playerId: string): void {
   reassignHostIfNeeded(room);
 }
 
+/** Игрок вышел из активной партии — объявляем банкротом и передаём имущество банку. */
+export function leaveActiveGame(room: RoomState, playerId: string): void {
+  if (room.phase === "lobby" || room.phase === "ended") return;
+  const p = room.players.find((pl) => pl.id === playerId);
+  if (!p || p.bankrupt) return;
+  p.bankrupt = true;
+  p.cash = 0;
+  // освобождаем его собственность
+  for (const idx in room.properties) {
+    if (room.properties[idx].ownerId === p.id) delete room.properties[idx];
+  }
+  log(room, { en: `${p.name} left the game`, ru: `${p.name} вышел из игры` });
+  // если ушёл текущий игрок — пропускаем ход
+  if (room.players[room.currentTurn]?.id === p.id) {
+    room.phase = "rolling";
+    room.dice = null;
+    room.doublesInARow = 0;
+    do {
+      room.currentTurn = (room.currentTurn + 1) % room.players.length;
+    } while (room.players[room.currentTurn].bankrupt);
+  }
+  // проверка победы
+  const alive = room.players.filter((pl) => !pl.bankrupt);
+  if (alive.length <= 1 && room.players.length > 1) {
+    room.phase = "ended";
+    room.winnerId = alive[0]?.id ?? null;
+    if (alive[0]) log(room, { en: `${alive[0].name} wins!`, ru: `${alive[0].name} победил!` });
+  }
+  reassignHostIfNeeded(room);
+}
+
 /** Сменить токен игрока (только в лобби). */
 export function selectToken(room: RoomState, playerId: string, tokenId: string): boolean {
   if (room.phase !== "lobby") return false;

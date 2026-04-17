@@ -99,17 +99,29 @@ function selectToken(tokenId: string) {
   haptic("light");
   ws.send({ type: "selectToken", tokenId });
 }
+
+function leaveRoom() {
+  const inGame = game.room && game.room.phase !== "lobby" && game.room.phase !== "ended";
+  if (inGame) {
+    const ok = confirm("Выйти из партии? Ты вылетишь из игры и потеряешь собственность.");
+    if (!ok) return;
+  }
+  haptic("medium");
+  ws.send({ type: "leave" });
+  setTimeout(() => router.replace({ name: "home" }), 100);
+}
 </script>
 
 <template>
   <div class="room">
     <header class="room__head">
-      <button class="btn btn--ghost back" @click="router.replace({ name: 'home' })">←</button>
+      <button class="btn btn--ghost back" @click="leaveRoom" :title="t('actions.back')">←</button>
       <div class="room__id">
         <span class="label">Room</span>
         <span class="code">{{ id }}</span>
       </div>
       <div v-if="game.lastError" class="error">{{ game.lastError }}</div>
+      <button class="btn btn--ghost leave" @click="leaveRoom">🚪 Exit</button>
     </header>
 
     <!-- Lobby state -->
@@ -201,6 +213,12 @@ function selectToken(tokenId: string) {
   padding: 6px 10px;
   border-radius: 8px;
   font-size: 12px;
+}
+.leave {
+  padding: 8px 12px;
+  font-size: 12px;
+  border-radius: 10px;
+  height: 36px;
 }
 
 .loading {

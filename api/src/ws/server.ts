@@ -7,6 +7,7 @@ import {
   buyCurrentProperty,
   createRoom,
   endTurn,
+  leaveActiveGame,
   reassignHostIfNeeded,
   removePlayer,
   rollAndMove,
@@ -125,6 +126,8 @@ function handleMessage(conn: Conn, ws: WebSocket, msg: ClientMessage): void {
       return handleChat(conn, msg.text);
     case "selectToken":
       return handleSelectToken(conn, msg.tokenId);
+    case "leave":
+      return handleLeave(conn);
     default:
       conn.send({ type: "error", message: "unknown message" });
   }
@@ -290,4 +293,17 @@ function handleSelectToken(conn: Conn, tokenId: string): void {
   if (selectToken(ctx.room, ctx.p.id, tokenId)) {
     sendState(ctx.room.id);
   }
+}
+
+function handleLeave(conn: Conn): void {
+  const ctx = getRoomAndPlayer(conn);
+  if (!ctx || !ctx.p) return;
+  if (ctx.room.phase === "lobby") {
+    removePlayer(ctx.room, ctx.p.id);
+  } else if (ctx.room.phase !== "ended") {
+    leaveActiveGame(ctx.room, ctx.p.id);
+  }
+  sendState(ctx.room.id);
+  conn.roomId = null;
+  conn.playerId = null;
 }
