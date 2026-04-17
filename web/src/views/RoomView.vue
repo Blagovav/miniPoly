@@ -54,6 +54,9 @@ onMounted(() => {
     tgInitData: initData.value,
     name: userName.value || "Player",
   });
+  // Подтянуть список друзей-соигроков для подсветки
+  const { userId } = useTelegram();
+  game.loadFriends(userId.value);
 });
 
 // Redirect to home if room not found
@@ -152,6 +155,15 @@ function respondTrade(accept: boolean) {
   haptic(accept ? "medium" : "light");
   ws.send({ type: "respondTrade", accept });
 }
+
+function mortgage(tileIndex: number) {
+  haptic("light");
+  ws.send({ type: "mortgage", tileIndex });
+}
+function unmortgage(tileIndex: number) {
+  haptic("medium");
+  ws.send({ type: "unmortgage", tileIndex });
+}
 </script>
 
 <template>
@@ -219,6 +231,8 @@ function respondTrade(accept: boolean) {
       :on-build-house="buildHouse"
       :on-sell-house="sellHouse"
       :on-propose-trade="proposeTrade"
+      :on-mortgage="mortgage"
+      :on-unmortgage="unmortgage"
     />
     <PlayerProfileModal :player="profilePlayer" :on-close="closeProfile" />
     <TradeBanner v-if="game.room" :on-respond="respondTrade" />

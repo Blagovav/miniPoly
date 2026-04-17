@@ -221,6 +221,41 @@ export function sellHouse(room: RoomState, playerId: string, tileIndex: number):
   return { ok: true };
 }
 
+/** Заложить собственность банку: +mortgage-стоимость, аренда не берётся. */
+export function mortgageProperty(room: RoomState, playerId: string, tileIndex: number): { ok: boolean; error?: string } {
+  const p = room.players.find((pl) => pl.id === playerId);
+  if (!p) return { ok: false, error: "no player" };
+  const tile = BOARD[tileIndex];
+  if (!tile || (tile.kind !== "street" && tile.kind !== "railroad" && tile.kind !== "utility"))
+    return { ok: false, error: "not property" };
+  const owned = room.properties[tileIndex];
+  if (!owned || owned.ownerId !== playerId) return { ok: false, error: "not your property" };
+  if (owned.mortgaged) return { ok: false, error: "already mortgaged" };
+  if (owned.houses > 0 || owned.hotel) return { ok: false, error: "sell buildings first" };
+  owned.mortgaged = true;
+  p.cash += tile.mortgage;
+  log(room, { en: `${p.name} mortgaged ${tile.name.en} (+$${tile.mortgage})`, ru: `${p.name} заложил ${tile.name.ru} (+$${tile.mortgage})` });
+  return { ok: true };
+}
+
+/** Выкупить заложенную собственность: залог + 10% комиссии. */
+export function unmortgageProperty(room: RoomState, playerId: string, tileIndex: number): { ok: boolean; error?: string } {
+  const p = room.players.find((pl) => pl.id === playerId);
+  if (!p) return { ok: false, error: "no player" };
+  const tile = BOARD[tileIndex];
+  if (!tile || (tile.kind !== "street" && tile.kind !== "railroad" && tile.kind !== "utility"))
+    return { ok: false, error: "not property" };
+  const owned = room.properties[tileIndex];
+  if (!owned || owned.ownerId !== playerId) return { ok: false, error: "not your property" };
+  if (!owned.mortgaged) return { ok: false, error: "not mortgaged" };
+  const cost = Math.ceil(tile.mortgage * 1.1);
+  if (p.cash < cost) return { ok: false, error: "not enough cash" };
+  p.cash -= cost;
+  owned.mortgaged = false;
+  log(room, { en: `${p.name} unmortgaged ${tile.name.en} (-$${cost})`, ru: `${p.name} выкупил залог ${tile.name.ru} (-$${cost})` });
+  return { ok: true };
+}
+
 /** Предложить купить чужую собственность. */
 export function proposeTrade(
   room: RoomState,

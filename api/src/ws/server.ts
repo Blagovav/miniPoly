@@ -9,6 +9,7 @@ import {
   createRoom,
   endTurn,
   leaveActiveGame,
+  mortgageProperty,
   proposeTrade,
   reassignHostIfNeeded,
   removePlayer,
@@ -18,6 +19,7 @@ import {
   sellHouse,
   skipBuy,
   startGame,
+  unmortgageProperty,
 } from "../game/engine";
 import { deleteRoom as mgrDeleteRoom } from "../rooms/manager";
 
@@ -143,6 +145,10 @@ function handleMessage(conn: Conn, ws: WebSocket, msg: ClientMessage): void {
       return handleProposeTrade(conn, msg.tileIndex, msg.cash);
     case "respondTrade":
       return handleRespondTrade(conn, msg.accept);
+    case "mortgage":
+      return handleMortgage(conn, msg.tileIndex);
+    case "unmortgage":
+      return handleUnmortgage(conn, msg.tileIndex);
     default:
       conn.send({ type: "error", message: "unknown message" });
   }
@@ -381,6 +387,28 @@ function handleRespondTrade(conn: Conn, accept: boolean): void {
   const res = resolveTrade(ctx.room, ctx.p.id, accept);
   if (!res.ok) {
     conn.send({ type: "error", message: res.error ?? "can't respond" });
+    return;
+  }
+  sendState(ctx.room.id);
+}
+
+function handleMortgage(conn: Conn, tileIndex: number): void {
+  const ctx = getRoomAndPlayer(conn);
+  if (!ctx || !ctx.p) return;
+  const res = mortgageProperty(ctx.room, ctx.p.id, tileIndex);
+  if (!res.ok) {
+    conn.send({ type: "error", message: res.error ?? "can't mortgage" });
+    return;
+  }
+  sendState(ctx.room.id);
+}
+
+function handleUnmortgage(conn: Conn, tileIndex: number): void {
+  const ctx = getRoomAndPlayer(conn);
+  if (!ctx || !ctx.p) return;
+  const res = unmortgageProperty(ctx.room, ctx.p.id, tileIndex);
+  if (!res.ok) {
+    conn.send({ type: "error", message: res.error ?? "can't unmortgage" });
     return;
   }
   sendState(ctx.room.id);

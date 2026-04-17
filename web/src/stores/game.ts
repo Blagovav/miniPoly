@@ -29,6 +29,23 @@ export const useGameStore = defineStore("game", () => {
     selectedTileIndex.value = idx;
   }
 
+  // Друзья (tgUserId, с кем уже играл) — для подсветки в лобби/игре.
+  const friendIds = ref<Set<number>>(new Set());
+  async function loadFriends(myTgUserId: number | null) {
+    if (!myTgUserId) return;
+    try {
+      const base = (import.meta.env.VITE_API_URL as string) || "";
+      const res = await fetch(`${base}/api/users/${myTgUserId}/coplayers`);
+      if (!res.ok) return;
+      const data = await res.json();
+      const ids = new Set<number>((data.players ?? []).map((p: any) => Number(p.tgUserId)));
+      friendIds.value = ids;
+    } catch {}
+  }
+  function isFriend(tgUserId: number): boolean {
+    return friendIds.value.has(tgUserId);
+  }
+
   const BOARD_LEN = 40;
 
   function animateMove(playerId: string, from: number, to: number) {
@@ -120,6 +137,9 @@ export const useGameStore = defineStore("game", () => {
     animatingPlayerId,
     selectedTileIndex,
     selectTile,
+    friendIds,
+    loadFriends,
+    isFriend,
     me,
     currentPlayer,
     isMyTurn,

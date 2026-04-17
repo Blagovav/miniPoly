@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from "vue";
+import { ref, onMounted } from "vue";
 import { useI18n } from "vue-i18n";
 import { useRouter } from "vue-router";
 import { setLocale } from "../i18n";
@@ -9,7 +9,21 @@ import { useTelegram } from "../composables/useTelegram";
 const { t, locale } = useI18n();
 const router = useRouter();
 const inv = useInventoryStore();
-const { haptic, userName, setUserName, tg } = useTelegram();
+const { haptic, notify, userName, setUserName, tg } = useTelegram();
+
+const bonusAmount = ref<number>(0);
+const bonusToast = ref(false);
+
+onMounted(() => {
+  // Даём ежедневный бонус автоматически при открытии, если сегодня ещё не получал.
+  const got = inv.claimDailyBonus();
+  if (got > 0) {
+    bonusAmount.value = got;
+    bonusToast.value = true;
+    notify("success");
+    setTimeout(() => (bonusToast.value = false), 3500);
+  }
+});
 
 const editingName = ref(false);
 const nameDraft = ref(userName.value);
@@ -124,6 +138,16 @@ function saveName() {
         🚪 {{ locale === "ru" ? "Закрыть" : "Close Mini App" }}
       </button>
     </footer>
+
+    <transition name="bonus">
+      <div v-if="bonusToast" class="bonus-toast">
+        <div class="bonus-toast__icon">🎁</div>
+        <div>
+          <div class="bonus-toast__title">Ежедневный бонус</div>
+          <div class="bonus-toast__val">+{{ bonusAmount }} 🪙</div>
+        </div>
+      </div>
+    </transition>
   </div>
 </template>
 
@@ -243,6 +267,27 @@ function saveName() {
   padding: 10px 20px;
   margin-top: 8px;
 }
+.bonus-toast {
+  position: fixed;
+  top: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 18px;
+  background: linear-gradient(135deg, rgba(251, 191, 36, 0.2), var(--surface-strong));
+  border: 1px solid var(--gold);
+  border-radius: 16px;
+  backdrop-filter: blur(20px);
+  z-index: 90;
+  box-shadow: 0 20px 50px -15px rgba(251, 191, 36, 0.5);
+}
+.bonus-toast__icon { font-size: 28px; }
+.bonus-toast__title { font-size: 11px; text-transform: uppercase; color: var(--text-dim); letter-spacing: 0.1em; }
+.bonus-toast__val { font-weight: 800; font-size: 18px; color: var(--gold); margin-top: 2px; }
+.bonus-enter-active, .bonus-leave-active { transition: transform 0.3s cubic-bezier(0.3, 1.2, 0.4, 1), opacity 0.2s; }
+.bonus-enter-from, .bonus-leave-to { transform: translate(-50%, -30px); opacity: 0; }
 
 .name-bar {
   display: flex;

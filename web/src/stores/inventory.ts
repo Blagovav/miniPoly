@@ -8,6 +8,7 @@ interface StoredInventory {
   owned: string[];
   equipped: { token: string; theme: string };
   serverUnlocks: string[]; // разблокировано за Stars (подгружается с сервера)
+  lastBonusDate: string | null; // yyyy-mm-dd последнего дейли-бонуса
 }
 
 function load(): StoredInventory {
@@ -20,6 +21,7 @@ function load(): StoredInventory {
         owned: parsed.owned ?? [],
         equipped: parsed.equipped ?? { token: "token-car", theme: "theme-classic" },
         serverUnlocks: parsed.serverUnlocks ?? [],
+        lastBonusDate: parsed.lastBonusDate ?? null,
       };
     }
   } catch {}
@@ -31,7 +33,15 @@ function load(): StoredInventory {
     ],
     equipped: { token: "token-car", theme: "theme-classic" },
     serverUnlocks: [],
+    lastBonusDate: null,
   };
+}
+
+const DAILY_BONUS = 1000;
+
+function todayISO(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
 export const useInventoryStore = defineStore("inventory", () => {
@@ -77,5 +87,20 @@ export const useInventoryStore = defineStore("inventory", () => {
     state.value.coins += n;
   }
 
-  return { coins, owned, equippedToken, equippedTheme, buy, equip, addCoins, syncServerUnlocks };
+  /** Даёт ежедневный бонус, если сегодня ещё не получали. Возвращает сумму (0 если уже получал). */
+  function claimDailyBonus(): number {
+    const today = todayISO();
+    if (state.value.lastBonusDate === today) return 0;
+    state.value.coins += DAILY_BONUS;
+    state.value.lastBonusDate = today;
+    return DAILY_BONUS;
+  }
+
+  const canClaimDaily = computed(() => state.value.lastBonusDate !== todayISO());
+
+  return {
+    coins, owned, equippedToken, equippedTheme,
+    buy, equip, addCoins, syncServerUnlocks,
+    claimDailyBonus, canClaimDaily,
+  };
 });

@@ -2,6 +2,9 @@
 import { computed, ref } from "vue";
 import type { Player, RoomState } from "../../../shared/types";
 import { SHOP_ITEMS } from "../shop/items";
+import { useGameStore } from "../stores/game";
+
+const game = useGameStore();
 
 const props = defineProps<{
   room: RoomState;
@@ -48,6 +51,7 @@ function tokenIcon(p: Player): string {
       </div>
       <div class="opp__body">
         <div class="opp__name">
+          <span v-if="game.isFriend(p.tgUserId)" class="opp__friend" title="Уже играл с тобой">🤝</span>
           {{ p.name }}
           <span v-if="!p.connected" class="opp__offline-dot" title="offline" />
         </div>
@@ -135,6 +139,10 @@ function tokenIcon(p: Player): string {
 .opp__offline-dot {
   width: 6px; height: 6px; border-radius: 50%; background: var(--red);
   display: inline-block;
+}
+.opp__friend {
+  font-size: 11px;
+  filter: drop-shadow(0 0 4px rgba(6, 182, 212, 0.7));
 }
 .opp__stats {
   display: flex;

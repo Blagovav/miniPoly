@@ -10,6 +10,8 @@ const props = defineProps<{
   onBuildHouse?: (tileIndex: number) => void;
   onSellHouse?: (tileIndex: number) => void;
   onProposeTrade?: (tileIndex: number, cash: number) => void;
+  onMortgage?: (tileIndex: number) => void;
+  onUnmortgage?: (tileIndex: number) => void;
 }>();
 
 const { locale } = useI18n();
@@ -181,6 +183,39 @@ function sendPropose() {
   proposeOpen.value = false;
   game.selectTile(null);
 }
+
+// Залог / выкуп — только для владельца, и только если это собственность без построек.
+const isMineProperty = computed(() => {
+  const t = tile.value;
+  const o = owned.value;
+  const me = game.me;
+  if (!t || !o || !me) return false;
+  if (o.ownerId !== me.id) return false;
+  return t.kind === "street" || t.kind === "railroad" || t.kind === "utility";
+});
+const canMortgage = computed(() => {
+  const o = owned.value;
+  if (!isMineProperty.value || !o) return false;
+  if (o.mortgaged) return false;
+  return o.houses === 0 && !o.hotel;
+});
+const canUnmortgage = computed(() => {
+  const o = owned.value;
+  return !!isMineProperty.value && !!o && o.mortgaged;
+});
+const mortgageValue = computed(() => {
+  const t = tile.value;
+  if (!t || (t.kind !== "street" && t.kind !== "railroad" && t.kind !== "utility")) return 0;
+  return (t as any).mortgage as number;
+});
+const unmortgageCost = computed(() => Math.ceil(mortgageValue.value * 1.1));
+
+function mortgage() {
+  if (tile.value) props.onMortgage?.(tile.value.index);
+}
+function unmortgage() {
+  if (tile.value) props.onUnmortgage?.(tile.value.index);
+}
 </script>
 
 <template>
@@ -269,6 +304,24 @@ function sendPropose() {
           <p v-if="!hasMonopoly" class="build-actions__hint">
             Нужна вся цветовая группа, чтобы строить
           </p>
+        </div>
+
+        <!-- Залог / выкуп из залога (для владельца) -->
+        <div v-if="isMineProperty && (canMortgage || canUnmortgage)" class="build-actions">
+          <button
+            v-if="canMortgage"
+            class="btn btn--ghost"
+            @click="mortgage"
+          >
+            🔒 Заложить банку · +${{ mortgageValue }}
+          </button>
+          <button
+            v-if="canUnmortgage"
+            class="btn btn--neon"
+            @click="unmortgage"
+          >
+            🔓 Выкупить из залога · −${{ unmortgageCost }}
+          </button>
         </div>
 
         <!-- Предложить выкуп у чужого владельца -->

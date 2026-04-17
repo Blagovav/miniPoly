@@ -202,7 +202,9 @@ export type ClientMessage =
   | { type: "buildHouse"; tileIndex: number }
   | { type: "sellHouse"; tileIndex: number }
   | { type: "proposeTrade"; tileIndex: number; cash: number }
-  | { type: "respondTrade"; accept: boolean };
+  | { type: "respondTrade"; accept: boolean }
+  | { type: "mortgage"; tileIndex: number }
+  | { type: "unmortgage"; tileIndex: number };
 
 // ---------- Server → Client messages ----------
 export type ServerMessage =
