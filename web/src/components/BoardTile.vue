@@ -92,6 +92,8 @@ const priceLabel = computed(() => {
       <span v-for="n in owned.houses" :key="n">🏠</span>
     </div>
     <div v-if="owned && owned.hotel" class="tile__hotel">🏨</div>
+
+    <div v-if="owned && owned.mortgaged" class="tile__mortgaged">🔒</div>
   </div>
 </template>
 
@@ -189,5 +191,20 @@ const priceLabel = computed(() => {
   line-height: 1;
   display: flex;
   gap: 1px;
+}
+.tile__mortgaged {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  font-size: 10px;
+  line-height: 1;
+  opacity: 0.85;
+  filter: grayscale(0.5) drop-shadow(0 0 4px rgba(239, 68, 68, 0.6));
+}
+.tile--owned.tile--street:has(.tile__mortgaged),
+.tile--owned.tile--railroad:has(.tile__mortgaged),
+.tile--owned.tile--utility:has(.tile__mortgaged) {
+  opacity: 0.6;
+  filter: grayscale(0.6);
 }
 </style>

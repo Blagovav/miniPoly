@@ -2,6 +2,7 @@
 import { onMounted, ref } from "vue";
 import { useRouter } from "vue-router";
 import { useTelegram } from "../composables/useTelegram";
+import { computeRank } from "../utils/rank";
 
 const router = useRouter();
 const { userId } = useTelegram();
@@ -82,7 +83,12 @@ onMounted(load);
           {{ p.name.slice(0, 1).toUpperCase() }}
         </div>
         <div class="player-row__body">
-          <div class="player-row__name">{{ p.name }}</div>
+          <div class="player-row__name">
+            {{ p.name }}
+            <span class="player-row__rank" :style="{ color: computeRank(p.gamesWon).color }">
+              {{ computeRank(p.gamesWon).icon }} {{ computeRank(p.gamesWon).label }}
+            </span>
+          </div>
           <div class="player-row__stats">
             {{ p.gamesPlayed }} игр · 🏆 {{ p.gamesWon }}
           </div>
@@ -172,7 +178,20 @@ onMounted(load);
   font-weight: 800;
 }
 .player-row__body { flex: 1; }
-.player-row__name { font-weight: 700; }
+.player-row__name {
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.player-row__rank {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.25);
+}
 .player-row__stats { font-size: 12px; color: var(--text-dim); margin-top: 2px; }
 .player-row__winrate {
   font-variant-numeric: tabular-nums;

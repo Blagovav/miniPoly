@@ -5,6 +5,7 @@ import { BOARD, GROUP_COLORS } from "../../../shared/board";
 import type { Locale, Player, StreetTile } from "../../../shared/types";
 import { SHOP_ITEMS } from "../shop/items";
 import { useGameStore } from "../stores/game";
+import { computeRank, nextRank } from "../utils/rank";
 
 const props = defineProps<{
   player: Player | null;
@@ -17,6 +18,8 @@ const loc = computed<Locale>(() => (locale.value === "ru" ? "ru" : "en"));
 const game = useGameStore();
 
 const serverStats = ref<{ gamesPlayed: number; gamesWon: number; totalEarned: number } | null>(null);
+const rank = computed(() => computeRank(serverStats.value?.gamesWon ?? 0));
+const nextR = computed(() => nextRank(serverStats.value?.gamesWon ?? 0));
 watch(
   () => props.player?.tgUserId,
   async (id) => {
@@ -106,6 +109,17 @@ function bandColor(tileIndex: number): string {
           <div class="stat">
             <span class="stat__label">Собственность</span>
             <span class="stat__val">{{ ownedList.length }}</span>
+          </div>
+        </div>
+
+        <div v-if="serverStats" class="rank-badge" :style="{ '--rank-clr': rank.color }">
+          <div class="rank-badge__icon">{{ rank.icon }}</div>
+          <div class="rank-badge__body">
+            <div class="rank-badge__title">{{ rank.label }}</div>
+            <div v-if="nextR" class="rank-badge__next">
+              До «{{ nextR.label }}»: ещё {{ nextR.minWins - serverStats.gamesWon }} побед
+            </div>
+            <div v-else class="rank-badge__next">Высший ранг ✦</div>
           </div>
         </div>
 
@@ -219,6 +233,30 @@ function bandColor(tileIndex: number): string {
 }
 .profile__stats--lifetime .stat__label {
   color: var(--purple);
+}
+
+.rank-badge {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  background: linear-gradient(90deg, var(--rank-clr, #94a3b8), transparent 70%);
+  border-top: 1px solid var(--border);
+  box-shadow: inset 0 -1px 0 var(--rank-clr);
+}
+.rank-badge__icon {
+  font-size: 28px;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.4));
+}
+.rank-badge__title {
+  font-weight: 800;
+  font-size: 18px;
+  color: #fff;
+}
+.rank-badge__next {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.8);
+  margin-top: 2px;
 }
 .stat {
   display: flex;

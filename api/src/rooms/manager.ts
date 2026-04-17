@@ -65,14 +65,12 @@ function resetTurnTimer(room: RoomState): void {
     const p = currentPlayer(fresh);
     if (!p) return;
 
-    // AI-такэовер: если игрок offline — играем за него «разумно»
     const aiMode = !p.connected;
 
     if (fresh.phase === "rolling") {
       rollAndMove(fresh);
     }
     if (fresh.phase === "buyPrompt") {
-      // AI: покупаем если можем позволить (оставляем запас > половины цены)
       const { BOARD } = await import("../../../shared/board");
       const tile = BOARD[p.position];
       const price = (tile as any).price ?? 0;
@@ -83,12 +81,52 @@ function resetTurnTimer(room: RoomState): void {
         skipBuy(fresh);
       }
     }
+
+    // AI: если есть монополии и деньги — строим дом на самой дешёвой улице без построек.
+    if (aiMode) {
+      await aiAutoBuild(fresh, p.id);
+    }
+
     if (fresh.phase === "action") {
       engineEndTurn(fresh);
     }
     onStateChange(fresh);
   }, config.turnTimeoutSec * 1000);
   turnTimers.set(room.id, timer);
+}
+
+async function aiAutoBuild(room: RoomState, playerId: string): Promise<void> {
+  const { BOARD, GROUP_SIZE } = await import("../../../shared/board");
+  const { buildHouse } = await import("../game/engine");
+  const p = room.players.find((pl) => pl.id === playerId);
+  if (!p) return;
+
+  // Улицы, где у нас полная монополия, сортируем по стоимости дома (дешёвле — раньше)
+  const myStreets = BOARD.filter(
+    (t) => t.kind === "street" && room.properties[t.index]?.ownerId === playerId,
+  ) as any[];
+
+  // Группируем по цвету
+  const byGroup = new Map<string, any[]>();
+  for (const s of myStreets) {
+    const arr = byGroup.get(s.group) ?? [];
+    arr.push(s);
+    byGroup.set(s.group, arr);
+  }
+
+  const monopolies: any[] = [];
+  for (const [group, list] of byGroup) {
+    if (list.length === (GROUP_SIZE[group] ?? 0)) monopolies.push(...list);
+  }
+
+  monopolies.sort((a, b) => a.houseCost - b.houseCost);
+
+  // Строим пока хватает денег, оставляя запас $300
+  for (const street of monopolies) {
+    if (p.cash < street.houseCost + 300) break;
+    const res = buildHouse(room, playerId, street.index);
+    if (!res.ok) continue;
+  }
 }
 
 function clearTurnTimer(roomId: string): void {
