@@ -49,12 +49,31 @@ const canStart = computed(() =>
   activePlayers.value.length >= 2 && readyActive.value.length === activePlayers.value.length,
 );
 
-const inviteUrl = computed(() => {
-  const base = window.location.origin + window.location.pathname;
-  return `${base}#/room/${props.room.id}`;
-});
+const botUsername = (import.meta.env.VITE_BOT_USERNAME as string) || "poly_mini_bot";
 
-async function copyInvite() {
+/** Telegram Mini App startapp-link — при открытии в TG запускает наш Mini App с параметром. */
+const inviteUrl = computed(
+  () => `https://t.me/${botUsername}?startapp=room_${props.room.id}`,
+);
+
+const tg = (window as any).Telegram?.WebApp;
+
+async function share() {
+  const text = `🎲 Го в Minipoly! Комната ${props.room.id}`;
+  // Внутри Telegram — открываем нативный share-диалог
+  if (tg?.openTelegramLink) {
+    const shareUrl = `https://t.me/share/url?url=${encodeURIComponent(inviteUrl.value)}&text=${encodeURIComponent(text)}`;
+    tg.openTelegramLink(shareUrl);
+    return;
+  }
+  // Web Share API (мобильный браузер)
+  if (navigator.share) {
+    try {
+      await navigator.share({ title: "Minipoly", text, url: inviteUrl.value });
+      return;
+    } catch {}
+  }
+  // Фоллбек — копируем в буфер
   try {
     await navigator.clipboard.writeText(inviteUrl.value);
     copied.value = true;
@@ -70,8 +89,8 @@ async function copyInvite() {
         <div class="lobby__code-label">{{ t("lobby.roomCode") }}</div>
         <div class="lobby__code">{{ room.id }}</div>
       </div>
-      <button class="btn btn--ghost" @click="copyInvite">
-        {{ copied ? `✓ ${t("lobby.copied")}` : `📋 ${t("lobby.copyInvite")}` }}
+      <button class="btn btn--ghost" @click="share">
+        {{ copied ? `✓ ${t("lobby.copied")}` : `📤 ${t("lobby.copyInvite")}` }}
       </button>
     </div>
 

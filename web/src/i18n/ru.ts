@@ -36,7 +36,7 @@ export default {
   lobby: {
     title: "Лобби",
     roomCode: "Код комнаты",
-    copyInvite: "Скопировать ссылку",
+    copyInvite: "Поделиться",
     copied: "Скопировано!",
     ready: "Готов",
     notReady: "Не готов",

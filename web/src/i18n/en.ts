@@ -36,7 +36,7 @@ export default {
   lobby: {
     title: "Lobby",
     roomCode: "Room code",
-    copyInvite: "Copy invite link",
+    copyInvite: "Share",
     copied: "Copied!",
     ready: "Ready",
     notReady: "Not ready",
