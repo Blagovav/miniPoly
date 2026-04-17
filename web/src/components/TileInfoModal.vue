@@ -6,6 +6,11 @@ import type { Locale, StreetTile } from "../../../shared/types";
 import { SHOP_ITEMS } from "../shop/items";
 import { useGameStore } from "../stores/game";
 
+const props = defineProps<{
+  onBuildHouse?: (tileIndex: number) => void;
+  onSellHouse?: (tileIndex: number) => void;
+}>();
+
 const { locale } = useI18n();
 const game = useGameStore();
 
@@ -111,6 +116,46 @@ const iconText = computed(() => {
 });
 
 function close() { game.selectTile(null); }
+
+const isMineStreet = computed(() => {
+  const t = tile.value;
+  const o = owned.value;
+  const me = game.me;
+  return t?.kind === "street" && o && me && o.ownerId === me.id;
+});
+
+const hasMonopoly = computed(() => {
+  const t = tile.value;
+  if (!t || t.kind !== "street" || !game.room || !owned.value) return false;
+  const group = t.group;
+  const groupTiles = BOARD.filter((x) => x.kind === "street" && (x as StreetTile).group === group);
+  if (groupTiles.length !== (GROUP_SIZE[group] ?? 0)) return false;
+  return groupTiles.every((gt) => game.room?.properties[gt.index]?.ownerId === owned.value?.ownerId);
+});
+
+const canBuild = computed(() => {
+  if (!isMineStreet.value || !hasMonopoly.value) return false;
+  const o = owned.value;
+  if (!o || o.mortgaged) return false;
+  return !o.hotel;
+});
+
+const canSell = computed(() => {
+  const o = owned.value;
+  return !!isMineStreet.value && !!o && (o.houses > 0 || o.hotel);
+});
+
+const buildCost = computed(() => {
+  const t = tile.value;
+  return t?.kind === "street" ? (t as StreetTile).houseCost : 0;
+});
+
+function build() {
+  if (tile.value) props.onBuildHouse?.(tile.value.index);
+}
+function sell() {
+  if (tile.value) props.onSellHouse?.(tile.value.index);
+}
 </script>
 
 <template>
@@ -177,6 +222,28 @@ function close() { game.selectTile(null); }
         </div>
         <div v-else-if="tile.kind === 'street' || tile.kind === 'railroad' || tile.kind === 'utility'" class="free-chip">
           {{ loc === "ru" ? "Свободно" : "Unowned" }}
+        </div>
+
+        <!-- Build / sell actions -->
+        <div v-if="isMineStreet" class="build-actions">
+          <button
+            class="btn btn--neon"
+            :disabled="!canBuild"
+            @click="build"
+          >
+            {{ owned?.houses === 4 ? "🏨 Построить отель" : "🏠 Построить дом" }}
+            <span class="build-actions__cost">${{ buildCost }}</span>
+          </button>
+          <button
+            class="btn btn--ghost"
+            :disabled="!canSell"
+            @click="sell"
+          >
+            💰 Продать за ${{ Math.floor(buildCost / 2) }}
+          </button>
+          <p v-if="!hasMonopoly" class="build-actions__hint">
+            Нужна вся цветовая группа, чтобы строить
+          </p>
         </div>
       </div>
     </div>
@@ -333,6 +400,30 @@ function close() { game.selectTile(null); }
   border-radius: 12px;
   color: var(--neon);
   font-weight: 600;
+}
+
+.build-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 0 16px 14px;
+}
+.build-actions .btn {
+  padding: 12px;
+  font-size: 14px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.build-actions__cost {
+  font-variant-numeric: tabular-nums;
+  opacity: 0.85;
+}
+.build-actions__hint {
+  font-size: 11px;
+  color: var(--text-mute);
+  text-align: center;
+  margin: 2px 0 0;
 }
 
 @keyframes info-pop {

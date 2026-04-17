@@ -37,11 +37,13 @@ export function log(room: RoomState, text: I18nText): void {
   if (room.log.length > 200) room.log.shift();
 }
 
-export function createRoom(hostId: string, isPublic = true): RoomState {
+export function createRoom(hostId: string, isPublic = true, maxPlayers = MAX_PLAYERS): RoomState {
+  const clamped = Math.max(MIN_PLAYERS, Math.min(MAX_PLAYERS, Math.floor(maxPlayers)));
   return {
     id: nanoid(6).toUpperCase(),
     hostId,
     isPublic,
+    maxPlayers: clamped,
     players: [],
     currentTurn: 0,
     phase: "lobby",
@@ -71,7 +73,7 @@ export function addPlayer(
     if (name && name !== existing.name) existing.name = name;
     return existing;
   }
-  if (room.players.length >= MAX_PLAYERS) return null;
+  if (room.players.length >= (room.maxPlayers ?? MAX_PLAYERS)) return null;
 
   const defaultTokens = ["token-car", "token-dog", "token-hat", "token-cat", "token-crown", "token-ufo"];
   const player: Player = {
@@ -166,6 +168,68 @@ export function selectToken(room: RoomState, playerId: string, tokenId: string):
   if (!p) return false;
   p.token = tokenId;
   return true;
+}
+
+/** Купить дом на улице (нужна монополия + деньги). */
+export function buildHouse(room: RoomState, playerId: string, tileIndex: number): { ok: boolean; error?: string } {
+  const p = room.players.find((pl) => pl.id === playerId);
+  if (!p) return { ok: false, error: "no player" };
+  const tile = BOARD[tileIndex];
+  if (!tile || tile.kind !== "street") return { ok: false, error: "not a street" };
+  const owned = room.properties[tileIndex];
+  if (!owned || owned.ownerId !== playerId) return { ok: false, error: "not your property" };
+  if (owned.mortgaged) return { ok: false, error: "mortgaged" };
+  if (owned.hotel) return { ok: false, error: "hotel already" };
+  if (!hasMonopoly(room, tile, playerId)) return { ok: false, error: "need monopoly" };
+  if (owned.houses >= 4) {
+    // строим отель
+    if (p.cash < tile.houseCost) return { ok: false, error: "not enough cash" };
+    p.cash -= tile.houseCost;
+    owned.houses = 0;
+    owned.hotel = true;
+    log(room, { en: `${p.name} built a hotel on ${tile.name.en}`, ru: `${p.name} построил отель на ${tile.name.ru}` });
+    return { ok: true };
+  }
+  if (p.cash < tile.houseCost) return { ok: false, error: "not enough cash" };
+  p.cash -= tile.houseCost;
+  owned.houses++;
+  log(room, { en: `${p.name} built a house on ${tile.name.en} (${owned.houses}/4)`, ru: `${p.name} построил дом на ${tile.name.ru} (${owned.houses}/4)` });
+  return { ok: true };
+}
+
+/** Продать дом/отель за половину стоимости. */
+export function sellHouse(room: RoomState, playerId: string, tileIndex: number): { ok: boolean; error?: string } {
+  const p = room.players.find((pl) => pl.id === playerId);
+  if (!p) return { ok: false, error: "no player" };
+  const tile = BOARD[tileIndex];
+  if (!tile || tile.kind !== "street") return { ok: false, error: "not a street" };
+  const owned = room.properties[tileIndex];
+  if (!owned || owned.ownerId !== playerId) return { ok: false, error: "not your property" };
+  const refund = Math.floor(tile.houseCost / 2);
+  if (owned.hotel) {
+    owned.hotel = false;
+    owned.houses = 4;
+    p.cash += refund;
+    log(room, { en: `${p.name} sold hotel on ${tile.name.en} (+$${refund})`, ru: `${p.name} продал отель на ${tile.name.ru} (+$${refund})` });
+    return { ok: true };
+  }
+  if (owned.houses <= 0) return { ok: false, error: "nothing to sell" };
+  owned.houses--;
+  p.cash += refund;
+  log(room, { en: `${p.name} sold a house on ${tile.name.en} (+$${refund})`, ru: `${p.name} продал дом на ${tile.name.ru} (+$${refund})` });
+  return { ok: true };
+}
+
+function hasMonopoly(
+  room: RoomState,
+  street: StreetTile,
+  ownerId: string,
+): boolean {
+  const groupTiles = BOARD.filter(
+    (t): t is StreetTile => t.kind === "street" && t.group === street.group,
+  );
+  if (groupTiles.length !== GROUP_SIZE[street.group]) return false;
+  return groupTiles.every((t) => room.properties[t.index]?.ownerId === ownerId && !room.properties[t.index].mortgaged);
 }
 
 export function currentPlayer(room: RoomState): Player | null {
@@ -380,18 +444,6 @@ function calculateRent(
   const multiplier = count === 2 ? 10 : 4;
   const sum = (room.dice?.[0] ?? 0) + (room.dice?.[1] ?? 0);
   return sum * multiplier;
-}
-
-function hasMonopoly(
-  room: RoomState,
-  street: StreetTile,
-  ownerId: string,
-): boolean {
-  const groupTiles = BOARD.filter(
-    (t): t is StreetTile => t.kind === "street" && t.group === street.group,
-  );
-  if (groupTiles.length !== GROUP_SIZE[street.group]) return false;
-  return groupTiles.every((t) => room.properties[t.index]?.ownerId === ownerId);
 }
 
 function countOwnedOfKind(

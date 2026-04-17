@@ -140,6 +140,7 @@ export interface RoomState {
   id: string;
   hostId: string;
   isPublic: boolean;
+  maxPlayers: number;
   players: Player[];
   currentTurn: number;
   phase: GamePhase;
@@ -174,7 +175,7 @@ export interface ShopItem {
 // ---------- Client → Server messages ----------
 export type ClientMessage =
   | { type: "join"; roomId: string; tgInitData: string; name: string }
-  | { type: "create"; tgInitData: string; name: string; isPublic?: boolean }
+  | { type: "create"; tgInitData: string; name: string; isPublic?: boolean; maxPlayers?: number }
   | { type: "ready" }
   | { type: "start" }
   | { type: "roll" }
@@ -185,7 +186,10 @@ export type ClientMessage =
   | { type: "useJailCard" }
   | { type: "chat"; text: string }
   | { type: "selectToken"; tokenId: string }
-  | { type: "leave" };
+  | { type: "leave" }
+  | { type: "destroyRoom" }
+  | { type: "buildHouse"; tileIndex: number }
+  | { type: "sellHouse"; tileIndex: number };
 
 // ---------- Server → Client messages ----------
 export type ServerMessage =

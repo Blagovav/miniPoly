@@ -111,6 +111,24 @@ function leaveRoom() {
   ws.send({ type: "leave" });
   setTimeout(() => router.replace({ name: "home" }), 100);
 }
+
+function destroyRoom() {
+  const ok = confirm("Закрыть комнату для всех?");
+  if (!ok) return;
+  haptic("heavy");
+  ws.send({ type: "destroyRoom" });
+  setTimeout(() => router.replace({ name: "home" }), 100);
+}
+
+function buildHouse(tileIndex: number) {
+  haptic("medium");
+  ws.send({ type: "buildHouse", tileIndex });
+}
+
+function sellHouse(tileIndex: number) {
+  haptic("light");
+  ws.send({ type: "sellHouse", tileIndex });
+}
 </script>
 
 <template>
@@ -122,7 +140,6 @@ function leaveRoom() {
         <span class="code">{{ id }}</span>
       </div>
       <div v-if="game.lastError" class="error">{{ game.lastError }}</div>
-      <button class="btn btn--ghost leave" @click="leaveRoom">🚪 Exit</button>
     </header>
 
     <!-- Lobby state -->
@@ -133,6 +150,7 @@ function leaveRoom() {
       :on-ready="ready"
       :on-start="start"
       :on-select-token="selectToken"
+      :on-destroy-room="destroyRoom"
     />
 
     <!-- Game state -->
@@ -172,7 +190,7 @@ function leaveRoom() {
     <!-- Chat overlay (always available when in a room) -->
     <Chat v-if="game.room" :on-send="sendChat" />
     <CardModal v-if="game.room" />
-    <TileInfoModal v-if="game.room" />
+    <TileInfoModal v-if="game.room" :on-build-house="buildHouse" :on-sell-house="sellHouse" />
   </div>
 </template>
 

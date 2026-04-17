@@ -4,6 +4,7 @@ import type { ClientMessage, ServerMessage, RoomState } from "../../../shared/ty
 import { validateInitData } from "../telegram";
 import {
   addPlayer,
+  buildHouse,
   buyCurrentProperty,
   createRoom,
   endTurn,
@@ -12,9 +13,11 @@ import {
   removePlayer,
   rollAndMove,
   selectToken,
+  sellHouse,
   skipBuy,
   startGame,
 } from "../game/engine";
+import { deleteRoom as mgrDeleteRoom } from "../rooms/manager";
 
 /** Чистит всех offline-игроков из лобби. Вызывается перед каждым broadcast. */
 function sweepOfflineLobby(room: RoomState): void {
@@ -22,7 +25,7 @@ function sweepOfflineLobby(room: RoomState): void {
   const offline = room.players.filter((p) => !p.connected);
   for (const p of offline) removePlayer(room, p.id);
 }
-import { deleteRoom, getRoom, onStateChange, saveRoom } from "../rooms/manager";
+import { getRoom, onStateChange, saveRoom } from "../rooms/manager";
 
 interface Conn {
   send(msg: ServerMessage): void;
@@ -128,6 +131,12 @@ function handleMessage(conn: Conn, ws: WebSocket, msg: ClientMessage): void {
       return handleSelectToken(conn, msg.tokenId);
     case "leave":
       return handleLeave(conn);
+    case "destroyRoom":
+      return handleDestroyRoom(conn);
+    case "buildHouse":
+      return handleBuildHouse(conn, msg.tileIndex);
+    case "sellHouse":
+      return handleSellHouse(conn, msg.tileIndex);
     default:
       conn.send({ type: "error", message: "unknown message" });
   }
@@ -145,7 +154,7 @@ function handleCreate(conn: Conn, msg: ClientMessage & { type: "create" }): void
     conn.send({ type: "error", message: "auth failed" });
     return;
   }
-  const room = createRoom("pending", msg.isPublic ?? true);
+  const room = createRoom("pending", msg.isPublic ?? true, msg.maxPlayers ?? 6);
   const player = addPlayer(room, auth.tgUserId, auth.displayName);
   if (!player) {
     conn.send({ type: "error", message: "can't add player" });
@@ -306,4 +315,45 @@ function handleLeave(conn: Conn): void {
   sendState(ctx.room.id);
   conn.roomId = null;
   conn.playerId = null;
+}
+
+function handleDestroyRoom(conn: Conn): void {
+  const ctx = getRoomAndPlayer(conn);
+  if (!ctx) return;
+  if (ctx.room.hostId !== conn.playerId) {
+    conn.send({ type: "error", message: "only host can destroy room" });
+    return;
+  }
+  const roomId = ctx.room.id;
+  // шлём всем финальное состояние и удаляем комнату
+  for (const [ws, c] of connections) {
+    if (c.roomId === roomId) {
+      try { ws.send(JSON.stringify({ type: "error", message: "room closed by host" })); } catch {}
+      c.roomId = null;
+      c.playerId = null;
+    }
+  }
+  mgrDeleteRoom(roomId);
+}
+
+function handleBuildHouse(conn: Conn, tileIndex: number): void {
+  const ctx = getRoomAndPlayer(conn);
+  if (!ctx || !ctx.p) return;
+  const res = buildHouse(ctx.room, ctx.p.id, tileIndex);
+  if (!res.ok) {
+    conn.send({ type: "error", message: res.error ?? "can't build" });
+    return;
+  }
+  sendState(ctx.room.id);
+}
+
+function handleSellHouse(conn: Conn, tileIndex: number): void {
+  const ctx = getRoomAndPlayer(conn);
+  if (!ctx || !ctx.p) return;
+  const res = sellHouse(ctx.room, ctx.p.id, tileIndex);
+  if (!res.ok) {
+    conn.send({ type: "error", message: res.error ?? "can't sell" });
+    return;
+  }
+  sendState(ctx.room.id);
 }

@@ -11,6 +11,7 @@ const props = defineProps<{
   onReady: () => void;
   onStart: () => void;
   onSelectToken: (tokenId: string) => void;
+  onDestroyRoom: () => void;
 }>();
 
 const inv = useInventoryStore();
@@ -157,6 +158,13 @@ async function share() {
         🚀 {{ t("lobby.start") }}
       </button>
       <p v-if="!canStart" class="waiting">{{ t("lobby.minPlayers") }}</p>
+      <button
+        v-if="isHost"
+        class="btn btn--danger destroy"
+        @click="onDestroyRoom"
+      >
+        💥 Закрыть комнату
+      </button>
     </div>
   </div>
 </template>
@@ -259,6 +267,11 @@ async function share() {
   color: var(--text-mute);
   font-size: 13px;
   margin: 4px 0;
+}
+.destroy {
+  margin-top: 6px;
+  font-size: 13px;
+  padding: 10px;
 }
 
 .tokens {

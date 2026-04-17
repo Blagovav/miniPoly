@@ -11,6 +11,7 @@ const router = useRouter();
 const { initData, userName, haptic } = useTelegram();
 
 const isPublic = ref(true);
+const maxPlayers = ref(4);
 const loading = ref(false);
 
 const ws = useWs();
@@ -27,7 +28,13 @@ onUnmounted(off);
 function create() {
   haptic("medium");
   loading.value = true;
-  ws.send({ type: "create", tgInitData: initData.value, name: userName.value, isPublic: isPublic.value });
+  ws.send({
+    type: "create",
+    tgInitData: initData.value,
+    name: userName.value,
+    isPublic: isPublic.value,
+    maxPlayers: maxPlayers.value,
+  });
 }
 </script>
 
@@ -60,6 +67,23 @@ function create() {
         >
           🔒 {{ t("home.private") }}
         </button>
+      </div>
+
+      <div class="players-field">
+        <div class="players-field__head">
+          <span>Игроков в комнате</span>
+          <span class="players-field__val">{{ maxPlayers }}</span>
+        </div>
+        <div class="players-field__row">
+          <button
+            v-for="n in [2, 3, 4, 5, 6]"
+            :key="n"
+            :class="['players-field__btn', maxPlayers === n && 'active']"
+            @click="maxPlayers = n"
+          >
+            {{ n }}
+          </button>
+        </div>
       </div>
 
       <button class="btn btn--primary big" :disabled="loading" @click="create">
@@ -148,5 +172,43 @@ function create() {
 .big {
   padding: 16px;
   font-size: 16px;
+}
+.players-field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.players-field__head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 13px;
+  color: var(--text-dim);
+}
+.players-field__val {
+  font-weight: 800;
+  font-size: 18px;
+  color: var(--gold);
+}
+.players-field__row {
+  display: flex;
+  gap: 6px;
+}
+.players-field__btn {
+  flex: 1;
+  padding: 12px 0;
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  font-weight: 700;
+  font-size: 15px;
+  transition: all 0.2s ease;
+}
+.players-field__btn.active {
+  background: linear-gradient(135deg, var(--purple), #7e22ce);
+  color: #fff;
+  border-color: transparent;
+  box-shadow: 0 4px 12px rgba(168, 85, 247, 0.35);
 }
 </style>

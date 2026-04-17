@@ -3,12 +3,28 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no" />
-    <meta name="theme-color" content="#0a0e1a" />
+    <meta name="theme-color" content="#05070f" />
     <title>Minipoly — Monopoly for Telegram</title>
+    <style>
+      /* Убираем белую вспышку при загрузке / сворачивании */
+      html, body { margin: 0; background: #05070f; color: #e6ebf5; overscroll-behavior: none; }
+      #app { min-height: 100dvh; }
+      .boot-loader {
+        position: fixed; inset: 0; display: grid; place-items: center;
+        background: #05070f; z-index: 999;
+        animation: boot-fade 0.3s ease 0.2s forwards;
+      }
+      .boot-loader__dice {
+        font-size: 52px;
+        animation: boot-spin 1.2s linear infinite;
+      }
+      @keyframes boot-spin { to { transform: rotate(360deg); } }
+      @keyframes boot-fade { to { opacity: 0; visibility: hidden; } }
+    </style>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
   </head>
   <body>
-    <div id="app"></div>
+    <div id="app"><div class="boot-loader"><div class="boot-loader__dice">🎲</div></div></div>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

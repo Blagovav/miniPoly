@@ -33,6 +33,10 @@ const currentTilePrice = computed(() => {
   if (tile.kind === "street" || tile.kind === "railroad" || tile.kind === "utility") return tile.price;
   return 0;
 });
+
+function openCurrentTile() {
+  if (currentTile.value) game.selectTile(currentTile.value.index);
+}
 </script>
 
 <template>
@@ -52,11 +56,18 @@ const currentTilePrice = computed(() => {
       <Dice :dice="room.dice" :speed-die="room.speedDie" :rolling="rolling" />
     </div>
 
-    <!-- Current tile card -->
-    <div v-if="currentTile && room.phase !== 'lobby' && room.phase !== 'ended'" class="tile-card card">
+    <!-- Current tile card — clickable, opens full info -->
+    <button
+      v-if="currentTile && room.phase !== 'lobby' && room.phase !== 'ended'"
+      class="tile-card card"
+      @click="openCurrentTile"
+    >
       <div class="tile-card__name">{{ currentTile.name[locale as "en" | "ru"] }}</div>
-      <div v-if="currentTilePrice" class="tile-card__price">💰 {{ currentTilePrice }}</div>
-    </div>
+      <div class="tile-card__right">
+        <span v-if="currentTilePrice" class="tile-card__price">💰 {{ currentTilePrice }}</span>
+        <span class="tile-card__info">ⓘ</span>
+      </div>
+    </button>
 
     <!-- Actions -->
     <div class="actions">
@@ -159,14 +170,29 @@ const currentTilePrice = computed(() => {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  width: 100%;
+  cursor: pointer;
+  text-align: left;
+  transition: border-color 0.2s ease, transform 0.1s ease;
 }
+.tile-card:active { transform: scale(0.98); }
+.tile-card:hover { border-color: var(--purple); }
 .tile-card__name {
   font-weight: 600;
+}
+.tile-card__right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }
 .tile-card__price {
   color: var(--gold);
   font-weight: 700;
   font-variant-numeric: tabular-nums;
+}
+.tile-card__info {
+  font-size: 18px;
+  color: var(--purple);
 }
 
 .actions {
