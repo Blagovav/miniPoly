@@ -55,19 +55,31 @@ export function onStateChange(room: RoomState): void {
 
 function resetTurnTimer(room: RoomState): void {
   clearTurnTimer(room.id);
-  const timer = setTimeout(() => {
+  const timer = setTimeout(async () => {
     const fresh = getRoom(room.id);
     if (!fresh) return;
     const p = currentPlayer(fresh);
     if (!p) return;
 
+    // AI-такэовер: если игрок offline — играем за него «разумно»
+    const aiMode = !p.connected;
+
     if (fresh.phase === "rolling") {
       rollAndMove(fresh);
-      engineEndTurn(fresh);
-    } else if (fresh.phase === "buyPrompt") {
-      skipBuy(fresh);
-      engineEndTurn(fresh);
-    } else if (fresh.phase === "action") {
+    }
+    if (fresh.phase === "buyPrompt") {
+      // AI: покупаем если можем позволить (оставляем запас > половины цены)
+      const { BOARD } = await import("../../../shared/board");
+      const tile = BOARD[p.position];
+      const price = (tile as any).price ?? 0;
+      if (aiMode && price > 0 && p.cash >= price * 1.5) {
+        const { buyCurrentProperty } = await import("../game/engine");
+        buyCurrentProperty(fresh);
+      } else {
+        skipBuy(fresh);
+      }
+    }
+    if (fresh.phase === "action") {
       engineEndTurn(fresh);
     }
     onStateChange(fresh);

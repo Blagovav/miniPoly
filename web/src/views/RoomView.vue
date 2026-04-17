@@ -12,6 +12,10 @@ import Chat from "../components/Chat.vue";
 import CardModal from "../components/CardModal.vue";
 import TileInfoModal from "../components/TileInfoModal.vue";
 import Confetti from "../components/Confetti.vue";
+import OpponentsPanel from "../components/OpponentsPanel.vue";
+import PlayerProfileModal from "../components/PlayerProfileModal.vue";
+import { ref } from "vue";
+import type { Player } from "../../../shared/types";
 
 const props = defineProps<{ id: string }>();
 const { t, locale } = useI18n();
@@ -129,6 +133,15 @@ function sellHouse(tileIndex: number) {
   haptic("light");
   ws.send({ type: "sellHouse", tileIndex });
 }
+
+const profilePlayer = ref<Player | null>(null);
+function openProfile(p: Player) {
+  haptic("light");
+  profilePlayer.value = p;
+}
+function closeProfile() {
+  profilePlayer.value = null;
+}
 </script>
 
 <template>
@@ -155,6 +168,7 @@ function sellHouse(tileIndex: number) {
 
     <!-- Game state -->
     <template v-else-if="game.room">
+      <OpponentsPanel :room="game.room" :my-player-id="game.myPlayerId" @open-profile="openProfile" />
       <Board :room="game.room" />
       <GameHud
         :room="game.room"
@@ -191,6 +205,7 @@ function sellHouse(tileIndex: number) {
     <Chat v-if="game.room" :on-send="sendChat" />
     <CardModal v-if="game.room" />
     <TileInfoModal v-if="game.room" :on-build-house="buildHouse" :on-sell-house="sellHouse" />
+    <PlayerProfileModal :player="profilePlayer" :on-close="closeProfile" />
   </div>
 </template>
 

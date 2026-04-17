@@ -25,26 +25,43 @@ const bandColor = computed(() => {
   return null;
 });
 
+// Тематическая иконка на каждую клетку (особенно уличные)
+const STREET_ICONS: Record<number, string> = {
+  1: "🏖️", 3: "🌊",                        // brown (Mediterranean/Baltic)
+  6: "🏛️", 8: "🏰", 9: "⛲",               // lightBlue
+  11: "🎭", 13: "🎨", 14: "🎪",             // pink
+  16: "🚢", 18: "🎸", 19: "🗽",             // orange
+  21: "🏇", 23: "🏟️", 24: "🎰",             // red
+  26: "🏝️", 27: "🎡", 29: "🌴",             // yellow
+  31: "🌉", 32: "🌁", 34: "🗿",             // green
+  37: "🏙️", 39: "🎆",                       // darkBlue
+};
+
 const tileIcon = computed(() => {
-  switch (props.tile.kind) {
+  const t = props.tile;
+  switch (t.kind) {
     case "go": return "▶";
     case "jail": return "🔒";
     case "goToJail": return "👮";
     case "freeParking": return "🅿️";
-    case "chance": return "?";
+    case "chance": return "❓";
     case "chest": return "🎁";
     case "tax": return "💸";
     case "railroad": return "🚂";
     case "utility":
-      return props.tile.index === 12 ? "💡" : "💧";
+      return t.index === 12 ? "💡" : "💧";
+    case "street":
+      return STREET_ICONS[t.index] ?? "🏠";
     default: return "";
   }
 });
 
+// Короткое имя только для углов (corner) и спец-клеток; улицы — только иконка + цена
 const short = computed(() => {
-  const full = props.tile.name[loc.value];
+  const t = props.tile;
+  if (t.kind === "street" || t.kind === "railroad" || t.kind === "utility") return "";
+  const full = t.name[loc.value];
   if (full.length < 14) return full;
-  // Сокращаем длинные названия для плитки
   return full.split(" ").slice(0, 2).join(" ");
 });
 
@@ -119,23 +136,27 @@ const priceLabel = computed(() => {
 .tile--top .tile__body { padding-bottom: 10px; }
 
 .tile__icon {
-  font-size: 14px;
+  font-size: 22px;
   line-height: 1;
+  filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.4));
 }
 .tile__name {
-  font-size: 8px;
+  font-size: 9px;
   line-height: 1.1;
   color: var(--text);
-  font-weight: 600;
+  font-weight: 700;
   overflow: hidden;
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
 }
 .tile__price {
-  font-size: 8px;
+  font-size: 9px;
   color: var(--gold);
-  font-weight: 700;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
 }
 
 .tile--corner {
