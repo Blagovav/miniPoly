@@ -57,15 +57,17 @@ interface PlacedPlayer {
   yPct: number;
   offsetX: number;
   offsetY: number;
+  isCurrent: boolean;
 }
 
 function positionOffset(idx: number, total: number): { dx: number; dy: number } {
-  // Раскидываем игроков по кругу внутри клетки, если на одной клетке несколько.
   if (total === 1) return { dx: 0, dy: 0 };
-  const angle = (idx / total) * Math.PI * 2;
-  const r = 10;
+  const angle = (idx / total) * Math.PI * 2 - Math.PI / 2;
+  const r = 12;
   return { dx: Math.cos(angle) * r, dy: Math.sin(angle) * r };
 }
+
+const currentPlayerId = computed(() => props.room.players[props.room.currentTurn]?.id ?? null);
 
 function playerVisualPos(p: Player): number {
   const animated = game.animatedPositions?.[p.id];
@@ -86,7 +88,11 @@ const tokens = computed<PlacedPlayer[]>(() => {
     const { xPct, yPct } = tileCenter(tileIdx);
     list.forEach((player, i) => {
       const { dx, dy } = positionOffset(i, list.length);
-      out.push({ player, xPct, yPct, offsetX: dx, offsetY: dy });
+      out.push({
+        player, xPct, yPct,
+        offsetX: dx, offsetY: dy,
+        isCurrent: player.id === currentPlayerId.value,
+      });
     });
   }
   return out;
@@ -114,20 +120,34 @@ const tokens = computed<PlacedPlayer[]>(() => {
     />
 
     <div class="tokens-layer">
-      <div
-        v-for="pt in tokens"
-        :key="pt.player.id"
-        :class="['token', game.animatingPlayerId === pt.player.id && 'token--animating']"
-        :style="{
-          left: `${pt.xPct}%`,
-          top: `${pt.yPct}%`,
-          background: pt.player.color,
-          transform: `translate(-50%, -50%) translate(${pt.offsetX}px, ${pt.offsetY}px)`,
-        }"
-        :title="pt.player.name"
-      >
-        {{ tokenIcon(pt.player) }}
-      </div>
+      <template v-for="pt in tokens" :key="pt.player.id">
+        <div
+          v-if="pt.isCurrent"
+          class="token-ring"
+          :style="{
+            left: `${pt.xPct}%`,
+            top: `${pt.yPct}%`,
+            '--ring-color': pt.player.color,
+            transform: `translate(-50%, -50%) translate(${pt.offsetX}px, ${pt.offsetY}px)`,
+          }"
+        />
+        <div
+          :class="[
+            'token',
+            game.animatingPlayerId === pt.player.id && 'token--animating',
+            pt.isCurrent && 'token--active',
+          ]"
+          :style="{
+            left: `${pt.xPct}%`,
+            top: `${pt.yPct}%`,
+            background: pt.player.color,
+            transform: `translate(-50%, -50%) translate(${pt.offsetX}px, ${pt.offsetY}px)`,
+          }"
+          :title="pt.player.name"
+        >
+          <span class="token__icon">{{ tokenIcon(pt.player) }}</span>
+        </div>
+      </template>
     </div>
   </div>
 </template>
@@ -210,34 +230,58 @@ const tokens = computed<PlacedPlayer[]>(() => {
 }
 .token {
   position: absolute;
-  width: 26px;
-  height: 26px;
+  width: 32px;
+  height: 32px;
   border-radius: 50%;
   display: grid;
   place-items: center;
-  font-size: 14px;
   color: #fff;
-  font-weight: 800;
   box-shadow:
-    0 0 0 2px rgba(0, 0, 0, 0.5),
-    0 4px 12px rgba(0, 0, 0, 0.4),
-    inset 0 1px 0 rgba(255, 255, 255, 0.4);
+    0 0 0 2px rgba(0, 0, 0, 0.55),
+    0 0 0 3px rgba(255, 255, 255, 0.1),
+    0 6px 14px rgba(0, 0, 0, 0.55),
+    inset 0 2px 0 rgba(255, 255, 255, 0.45),
+    inset 0 -2px 0 rgba(0, 0, 0, 0.2);
   transition: left 0.18s cubic-bezier(0.4, 0, 0.2, 1),
               top 0.18s cubic-bezier(0.4, 0, 0.2, 1),
               transform 0.18s cubic-bezier(0.4, 0, 0.2, 1);
   will-change: left, top, transform;
 }
+.token__icon {
+  font-size: 18px;
+  line-height: 1;
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.4));
+}
+.token--active {
+  z-index: 7;
+}
 .token--animating {
   animation: token-hop 0.18s ease-in-out;
-  z-index: 6;
+  z-index: 8;
   box-shadow:
     0 0 0 2px rgba(0, 0, 0, 0.5),
-    0 0 20px currentColor,
-    0 6px 16px rgba(0, 0, 0, 0.5);
+    0 0 22px currentColor,
+    0 8px 18px rgba(0, 0, 0, 0.55),
+    inset 0 2px 0 rgba(255, 255, 255, 0.5);
 }
 @keyframes token-hop {
   0% { transform: translate(-50%, -50%) scale(1); }
-  50% { transform: translate(-50%, -60%) scale(1.15); }
+  50% { transform: translate(-50%, -62%) scale(1.18); }
   100% { transform: translate(-50%, -50%) scale(1); }
+}
+.token-ring {
+  position: absolute;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  border: 2px solid var(--ring-color);
+  opacity: 0.5;
+  pointer-events: none;
+  z-index: 4;
+  animation: ring-pulse 1.6s ease-in-out infinite;
+}
+@keyframes ring-pulse {
+  0%, 100% { transform: translate(-50%, -50%) scale(1); opacity: 0.6; }
+  50% { transform: translate(-50%, -50%) scale(1.35); opacity: 0; }
 }
 </style>

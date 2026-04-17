@@ -215,15 +215,19 @@ async function share() {
   border: 1px solid var(--border);
 }
 .player-row__token {
-  width: 36px;
-  height: 36px;
-  border-radius: 10px;
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
   display: grid;
   place-items: center;
   color: #fff;
   font-weight: 800;
   font-size: 14px;
-  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.3);
+  box-shadow:
+    0 0 0 1px rgba(0, 0, 0, 0.3),
+    0 4px 10px -2px currentColor,
+    inset 0 1px 0 rgba(255, 255, 255, 0.4),
+    inset 0 -2px 4px rgba(0, 0, 0, 0.15);
 }
 .player-row__body { flex: 1; }
 .player-row__name {

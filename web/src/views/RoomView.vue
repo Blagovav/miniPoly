@@ -11,6 +11,7 @@ import GameHud from "../components/GameHud.vue";
 import Chat from "../components/Chat.vue";
 import CardModal from "../components/CardModal.vue";
 import TileInfoModal from "../components/TileInfoModal.vue";
+import Confetti from "../components/Confetti.vue";
 
 const props = defineProps<{ id: string }>();
 const { t, locale } = useI18n();
@@ -152,6 +153,7 @@ function leaveRoom() {
       <!-- Winner overlay -->
       <transition name="fade">
         <div v-if="isEnded && winner" class="overlay">
+          <Confetti />
           <div class="winner-card card">
             <div class="winner-card__emoji">🏆</div>
             <div class="winner-card__title">{{ t("game.winner", { name: winner.name }) }}</div>

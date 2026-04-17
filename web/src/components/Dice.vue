@@ -65,20 +65,23 @@ const speedLabel = computed(() => {
 }
 .die {
   position: relative;
-  width: 52px;
-  height: 52px;
-  background: linear-gradient(145deg, #fff 0%, #e2e8f0 100%);
-  border-radius: 12px;
+  width: 56px;
+  height: 56px;
+  background:
+    linear-gradient(145deg, #ffffff 0%, #d1d5db 100%);
+  border-radius: 14px;
   box-shadow:
-    0 8px 20px -6px rgba(0, 0, 0, 0.5),
-    inset 0 1px 0 rgba(255, 255, 255, 0.8),
-    inset 0 -3px 8px rgba(0, 0, 0, 0.1);
+    0 10px 24px -6px rgba(0, 0, 0, 0.55),
+    0 2px 4px rgba(0, 0, 0, 0.3),
+    inset 0 2px 0 rgba(255, 255, 255, 0.95),
+    inset 0 -4px 10px rgba(0, 0, 0, 0.12),
+    inset 2px 0 0 rgba(255, 255, 255, 0.4);
   display: grid;
   grid-template-areas:
     "tl .  tr"
     "ml m  mr"
     "bl .  br";
-  padding: 8px;
+  padding: 9px;
   gap: 2px;
 }
 .die--speed {
@@ -86,6 +89,10 @@ const speedLabel = computed(() => {
   display: grid;
   grid-template-areas: none;
   place-items: center;
+  box-shadow:
+    0 10px 24px -6px rgba(217, 119, 6, 0.5),
+    inset 0 2px 0 rgba(255, 255, 255, 0.6),
+    inset 0 -4px 8px rgba(0, 0, 0, 0.18);
 }
 .speed-face {
   font-size: 22px;
@@ -103,10 +110,11 @@ const speedLabel = computed(() => {
   100% { transform: rotate(720deg) scale(1); }
 }
 .pip {
-  width: 8px;
-  height: 8px;
+  width: 9px;
+  height: 9px;
   border-radius: 50%;
-  background: #1f2937;
+  background: radial-gradient(circle at 35% 30%, #4b5563, #0f172a);
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.5);
   align-self: center;
   justify-self: center;
 }
