@@ -14,6 +14,7 @@ import TileInfoModal from "../components/TileInfoModal.vue";
 import Confetti from "../components/Confetti.vue";
 import OpponentsPanel from "../components/OpponentsPanel.vue";
 import PlayerProfileModal from "../components/PlayerProfileModal.vue";
+import TradeBanner from "../components/TradeBanner.vue";
 import { ref } from "vue";
 import type { Player } from "../../../shared/types";
 
@@ -142,6 +143,15 @@ function openProfile(p: Player) {
 function closeProfile() {
   profilePlayer.value = null;
 }
+
+function proposeTrade(tileIndex: number, cash: number) {
+  haptic("medium");
+  ws.send({ type: "proposeTrade", tileIndex, cash });
+}
+function respondTrade(accept: boolean) {
+  haptic(accept ? "medium" : "light");
+  ws.send({ type: "respondTrade", accept });
+}
 </script>
 
 <template>
@@ -204,8 +214,14 @@ function closeProfile() {
     <!-- Chat overlay (always available when in a room) -->
     <Chat v-if="game.room" :on-send="sendChat" />
     <CardModal v-if="game.room" />
-    <TileInfoModal v-if="game.room" :on-build-house="buildHouse" :on-sell-house="sellHouse" />
+    <TileInfoModal
+      v-if="game.room"
+      :on-build-house="buildHouse"
+      :on-sell-house="sellHouse"
+      :on-propose-trade="proposeTrade"
+    />
     <PlayerProfileModal :player="profilePlayer" :on-close="closeProfile" />
+    <TradeBanner v-if="game.room" :on-respond="respondTrade" />
   </div>
 </template>
 

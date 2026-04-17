@@ -53,6 +53,7 @@ export function createRoom(hostId: string, isPublic = true, maxPlayers = MAX_PLA
     properties: {},
     log: [],
     lastCard: null,
+    pendingTrade: null,
     winnerId: null,
     createdAt: Date.now(),
     startedAt: null,
@@ -217,6 +218,77 @@ export function sellHouse(room: RoomState, playerId: string, tileIndex: number):
   owned.houses--;
   p.cash += refund;
   log(room, { en: `${p.name} sold a house on ${tile.name.en} (+$${refund})`, ru: `${p.name} продал дом на ${tile.name.ru} (+$${refund})` });
+  return { ok: true };
+}
+
+/** Предложить купить чужую собственность. */
+export function proposeTrade(
+  room: RoomState,
+  fromId: string,
+  tileIndex: number,
+  cash: number,
+): { ok: boolean; error?: string } {
+  if (room.phase === "lobby" || room.phase === "ended") return { ok: false, error: "not in game" };
+  if (room.pendingTrade) return { ok: false, error: "a trade is already pending" };
+  const from = room.players.find((p) => p.id === fromId);
+  if (!from || from.bankrupt) return { ok: false, error: "no buyer" };
+  const owned = room.properties[tileIndex];
+  if (!owned) return { ok: false, error: "nobody owns this" };
+  if (owned.ownerId === fromId) return { ok: false, error: "already yours" };
+  if (owned.houses > 0 || owned.hotel) return { ok: false, error: "sell houses first" };
+  const offer = Math.max(0, Math.floor(cash));
+  if (from.cash < offer) return { ok: false, error: "not enough cash" };
+
+  room.pendingTrade = {
+    id: nanoid(8),
+    fromId,
+    toId: owned.ownerId,
+    tileIndex,
+    cash: offer,
+    ts: Date.now(),
+  };
+  const tile = BOARD[tileIndex];
+  const owner = room.players.find((p) => p.id === owned.ownerId);
+  log(room, {
+    en: `${from.name} offers $${offer} for ${tile.name.en} to ${owner?.name ?? "?"}`,
+    ru: `${from.name} предлагает $${offer} за ${tile.name.ru} игроку ${owner?.name ?? "?"}`,
+  });
+  return { ok: true };
+}
+
+export function resolveTrade(
+  room: RoomState,
+  responderId: string,
+  accept: boolean,
+): { ok: boolean; error?: string } {
+  const t = room.pendingTrade;
+  if (!t) return { ok: false, error: "no pending trade" };
+  if (t.toId !== responderId) return { ok: false, error: "not your offer" };
+
+  const from = room.players.find((p) => p.id === t.fromId);
+  const to = room.players.find((p) => p.id === t.toId);
+  const prop = room.properties[t.tileIndex];
+  const tile = BOARD[t.tileIndex];
+  room.pendingTrade = null;
+
+  if (!accept) {
+    log(room, {
+      en: `${to?.name ?? "?"} rejected offer for ${tile?.name.en ?? "?"}`,
+      ru: `${to?.name ?? "?"} отклонил предложение за ${tile?.name.ru ?? "?"}`,
+    });
+    return { ok: true };
+  }
+
+  if (!from || !to || !prop || from.bankrupt) return { ok: false, error: "trade invalid" };
+  if (from.cash < t.cash) return { ok: false, error: "buyer no longer has cash" };
+
+  from.cash -= t.cash;
+  to.cash += t.cash;
+  prop.ownerId = from.id;
+  log(room, {
+    en: `${to.name} sold ${tile.name.en} to ${from.name} for $${t.cash}`,
+    ru: `${to.name} продал ${tile.name.ru} игроку ${from.name} за $${t.cash}`,
+  });
   return { ok: true };
 }
 

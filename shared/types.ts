@@ -136,6 +136,15 @@ export interface DrawnCard {
   ts: number;
 }
 
+export interface TradeOffer {
+  id: string;
+  fromId: string;
+  toId: string;
+  tileIndex: number;
+  cash: number;
+  ts: number;
+}
+
 export interface RoomState {
   id: string;
   hostId: string;
@@ -150,6 +159,7 @@ export interface RoomState {
   properties: Record<number, OwnedProperty>;
   log: GameLogEntry[];
   lastCard: DrawnCard | null;
+  pendingTrade: TradeOffer | null;
   winnerId: string | null;
   createdAt: number;
   startedAt: number | null;
@@ -189,7 +199,9 @@ export type ClientMessage =
   | { type: "leave" }
   | { type: "destroyRoom" }
   | { type: "buildHouse"; tileIndex: number }
-  | { type: "sellHouse"; tileIndex: number };
+  | { type: "sellHouse"; tileIndex: number }
+  | { type: "proposeTrade"; tileIndex: number; cash: number }
+  | { type: "respondTrade"; accept: boolean };
 
 // ---------- Server → Client messages ----------
 export type ServerMessage =

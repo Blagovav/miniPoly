@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, ref } from "vue";
 import { useI18n } from "vue-i18n";
 import { BOARD, GROUP_COLORS, GROUP_SIZE } from "../../../shared/board";
 import type { Locale, StreetTile } from "../../../shared/types";
@@ -9,6 +9,7 @@ import { useGameStore } from "../stores/game";
 const props = defineProps<{
   onBuildHouse?: (tileIndex: number) => void;
   onSellHouse?: (tileIndex: number) => void;
+  onProposeTrade?: (tileIndex: number, cash: number) => void;
 }>();
 
 const { locale } = useI18n();
@@ -156,6 +157,30 @@ function build() {
 function sell() {
   if (tile.value) props.onSellHouse?.(tile.value.index);
 }
+
+// Трейд — можно предложить, если это чья-то чужая собственность (без построек).
+const canPropose = computed(() => {
+  const o = owned.value;
+  const me = game.me;
+  if (!o || !me || o.ownerId === me.id) return false;
+  if (o.houses > 0 || o.hotel) return false;
+  return true;
+});
+const proposeOpen = ref(false);
+const proposeCash = ref(0);
+function openPropose() {
+  const t = tile.value;
+  if (t && (t.kind === "street" || t.kind === "railroad" || t.kind === "utility")) {
+    proposeCash.value = t.price;
+  }
+  proposeOpen.value = true;
+}
+function sendPropose() {
+  if (!tile.value || !proposeCash.value || proposeCash.value <= 0) return;
+  props.onProposeTrade?.(tile.value.index, proposeCash.value);
+  proposeOpen.value = false;
+  game.selectTile(null);
+}
 </script>
 
 <template>
@@ -244,6 +269,33 @@ function sell() {
           <p v-if="!hasMonopoly" class="build-actions__hint">
             Нужна вся цветовая группа, чтобы строить
           </p>
+        </div>
+
+        <!-- Предложить выкуп у чужого владельца -->
+        <div v-if="canPropose" class="build-actions">
+          <div v-if="!proposeOpen">
+            <button class="btn btn--primary" @click="openPropose">
+              💱 Предложить выкуп
+            </button>
+          </div>
+          <div v-else class="propose-form">
+            <label class="propose-form__label">
+              Сколько предлагаешь?
+              <input
+                v-model.number="proposeCash"
+                type="number"
+                min="1"
+                :max="game.me?.cash ?? 0"
+                class="propose-form__input"
+              />
+            </label>
+            <div class="propose-form__row">
+              <button class="btn btn--ghost" @click="proposeOpen = false">Отмена</button>
+              <button class="btn btn--neon" :disabled="!proposeCash || proposeCash <= 0" @click="sendPropose">
+                Отправить
+              </button>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -425,6 +477,28 @@ function sell() {
   text-align: center;
   margin: 2px 0 0;
 }
+.propose-form { display: flex; flex-direction: column; gap: 8px; }
+.propose-form__label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--text-dim);
+}
+.propose-form__input {
+  padding: 10px 12px;
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  color: var(--text);
+  font-size: 16px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  outline: none;
+}
+.propose-form__input:focus { border-color: var(--purple); }
+.propose-form__row { display: flex; gap: 6px; }
+.propose-form__row .btn { flex: 1; padding: 10px; }
 
 @keyframes info-pop {
   0% { transform: translateY(30px) scale(0.9); opacity: 0; }

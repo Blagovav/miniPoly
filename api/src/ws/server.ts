@@ -9,8 +9,10 @@ import {
   createRoom,
   endTurn,
   leaveActiveGame,
+  proposeTrade,
   reassignHostIfNeeded,
   removePlayer,
+  resolveTrade,
   rollAndMove,
   selectToken,
   sellHouse,
@@ -137,6 +139,10 @@ function handleMessage(conn: Conn, ws: WebSocket, msg: ClientMessage): void {
       return handleBuildHouse(conn, msg.tileIndex);
     case "sellHouse":
       return handleSellHouse(conn, msg.tileIndex);
+    case "proposeTrade":
+      return handleProposeTrade(conn, msg.tileIndex, msg.cash);
+    case "respondTrade":
+      return handleRespondTrade(conn, msg.accept);
     default:
       conn.send({ type: "error", message: "unknown message" });
   }
@@ -353,6 +359,28 @@ function handleSellHouse(conn: Conn, tileIndex: number): void {
   const res = sellHouse(ctx.room, ctx.p.id, tileIndex);
   if (!res.ok) {
     conn.send({ type: "error", message: res.error ?? "can't sell" });
+    return;
+  }
+  sendState(ctx.room.id);
+}
+
+function handleProposeTrade(conn: Conn, tileIndex: number, cash: number): void {
+  const ctx = getRoomAndPlayer(conn);
+  if (!ctx || !ctx.p) return;
+  const res = proposeTrade(ctx.room, ctx.p.id, tileIndex, cash);
+  if (!res.ok) {
+    conn.send({ type: "error", message: res.error ?? "can't propose trade" });
+    return;
+  }
+  sendState(ctx.room.id);
+}
+
+function handleRespondTrade(conn: Conn, accept: boolean): void {
+  const ctx = getRoomAndPlayer(conn);
+  if (!ctx || !ctx.p) return;
+  const res = resolveTrade(ctx.room, ctx.p.id, accept);
+  if (!res.ok) {
+    conn.send({ type: "error", message: res.error ?? "can't respond" });
     return;
   }
   sendState(ctx.room.id);
