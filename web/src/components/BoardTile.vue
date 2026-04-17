@@ -3,6 +3,7 @@ import { computed } from "vue";
 import { useI18n } from "vue-i18n";
 import type { Tile, OwnedProperty, Player, Locale } from "../../../shared/types";
 import { GROUP_COLORS } from "../../../shared/board";
+import { useGameStore } from "../stores/game";
 
 const props = defineProps<{
   tile: Tile;
@@ -10,6 +11,11 @@ const props = defineProps<{
   owned?: OwnedProperty;
   owner?: Player;
 }>();
+
+const game = useGameStore();
+function open() {
+  game.selectTile(props.tile.index);
+}
 
 const { locale } = useI18n();
 const loc = computed<Locale>(() => (locale.value === "ru" ? "ru" : "en"));
@@ -53,6 +59,7 @@ const priceLabel = computed(() => {
 <template>
   <div
     :class="['tile', `tile--${tile.kind}`, `tile--${side}`, owned && 'tile--owned']"
+    @click="open"
   >
     <div v-if="bandColor" class="tile__band" :style="{ background: bandColor }" />
 
@@ -83,7 +90,9 @@ const priceLabel = computed(() => {
   min-width: 0;
   min-height: 0;
   transition: transform 0.15s ease, border-color 0.2s ease, box-shadow 0.2s ease, background 0.4s ease;
+  cursor: pointer;
 }
+.tile:active { transform: scale(0.95); }
 .tile:hover { border-color: rgba(168, 85, 247, 0.5); z-index: 2; }
 
 .tile__band {

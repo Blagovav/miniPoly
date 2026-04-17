@@ -10,6 +10,7 @@ import Lobby from "../components/Lobby.vue";
 import GameHud from "../components/GameHud.vue";
 import Chat from "../components/Chat.vue";
 import CardModal from "../components/CardModal.vue";
+import TileInfoModal from "../components/TileInfoModal.vue";
 
 const props = defineProps<{ id: string }>();
 const { t, locale } = useI18n();
@@ -157,6 +158,7 @@ function selectToken(tokenId: string) {
     <!-- Chat overlay (always available when in a room) -->
     <Chat v-if="game.room" :on-send="sendChat" />
     <CardModal v-if="game.room" />
+    <TileInfoModal v-if="game.room" />
   </div>
 </template>
 

@@ -22,6 +22,12 @@ export const useGameStore = defineStore("game", () => {
   // Пошаговая анимация: пока идёт, отрисовка берёт значение отсюда, а не из player.position.
   const animatedPositions = ref<Record<string, number>>({});
   const animatingPlayerId = ref<string | null>(null);
+  // Какую клетку посмотреть в info-модалке.
+  const selectedTileIndex = ref<number | null>(null);
+
+  function selectTile(idx: number | null) {
+    selectedTileIndex.value = idx;
+  }
 
   const BOARD_LEN = 40;
 
@@ -112,6 +118,8 @@ export const useGameStore = defineStore("game", () => {
     unreadChat,
     animatedPositions,
     animatingPlayerId,
+    selectedTileIndex,
+    selectTile,
     me,
     currentPlayer,
     isMyTurn,
