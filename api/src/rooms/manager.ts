@@ -48,7 +48,11 @@ export function onStateChange(room: RoomState): void {
   const prev = notifiedTurns.get(room.id);
   if (prev !== p.id) {
     notifiedTurns.set(room.id, p.id);
-    notifyTurn(p.tgUserId, room.id, p.name);
+    // Пушим только если игрок не в сети (свернул/закрыл приложение).
+    // Если у него открытый WS — он видит экран, бот в личку не пишет.
+    if (!p.connected) {
+      notifyTurn(p.tgUserId, room.id, p.name);
+    }
     resetTurnTimer(room);
   }
 }
