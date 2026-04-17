@@ -4,7 +4,7 @@ import { config } from "./config";
 import { registerWebSocket } from "./ws/server";
 import { allRooms, getRoom } from "./rooms/manager";
 import { BOARD } from "../../shared/board";
-import { getRecentCoPlayers, getUserProfile, initDb } from "./db";
+import { getRecentCoPlayers, getUserProfile, getUserPurchases, initDb, recordPurchase } from "./db";
 
 const app = Fastify({ logger: true });
 
@@ -50,6 +50,44 @@ app.get<{ Params: { tgUserId: string } }>("/api/users/:tgUserId/coplayers", asyn
   const list = await getRecentCoPlayers(id);
   return { players: list };
 });
+
+app.get<{ Params: { tgUserId: string } }>("/api/users/:tgUserId/purchases", async (req, reply) => {
+  const id = Number(req.params.tgUserId);
+  if (!id) return reply.code(400).send({ error: "bad id" });
+  const items = await getUserPurchases(id);
+  return { items };
+});
+
+// Создать инвойс для покупки за Telegram Stars. Перенаправляет в бота.
+app.post<{ Body: { tgUserId: number; itemId: string; title: string; stars: number } }>(
+  "/api/stars/invoice",
+  async (req, reply) => {
+    try {
+      const res = await fetch(`${config.botUrl}/invoice/create`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(req.body),
+      });
+      if (!res.ok) return reply.code(502).send({ error: "bot unreachable" });
+      return await res.json();
+    } catch {
+      return reply.code(502).send({ error: "bot unreachable" });
+    }
+  },
+);
+
+// Внутренний endpoint — бот шлёт сюда на successful_payment.
+app.post<{ Body: { tgUserId: number; itemId: string; stars: number; chargeId: string }; Headers: { "x-bot-token"?: string } }>(
+  "/api/internal/purchase",
+  async (req, reply) => {
+    if (req.headers["x-bot-token"] !== config.botToken) {
+      return reply.code(401).send({ error: "unauthorized" });
+    }
+    const { tgUserId, itemId, stars, chargeId } = req.body;
+    await recordPurchase({ tgUserId, itemId, stars, tgPaymentChargeId: chargeId });
+    return { ok: true };
+  },
+);
 
 // Инициализация БД — ждём postgres
 try {

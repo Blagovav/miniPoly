@@ -177,7 +177,8 @@ export interface ShopItem {
   id: string;
   kind: "token" | "theme" | "emote";
   name: I18nText;
-  price: number;
+  price: number; // цена в монетах (0 = бесплатно, если за Stars)
+  starsPrice?: number; // если указано — можно купить за Telegram Stars
   icon: string;
   preview?: string;
 }

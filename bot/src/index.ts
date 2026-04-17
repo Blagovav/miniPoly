@@ -3,6 +3,7 @@ import Fastify from "fastify";
 
 const BOT_TOKEN = process.env.BOT_TOKEN ?? "";
 const WEBAPP_URL = process.env.WEBAPP_URL ?? "http://localhost:5174";
+const API_URL = process.env.API_URL ?? "http://api:3000";
 const PORT = Number(process.env.PORT ?? 3001);
 
 if (!BOT_TOKEN) {
@@ -46,6 +47,44 @@ if (bot) {
     await ctx.reply("Создай комнату и пригласи друзей!", { reply_markup: kb });
   });
 
+  // Pre-checkout — всегда одобряем.
+  bot.on("pre_checkout_query", async (ctx) => {
+    try {
+      await ctx.answerPreCheckoutQuery(true);
+    } catch (err) {
+      console.error("[bot] pre_checkout_query failed:", err);
+    }
+  });
+
+  // Успешная оплата — регистрируем покупку в API.
+  bot.on("message:successful_payment", async (ctx) => {
+    const sp = ctx.message.successful_payment;
+    const payload = sp.invoice_payload; // "itemId|tgUserId"
+    const [itemId, uidStr] = payload.split("|");
+    const tgUserId = Number(uidStr || ctx.from?.id);
+    try {
+      const res = await fetch(`${API_URL}/api/internal/purchase`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-bot-token": BOT_TOKEN,
+        },
+        body: JSON.stringify({
+          tgUserId,
+          itemId,
+          stars: sp.total_amount,
+          chargeId: sp.telegram_payment_charge_id,
+        }),
+      });
+      if (!res.ok) {
+        console.error("[bot] API didn't accept purchase:", res.status);
+      }
+      await ctx.reply(`✅ Оплата принята! <b>${itemId}</b> добавлен в твой инвентарь.`, { parse_mode: "HTML" });
+    } catch (err) {
+      console.error("[bot] successful_payment forwarding failed:", err);
+    }
+  });
+
   bot.catch((err) => {
     console.error("[bot] error", err);
   });
@@ -60,7 +99,6 @@ if (bot) {
     });
 }
 
-// HTTP API для уведомлений от `api` контейнера
 const app = Fastify({ logger: false });
 
 app.post<{ Body: { tgUserId: number; roomId: string; playerName: string } }>(
@@ -73,8 +111,6 @@ app.post<{ Body: { tgUserId: number; roomId: string; playerName: string } }>(
     const kb = new InlineKeyboard().webApp("🎲 Сделать ход", url);
 
     try {
-      // В приватных чатах chat_id === user_id.
-      // Работает если юзер /start'ил бота ИЛИ дал requestWriteAccess.
       await bot.api.sendMessage(
         tgUserId,
         `🎲 <b>${playerName}</b>, твой ход в комнате <b>${roomId}</b>!\n\n⏱ На ход 3 минуты, иначе пропустим.`,
@@ -82,9 +118,34 @@ app.post<{ Body: { tgUserId: number; roomId: string; playerName: string } }>(
       );
       return { ok: true };
     } catch (err: any) {
-      // Если бот не может писать — юзер не давал разрешения. Не страшно, просто скипнется.
       console.error("[bot] notify failed (user may not have started bot):", err?.description || err?.message);
       return reply.code(200).send({ ok: false, reason: "no chat access" });
+    }
+  },
+);
+
+// Создать invoice-link для Telegram Stars.
+app.post<{ Body: { tgUserId: number; itemId: string; title: string; stars: number } }>(
+  "/invoice/create",
+  async (req, reply) => {
+    if (!bot) return reply.code(503).send({ error: "bot not running" });
+    const { tgUserId, itemId, title, stars } = req.body;
+    if (!tgUserId || !itemId || !stars) return reply.code(400).send({ error: "bad request" });
+    try {
+      // payload — содержит itemId и пользователя, чтобы получить на successful_payment
+      const payload = `${itemId}|${tgUserId}`;
+      const link = await bot.api.createInvoiceLink(
+        title,
+        `Покупка ${title} за Telegram Stars`,
+        payload,
+        "", // provider_token для Stars должен быть пустым
+        "XTR", // currency = Telegram Stars
+        [{ label: title, amount: stars }],
+      );
+      return { link };
+    } catch (err: any) {
+      console.error("[bot] createInvoiceLink failed:", err?.description || err?.message);
+      return reply.code(500).send({ error: "invoice failed", reason: err?.description });
     }
   },
 );

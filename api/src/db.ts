@@ -27,6 +27,17 @@ export async function initDb(): Promise<void> {
     );
     CREATE INDEX IF NOT EXISTS idx_match_user ON match_history (tg_user_id);
     CREATE INDEX IF NOT EXISTS idx_match_ended ON match_history (ended_at DESC);
+
+    CREATE TABLE IF NOT EXISTS stars_purchases (
+      id BIGSERIAL PRIMARY KEY,
+      tg_user_id BIGINT NOT NULL,
+      item_id TEXT NOT NULL,
+      stars INT NOT NULL,
+      tg_payment_charge_id TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS idx_purchases_user ON stars_purchases (tg_user_id);
+    CREATE UNIQUE INDEX IF NOT EXISTS uq_purchase_charge ON stars_purchases (tg_payment_charge_id) WHERE tg_payment_charge_id IS NOT NULL;
   `);
 }
 
@@ -94,6 +105,28 @@ export async function recordMatch(args: {
      VALUES ($1, $2, $3, $4, $5)`,
     [args.roomId, args.tgUserId, args.won, args.cashAtEnd, args.playedWith],
   );
+}
+
+export async function recordPurchase(args: {
+  tgUserId: number;
+  itemId: string;
+  stars: number;
+  tgPaymentChargeId: string;
+}): Promise<void> {
+  await pool.query(
+    `INSERT INTO stars_purchases (tg_user_id, item_id, stars, tg_payment_charge_id)
+     VALUES ($1, $2, $3, $4)
+     ON CONFLICT (tg_payment_charge_id) DO NOTHING`,
+    [args.tgUserId, args.itemId, args.stars, args.tgPaymentChargeId],
+  );
+}
+
+export async function getUserPurchases(tgUserId: number): Promise<string[]> {
+  const { rows } = await pool.query(
+    `SELECT DISTINCT item_id FROM stars_purchases WHERE tg_user_id = $1`,
+    [tgUserId],
+  );
+  return rows.map((r) => r.item_id);
 }
 
 /** Последние N соигроков — люди, с которыми недавно играл. */

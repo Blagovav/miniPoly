@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed } from "vue";
+import { ref, computed, onMounted } from "vue";
 import { useI18n } from "vue-i18n";
 import { useRouter } from "vue-router";
 import { SHOP_ITEMS } from "../shop/items";
@@ -9,7 +9,52 @@ import { useTelegram } from "../composables/useTelegram";
 const { t, locale } = useI18n();
 const router = useRouter();
 const inv = useInventoryStore();
-const { haptic, notify } = useTelegram();
+const { haptic, notify, tg, userId } = useTelegram();
+
+// Подтянем купленные за Stars при входе в магазин.
+onMounted(() => inv.syncServerUnlocks(userId.value));
+
+async function buyWithStars(item: (typeof SHOP_ITEMS)[number]) {
+  if (!item.starsPrice || !userId.value) {
+    notify("error");
+    return;
+  }
+  try {
+    const base = (import.meta.env.VITE_API_URL as string) || "";
+    const res = await fetch(`${base}/api/stars/invoice`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        tgUserId: userId.value,
+        itemId: item.id,
+        title: item.name[locale.value as "en" | "ru"],
+        stars: item.starsPrice,
+      }),
+    });
+    const data = await res.json();
+    if (!data.link) {
+      notify("error");
+      alert("Не удалось создать счёт. Попробуй позже.");
+      return;
+    }
+    const tgApp: any = tg.value as any;
+    if (tgApp?.openInvoice) {
+      tgApp.openInvoice(data.link, async (status: string) => {
+        if (status === "paid") {
+          notify("success");
+          haptic("heavy");
+          await inv.syncServerUnlocks(userId.value);
+        } else if (status === "failed" || status === "cancelled") {
+          notify("error");
+        }
+      });
+    } else {
+      window.open(data.link, "_blank");
+    }
+  } catch {
+    notify("error");
+  }
+}
 
 const tabs = [
   { id: "token", label: "shop.tokens" },
@@ -82,10 +127,18 @@ function actionLabel(item: (typeof SHOP_ITEMS)[number]) {
         :key="item.id"
         :class="['item', isOwned(item.id) && 'owned', isEquipped(item.id, item.kind as any) && 'equipped']"
       >
+        <div v-if="item.starsPrice && !isOwned(item.id)" class="item__stars-badge">⭐ {{ item.starsPrice }}</div>
         <div class="item__icon">{{ item.icon }}</div>
         <div class="item__name">{{ item.name[locale as "en" | "ru"] }}</div>
         <button class="btn btn--ghost item__cta" @click="onAction(item)">
           {{ actionLabel(item) }}
+        </button>
+        <button
+          v-if="item.starsPrice && !isOwned(item.id)"
+          class="btn btn--primary item__stars-btn"
+          @click="buyWithStars(item)"
+        >
+          ⭐ Stars
         </button>
       </div>
     </div>
@@ -177,4 +230,23 @@ function actionLabel(item: (typeof SHOP_ITEMS)[number]) {
   font-size: 12px;
   width: 100%;
 }
+.item__stars-btn {
+  padding: 8px 10px;
+  font-size: 12px;
+  width: 100%;
+  background: linear-gradient(135deg, #ffd95e 0%, #f59e0b 100%);
+}
+.item__stars-badge {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  padding: 2px 8px;
+  font-size: 11px;
+  font-weight: 800;
+  background: linear-gradient(135deg, #ffd95e, #d97706);
+  color: #1a1000;
+  border-radius: 999px;
+  box-shadow: 0 2px 8px rgba(245, 158, 11, 0.5);
+}
+.item { position: relative; }
 </style>
