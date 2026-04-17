@@ -11,6 +11,8 @@ import RoomsView from "./views/RoomsView.vue";
 import ShopView from "./views/ShopView.vue";
 import CreateView from "./views/CreateView.vue";
 
+import FriendsView from "./views/FriendsView.vue";
+
 const router = createRouter({
   history: createWebHashHistory(),
   routes: [
@@ -18,6 +20,7 @@ const router = createRouter({
     { path: "/rooms", component: RoomsView, name: "rooms" },
     { path: "/create", component: CreateView, name: "create" },
     { path: "/shop", component: ShopView, name: "shop" },
+    { path: "/friends", component: FriendsView, name: "friends" },
     { path: "/room/:id", component: RoomView, name: "room", props: true },
   ],
 });

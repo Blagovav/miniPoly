@@ -589,6 +589,24 @@ function checkWinCondition(room: RoomState): void {
     if (alive[0]) {
       log(room, { en: `${alive[0].name} wins!`, ru: `${alive[0].name} победил!` });
     }
+    // Лениво записываем результат в БД (не блокируя игру).
+    import("../db")
+      .then(({ recordMatch, upsertUser }) => {
+        const winnerId = room.winnerId;
+        const allIds = room.players.map((p) => p.tgUserId);
+        for (const p of room.players) {
+          upsertUser(p.tgUserId, p.name).catch(() => {});
+          recordMatch({
+            roomId: room.id,
+            tgUserId: p.tgUserId,
+            name: p.name,
+            won: p.id === winnerId,
+            cashAtEnd: p.cash,
+            playedWith: allIds.filter((id) => id !== p.tgUserId),
+          }).catch((err) => console.error("[db] recordMatch failed:", err?.message));
+        }
+      })
+      .catch(() => {});
   }
 }
 

@@ -107,6 +107,15 @@ function saveName() {
         </div>
         <div class="tile__arrow">→</div>
       </button>
+
+      <button class="tile tile--friends" @click="go('friends')">
+        <div class="tile__icon">👥</div>
+        <div class="tile__body">
+          <div class="tile__title">Друзья</div>
+          <div class="tile__sub">Статистика и соигроки</div>
+        </div>
+        <div class="tile__arrow">→</div>
+      </button>
     </main>
 
     <footer class="home__footer">
@@ -192,6 +201,7 @@ function saveName() {
 .tile--play { color: var(--neon); }
 .tile--create { color: var(--purple); }
 .tile--shop { color: var(--gold); }
+.tile--friends { color: #06b6d4; }
 .tile__icon {
   font-size: 34px;
   width: 56px;

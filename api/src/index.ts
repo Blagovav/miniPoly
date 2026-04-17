@@ -4,6 +4,7 @@ import { config } from "./config";
 import { registerWebSocket } from "./ws/server";
 import { allRooms, getRoom } from "./rooms/manager";
 import { BOARD } from "../../shared/board";
+import { getRecentCoPlayers, getUserProfile, initDb } from "./db";
 
 const app = Fastify({ logger: true });
 
@@ -34,6 +35,29 @@ app.get<{ Params: { id: string } }>("/api/rooms/:id", async (req, reply) => {
   if (!room) return reply.code(404).send({ error: "not found" });
   return { room };
 });
+
+app.get<{ Params: { tgUserId: string } }>("/api/users/:tgUserId", async (req, reply) => {
+  const id = Number(req.params.tgUserId);
+  if (!id) return reply.code(400).send({ error: "bad id" });
+  const profile = await getUserProfile(id);
+  if (!profile) return reply.code(404).send({ error: "not found" });
+  return { profile };
+});
+
+app.get<{ Params: { tgUserId: string } }>("/api/users/:tgUserId/coplayers", async (req, reply) => {
+  const id = Number(req.params.tgUserId);
+  if (!id) return reply.code(400).send({ error: "bad id" });
+  const list = await getRecentCoPlayers(id);
+  return { players: list };
+});
+
+// Инициализация БД — ждём postgres
+try {
+  await initDb();
+  app.log.info("DB schema ready");
+} catch (err) {
+  app.log.error({ err }, "DB init failed — stats will not persist");
+}
 
 await registerWebSocket(app);
 

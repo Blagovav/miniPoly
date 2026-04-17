@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { BOARD, GROUP_COLORS } from "../../../shared/board";
 import type { Locale, Player, StreetTile } from "../../../shared/types";
@@ -15,6 +15,24 @@ const props = defineProps<{
 const { locale } = useI18n();
 const loc = computed<Locale>(() => (locale.value === "ru" ? "ru" : "en"));
 const game = useGameStore();
+
+const serverStats = ref<{ gamesPlayed: number; gamesWon: number; totalEarned: number } | null>(null);
+watch(
+  () => props.player?.tgUserId,
+  async (id) => {
+    serverStats.value = null;
+    if (!id) return;
+    try {
+      const base = (import.meta.env.VITE_API_URL as string) || "";
+      const res = await fetch(`${base}/api/users/${id}`);
+      if (res.ok) {
+        const data = await res.json();
+        serverStats.value = data.profile;
+      }
+    } catch {}
+  },
+  { immediate: true },
+);
 
 const icon = computed(() => {
   const p = props.player;
@@ -88,6 +106,25 @@ function bandColor(tileIndex: number): string {
           <div class="stat">
             <span class="stat__label">Собственность</span>
             <span class="stat__val">{{ ownedList.length }}</span>
+          </div>
+        </div>
+
+        <div v-if="serverStats" class="profile__stats profile__stats--lifetime">
+          <div class="stat">
+            <span class="stat__label">Всего игр</span>
+            <span class="stat__val">{{ serverStats.gamesPlayed }}</span>
+          </div>
+          <div class="stat">
+            <span class="stat__label">Побед</span>
+            <span class="stat__val">🏆 {{ serverStats.gamesWon }}</span>
+          </div>
+          <div class="stat">
+            <span class="stat__label">Winrate</span>
+            <span class="stat__val">
+              {{ serverStats.gamesPlayed > 0
+                ? Math.round((serverStats.gamesWon / serverStats.gamesPlayed) * 100)
+                : 0 }}%
+            </span>
           </div>
         </div>
 
@@ -175,6 +212,13 @@ function bandColor(tileIndex: number): string {
   padding: 14px 16px;
   border-top: 1px solid var(--border);
   border-bottom: 1px solid var(--border);
+}
+.profile__stats--lifetime {
+  border-top: none;
+  background: rgba(168, 85, 247, 0.08);
+}
+.profile__stats--lifetime .stat__label {
+  color: var(--purple);
 }
 .stat {
   display: flex;

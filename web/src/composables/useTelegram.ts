@@ -90,5 +90,19 @@ export function useTelegram() {
     }
   }
 
-  return { tg, initData, userId, userName, init, haptic, notify, close, setUserName };
+  async function fetchProfile(id?: number | null): Promise<{
+    gamesPlayed: number; gamesWon: number; totalEarned: number; winRate: number;
+  } | null> {
+    const target = id ?? userId.value;
+    if (!target) return null;
+    try {
+      const base = (import.meta.env.VITE_API_URL as string) || "";
+      const res = await fetch(`${base}/api/users/${target}`);
+      if (!res.ok) return null;
+      const data = await res.json();
+      return data.profile;
+    } catch { return null; }
+  }
+
+  return { tg, initData, userId, userName, init, haptic, notify, close, setUserName, fetchProfile };
 }
