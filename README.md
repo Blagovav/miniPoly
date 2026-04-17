@@ -61,6 +61,41 @@ nini_polia/
 - Торговля, аукционы, залог
 - Победа: все остальные банкроты
 
+## Production-деплой на VPS (tapcade.online)
+
+Один раз на сервере:
+
+```bash
+# 1. Установи Docker + Compose
+curl -fsSL https://get.docker.com | sh
+apt install -y docker-compose-plugin
+
+# 2. Склонируй репо
+git clone https://github.com/Blagovav/miniPoly.git /opt/minipoly
+cd /opt/minipoly
+
+# 3. Создай .env (из .env.prod.example)
+cp .env.prod.example .env
+nano .env   # впиши BOT_TOKEN и POSTGRES_PASSWORD
+
+# 4. DNS: направь A-записи tapcade.online и www.tapcade.online на IP сервера
+
+# 5. Открой порты 80/443 в файрволе (ufw/iptables)
+ufw allow 80 && ufw allow 443
+
+# 6. Поднимай
+docker compose -f docker-compose.prod.yml up -d --build
+```
+
+Caddy сам получит SSL от Let's Encrypt при первом запросе к `tapcade.online`. Почта уведомлений — в [Caddyfile](./Caddyfile).
+
+Обновление после `git push`:
+```bash
+cd /opt/minipoly
+git pull
+docker compose -f docker-compose.prod.yml up -d --build
+```
+
 ## Разработка
 
 - `shared/` монтируется в `api/` и `web/` — общие типы не дублируются.

@@ -1,0 +1,14 @@
+{
+	email blgovav94@gmail.com
+}
+
+tapcade.online, www.tapcade.online {
+	encode gzip
+
+	# WebSocket + REST API на api-сервис
+	@api path /api/* /ws /health
+	reverse_proxy @api api:3000
+
+	# Всё остальное — статика SPA через nginx в web-контейнере
+	reverse_proxy web:80
+}
