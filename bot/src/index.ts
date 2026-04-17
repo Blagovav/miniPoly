@@ -2,24 +2,17 @@ import { Bot, InlineKeyboard } from "grammy";
 import Fastify from "fastify";
 
 const BOT_TOKEN = process.env.BOT_TOKEN ?? "";
-const WEBAPP_URL = process.env.WEBAPP_URL ?? "http://localhost:5173";
+const WEBAPP_URL = process.env.WEBAPP_URL ?? "http://localhost:5174";
 const PORT = Number(process.env.PORT ?? 3001);
 
 if (!BOT_TOKEN) {
   console.warn("[bot] BOT_TOKEN is empty — bot will not start Telegram polling. API notify endpoint still available.");
 }
 
-// Храним tgUserId → chatId для отправки уведомлений (in-memory).
-const userChats = new Map<number, number>();
-
 const bot = BOT_TOKEN ? new Bot(BOT_TOKEN) : null;
 
 if (bot) {
   bot.command("start", async (ctx) => {
-    const userId = ctx.from?.id;
-    const chatId = ctx.chat?.id;
-    if (userId && chatId) userChats.set(userId, chatId);
-
     const payload = ctx.match?.trim();
     const isRoomInvite = payload && payload.startsWith("room_");
     const roomId = isRoomInvite ? payload.slice(5) : null;
@@ -27,7 +20,7 @@ if (bot) {
     const url = roomId ? `${WEBAPP_URL}?room=${encodeURIComponent(roomId)}` : WEBAPP_URL;
 
     const kb = new InlineKeyboard().webApp(
-      roomId ? `🎲 Войти в комнату ${roomId}` : "🎲 Играть в Монополию",
+      roomId ? `🎲 Войти в комнату ${roomId}` : "🎲 Играть в Minipoly",
       url,
     );
 
@@ -36,10 +29,10 @@ if (bot) {
       lang === "ru"
         ? roomId
           ? `Тебя пригласили в комнату <b>${roomId}</b>. Жми «Играть»!`
-          : "Привет! Монополия в Telegram 🎲\n\nЖми кнопку ниже и стартуй игру — приглашай друзей, кидай кости, скупай города."
+          : "Привет! Minipoly — Монополия в Telegram 🎲\n\nЖми кнопку ниже и стартуй игру — приглашай друзей, кидай кости, скупай города.\n\n✅ Бот будет пинговать, когда твой ход."
         : roomId
           ? `You've been invited to room <b>${roomId}</b>. Tap to join!`
-          : "Welcome to Monopoly on Telegram 🎲\n\nTap below to play. Invite friends, roll dice, buy streets.";
+          : "Welcome to Minipoly on Telegram 🎲\n\nTap below to play. Invite friends, roll dice, buy streets.\n\n✅ Bot will ping you when it's your turn.";
 
     await ctx.reply(text, { reply_markup: kb, parse_mode: "HTML" });
   });
@@ -74,22 +67,24 @@ app.post<{ Body: { tgUserId: number; roomId: string; playerName: string } }>(
   "/notify/turn",
   async (req, reply) => {
     const { tgUserId, roomId, playerName } = req.body;
-    const chatId = userChats.get(tgUserId);
-    if (!bot || !chatId) return { ok: false, reason: "no chat or bot" };
+    if (!bot) return { ok: false, reason: "no bot" };
 
     const url = `${WEBAPP_URL}?room=${encodeURIComponent(roomId)}`;
-    const kb = new InlineKeyboard().webApp("🎲 Мой ход!", url);
+    const kb = new InlineKeyboard().webApp("🎲 Сделать ход", url);
 
     try {
+      // В приватных чатах chat_id === user_id.
+      // Работает если юзер /start'ил бота ИЛИ дал requestWriteAccess.
       await bot.api.sendMessage(
-        chatId,
-        `🎲 <b>${playerName}</b>, твой ход в комнате <b>${roomId}</b>!`,
+        tgUserId,
+        `🎲 <b>${playerName}</b>, твой ход в комнате <b>${roomId}</b>!\n\n⏱ На ход 3 минуты, иначе пропустим.`,
         { reply_markup: kb, parse_mode: "HTML" },
       );
       return { ok: true };
-    } catch (err) {
-      console.error("[bot] notify failed", err);
-      return reply.code(500).send({ ok: false });
+    } catch (err: any) {
+      // Если бот не может писать — юзер не давал разрешения. Не страшно, просто скипнется.
+      console.error("[bot] notify failed (user may not have started bot):", err?.description || err?.message);
+      return reply.code(200).send({ ok: false, reason: "no chat access" });
     }
   },
 );

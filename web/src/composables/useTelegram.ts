@@ -8,6 +8,7 @@ interface TgWebApp {
   ready: () => void;
   expand: () => void;
   close: () => void;
+  requestWriteAccess?: (cb?: (granted: boolean) => void) => void;
   MainButton: {
     text: string;
     show: () => void;
@@ -48,6 +49,12 @@ export function useTelegram() {
     }
     try { w.ready(); } catch {}
     try { w.expand(); } catch {}
+    // Просим разрешение писать в личку — нужно для push-уведомлений о ходе.
+    try {
+      if (w.requestWriteAccess && !localStorage.getItem("writeAccessAsked")) {
+        w.requestWriteAccess(() => localStorage.setItem("writeAccessAsked", "1"));
+      }
+    } catch {}
     tg.value = markRaw(w);
     initData.value = w.initData ?? "";
     userId.value = w.initDataUnsafe?.user?.id ?? null;
