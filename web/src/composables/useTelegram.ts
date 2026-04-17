@@ -5,9 +5,19 @@ interface TgWebApp {
   initDataUnsafe: {
     user?: { id: number; first_name: string; last_name?: string; username?: string; photo_url?: string; language_code?: string };
   };
+  version?: string;
+  isFullscreen?: boolean;
+  isVerticalSwipesEnabled?: boolean;
   ready: () => void;
   expand: () => void;
   close: () => void;
+  isVersionAtLeast?: (v: string) => boolean;
+  requestFullscreen?: () => void;
+  exitFullscreen?: () => void;
+  disableVerticalSwipes?: () => void;
+  enableVerticalSwipes?: () => void;
+  onEvent?: (event: string, handler: (...args: unknown[]) => void) => void;
+  offEvent?: (event: string, handler: (...args: unknown[]) => void) => void;
   requestWriteAccess?: (cb?: (granted: boolean) => void) => void;
   MainButton: {
     text: string;
@@ -49,6 +59,17 @@ export function useTelegram() {
     }
     try { w.ready(); } catch {}
     try { w.expand(); } catch {}
+    // Fullscreen (Bot API 8.0+) — прячет шапку Telegram, когда Mini App открыт из диалога.
+    // Без этого приложение показывается как bottom sheet с видимым хедером Telegram.
+    try {
+      const supportsFs = w.isVersionAtLeast?.("8.0") && !!w.requestFullscreen;
+      if (supportsFs && !w.isFullscreen) {
+        w.requestFullscreen!();
+        // Когда в fullscreen, вертикальные свайпы закрывают приложение —
+        // отключаем, чтобы можно было скроллить внутри.
+        w.disableVerticalSwipes?.();
+      }
+    } catch { /* старая версия Telegram — остаёмся в expanded */ }
     // Просим разрешение писать в личку — нужно для push-уведомлений о ходе.
     try {
       if (w.requestWriteAccess && !localStorage.getItem("writeAccessAsked")) {
@@ -57,8 +78,24 @@ export function useTelegram() {
     } catch {}
     tg.value = markRaw(w);
     initData.value = w.initData ?? "";
-    userId.value = w.initDataUnsafe?.user?.id ?? null;
-    userName.value = w.initDataUnsafe?.user?.first_name ?? "Player";
+    const tgUser = w.initDataUnsafe?.user;
+    if (tgUser?.id) {
+      userId.value = tgUser.id;
+      userName.value = tgUser.first_name ?? "Player";
+    } else {
+      // Telegram WebApp есть, но пользователя нет (dev-preview, broken launch) —
+      // падаем на стабильный devId, чтобы профиль/друзья/инвайты работали.
+      const storedId = localStorage.getItem("devId");
+      const devId = storedId ? Number(storedId) : Math.floor(Math.random() * 1_000_000);
+      localStorage.setItem("devId", String(devId));
+      const devName = localStorage.getItem("devName") ?? `Player${devId % 1000}`;
+      userId.value = devId;
+      userName.value = devName;
+      if (!initData.value) {
+        const userPayload = JSON.stringify({ id: devId, first_name: devName });
+        initData.value = `user=${encodeURIComponent(userPayload)}&auth_date=${Math.floor(Date.now() / 1000)}`;
+      }
+    }
   }
 
   function haptic(style: "light" | "medium" | "heavy" = "light") {

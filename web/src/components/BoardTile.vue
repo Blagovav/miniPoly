@@ -10,6 +10,8 @@ const props = defineProps<{
   side: "top" | "bottom" | "left" | "right" | "corner";
   owned?: OwnedProperty;
   owner?: Player;
+  ownerColor?: string;
+  ownerIsFriend?: boolean;
 }>();
 
 const game = useGameStore();
@@ -20,21 +22,22 @@ function open() {
 const { locale } = useI18n();
 const loc = computed<Locale>(() => (locale.value === "ru" ? "ru" : "en"));
 
+/** Пастельный цвет группы в manifest-шаблоне medieval. */
 const bandColor = computed(() => {
   if (props.tile.kind === "street") return GROUP_COLORS[props.tile.group];
   return null;
 });
 
-// Тематическая иконка на каждую клетку (особенно уличные)
+// Icon per tile — used sparingly, mainly for corners and special tiles.
 const STREET_ICONS: Record<number, string> = {
-  1: "🏖️", 3: "🌊",                        // brown (Mediterranean/Baltic)
-  6: "🏛️", 8: "🏰", 9: "⛲",               // lightBlue
-  11: "🎭", 13: "🎨", 14: "🎪",             // pink
-  16: "🚢", 18: "🎸", 19: "🗽",             // orange
-  21: "🏇", 23: "🏟️", 24: "🎰",             // red
-  26: "🏝️", 27: "🎡", 29: "🌴",             // yellow
-  31: "🌉", 32: "🌁", 34: "🗿",             // green
-  37: "🏙️", 39: "🎆",                       // darkBlue
+  1: "🏖️", 3: "🌊",
+  6: "🏛️", 8: "🏰", 9: "⛲",
+  11: "🎭", 13: "🎨", 14: "🎪",
+  16: "🚢", 18: "🎸", 19: "🗽",
+  21: "🏇", 23: "🏟️", 24: "🎰",
+  26: "🏝️", 27: "🎡", 29: "🌴",
+  31: "🌉", 32: "🌁", 34: "🗿",
+  37: "🏙️", 39: "🎆",
 };
 
 const tileIcon = computed(() => {
@@ -51,160 +54,257 @@ const tileIcon = computed(() => {
     case "utility":
       return t.index === 12 ? "💡" : "💧";
     case "street":
-      return STREET_ICONS[t.index] ?? "🏠";
-    default: return "";
+      return STREET_ICONS[t.index] ?? null;
+    default:
+      return null;
   }
 });
 
-// Короткое имя только для углов (corner) и спец-клеток; улицы — только иконка + цена
+const showIcon = computed(() => props.side === "corner" || props.tile.kind !== "street");
+
+/** Короткое название для corner-клеток и спец-клеток, многострочно. */
 const short = computed(() => {
   const t = props.tile;
   if (t.kind === "street" || t.kind === "railroad" || t.kind === "utility") return "";
   const full = t.name[loc.value];
-  if (full.length < 14) return full;
+  if (full.length < 16) return full;
+  // Stripped for compactness.
   return full.split(" ").slice(0, 2).join(" ");
 });
 
 const priceLabel = computed(() => {
-  if (props.tile.kind === "street" || props.tile.kind === "railroad" || props.tile.kind === "utility") {
-    return `$${props.tile.price}`;
+  if (
+    props.tile.kind === "street"
+    || props.tile.kind === "railroad"
+    || props.tile.kind === "utility"
+  ) {
+    return props.tile.price;
   }
   return null;
 });
 </script>
 
 <template>
-  <div
-    :class="['tile', `tile--${tile.kind}`, `tile--${side}`, owned && 'tile--owned']"
+  <button
+    type="button"
+    :class="[
+      'board-tile',
+      props.side === 'corner' && 'corner',
+      `side-${props.side}`,
+      `kind-${tile.kind}`,
+      owned && 'is-owned',
+      ownerIsFriend && 'is-friend',
+    ]"
+    :style="ownerColor ? { '--owner-hue': ownerColor } : undefined"
     @click="open"
   >
-    <div v-if="bandColor" class="tile__band" :style="{ background: bandColor }" />
+    <!-- Group-color strip (streets only): sits on the inner edge so the
+         coloured band faces the middle of the board. -->
+    <div
+      v-if="bandColor"
+      class="band"
+      :style="{ background: bandColor }"
+    />
 
-    <div class="tile__body">
-      <div v-if="tileIcon" class="tile__icon">{{ tileIcon }}</div>
-      <div v-if="short" class="tile__name">{{ short }}</div>
-      <div v-if="priceLabel" class="tile__price">{{ priceLabel }}</div>
+    <!-- Tile body: icon (optional), name, price. Oriented per side so that
+         text on side rows reads sideways like a real Monopoly board. -->
+    <div class="body">
+      <div v-if="showIcon && tileIcon" class="icon">{{ tileIcon }}</div>
+      <div v-if="short" class="name">{{ short }}</div>
+      <div v-if="priceLabel !== null" class="price">◈ {{ priceLabel }}</div>
     </div>
 
-    <div v-if="owned && owner" class="tile__owner" :style="{ background: owner.color }" />
+    <!-- Mortgage padlock -->
+    <div v-if="owned && owned.mortgaged" class="mortgage" aria-label="Mortgaged">🔒</div>
 
-    <div v-if="owned && owned.houses > 0 && !owned.hotel" class="tile__houses">
-      <span v-for="n in owned.houses" :key="n">🏠</span>
+    <!-- House / hotel markers -->
+    <div v-if="owned && owned.hotel" class="hotel" aria-label="Hotel">🏨</div>
+    <div v-else-if="owned && owned.houses > 0" class="houses">
+      <span v-for="n in owned.houses" :key="n" class="house">▲</span>
     </div>
-    <div v-if="owned && owned.hotel" class="tile__hotel">🏨</div>
-
-    <div v-if="owned && owned.mortgaged" class="tile__mortgaged">🔒</div>
-  </div>
+  </button>
 </template>
 
 <style scoped>
-.tile {
+/* Base parchment tile. Matches .board-tile from design reference. */
+.board-tile {
+  background: var(--card-alt);
   position: relative;
-  background: var(--tile-bg, rgba(12, 17, 33, 0.85));
-  border: 1px solid rgba(148, 163, 184, 0.18);
-  border-radius: 6px;
   overflow: hidden;
+  padding: 0;
+  border: none;
+  cursor: pointer;
+  font-family: var(--font-body);
+  color: var(--ink);
   display: flex;
-  flex-direction: column;
+  font-size: 8px;
   min-width: 0;
   min-height: 0;
-  transition: transform 0.15s ease, border-color 0.2s ease, box-shadow 0.2s ease, background 0.4s ease;
-  cursor: pointer;
+  transition: background 0.15s ease, box-shadow 0.2s ease, transform 0.1s ease;
 }
-.tile:active { transform: scale(0.95); }
-.tile:hover { border-color: rgba(168, 85, 247, 0.5); z-index: 2; }
+.board-tile:hover { background: #fff9e4; }
+.board-tile:active { transform: scale(0.98); }
 
-.tile__band {
-  height: 7px;
-  border-bottom: 1px solid rgba(0, 0, 0, 0.3);
+/* Corner plate: softer gradient, parchment into deep. */
+.board-tile.corner {
+  background: linear-gradient(145deg, var(--card), var(--bg-deep));
 }
-.tile--left .tile__band { height: 100%; width: 7px; border-bottom: none; border-right: 1px solid rgba(0, 0, 0, 0.3); position: absolute; right: 0; top: 0; }
-.tile--right .tile__band { height: 100%; width: 7px; border-bottom: none; border-right: none; border-left: 1px solid rgba(0, 0, 0, 0.3); position: absolute; left: 0; top: 0; }
-.tile--top .tile__band { position: absolute; bottom: 0; top: auto; left: 0; right: 0; border-bottom: none; border-top: 1px solid rgba(0, 0, 0, 0.3); }
 
-.tile__body {
+/* Ownership — subtle coloured glow matching owner's medieval hue. */
+.board-tile.is-owned {
+  box-shadow:
+    inset 0 0 0 1px color-mix(in srgb, var(--owner-hue, var(--primary)) 45%, transparent),
+    inset 0 0 14px color-mix(in srgb, var(--owner-hue, var(--primary)) 18%, transparent);
+}
+.board-tile.is-owned.is-friend {
+  box-shadow:
+    inset 0 0 0 1px var(--gold-soft, #d4a84a),
+    inset 0 0 14px color-mix(in srgb, var(--gold) 25%, transparent);
+}
+
+/* ─── Group-colour strip. Always rides the INNER edge of the tile ─── */
+.band {
+  position: absolute;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.22);
+}
+/* Bottom row: strip along the top (which is inside) */
+.board-tile.side-bottom .band {
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 18%;
+}
+/* Top row: strip along the bottom (inside) */
+.board-tile.side-top .band {
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 18%;
+}
+/* Left column: strip along the right side (inside) */
+.board-tile.side-left .band {
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 18%;
+}
+/* Right column: strip along the left side (inside) */
+.board-tile.side-right .band {
+  top: 0;
+  left: 0;
+  bottom: 0;
+  width: 18%;
+}
+
+/* ─── Body layout per side: push text to the OUTER edge ─── */
+.body {
+  position: relative;
+  z-index: 1;
   flex: 1;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 4px;
-  gap: 2px;
+  gap: 1px;
   text-align: center;
+  padding: 3px;
   min-width: 0;
+  min-height: 0;
 }
-.tile--left .tile__body { padding-right: 10px; }
-.tile--right .tile__body { padding-left: 10px; }
-.tile--top .tile__body { padding-bottom: 10px; }
+.board-tile.side-bottom .body { padding-top: 22%; }
+.board-tile.side-top    .body { padding-bottom: 22%; }
+.board-tile.side-left   .body { padding-right: 22%; }
+.board-tile.side-right  .body { padding-left: 22%; }
 
-.tile__icon {
-  font-size: 22px;
-  line-height: 1;
-  filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.4));
+/* Side rows rotate so the name reads from outside. */
+.board-tile.side-left .body,
+.board-tile.side-right .body {
+  flex-direction: row;
 }
-.tile__name {
-  font-size: 9px;
-  line-height: 1.1;
-  color: var(--text);
-  font-weight: 700;
+
+/* ─── Pieces ─── */
+.icon {
+  font-size: clamp(10px, 1.8vmin, 15px);
+  line-height: 1;
+  filter: drop-shadow(0 1px 1px rgba(42, 29, 16, 0.25));
+}
+.board-tile.corner .icon {
+  font-size: clamp(14px, 2.6vmin, 22px);
+}
+.name {
+  font-family: var(--font-body);
+  font-size: clamp(6.5px, 1vmin, 9px);
+  line-height: 1.05;
+  color: var(--ink);
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
   overflow: hidden;
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
 }
-.tile__price {
-  font-size: 9px;
+.board-tile.corner .name {
+  font-family: var(--font-title);
+  font-size: clamp(7.5px, 1.2vmin, 11px);
+  letter-spacing: 0.14em;
+  color: var(--primary);
+}
+.price {
+  font-family: var(--font-mono);
+  font-size: clamp(7px, 1vmin, 9px);
   color: var(--gold);
-  font-weight: 800;
+  font-weight: 700;
   font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
 }
 
-.tile--corner {
-  background: linear-gradient(135deg, rgba(26, 34, 59, 0.9), rgba(16, 22, 40, 0.95));
-}
-.tile--corner .tile__icon { font-size: 20px; }
-
-.tile--go {
-  background: linear-gradient(135deg, rgba(34, 197, 94, 0.3), rgba(22, 163, 74, 0.15));
-}
-
-.tile__owner {
+/* ─── Overlays: mortgage, houses, hotel ─── */
+.mortgage {
   position: absolute;
-  bottom: 2px;
+  top: 2px;
   left: 2px;
-  right: 2px;
-  height: 3px;
-  border-radius: 2px;
-  box-shadow: 0 0 8px currentColor;
+  font-size: 9px;
+  line-height: 1;
+  opacity: 0.9;
+  filter: drop-shadow(0 0 2px rgba(139, 26, 26, 0.6));
+  z-index: 2;
 }
-.tile--left .tile__owner { left: auto; right: 10px; top: 2px; bottom: 2px; width: 3px; height: auto; }
-.tile--right .tile__owner { right: auto; left: 10px; top: 2px; bottom: 2px; width: 3px; height: auto; }
-.tile--top .tile__owner { top: 2px; bottom: auto; }
-
-.tile__houses, .tile__hotel {
+.board-tile.is-owned:has(.mortgage) {
+  opacity: 0.6;
+  filter: grayscale(0.55);
+}
+.houses {
   position: absolute;
   top: 2px;
   right: 2px;
-  font-size: 8px;
-  line-height: 1;
   display: flex;
   gap: 1px;
+  line-height: 1;
+  z-index: 2;
+  color: var(--emerald, #2d7a4f);
+  font-size: 8px;
+  text-shadow: 0 0 2px rgba(247, 238, 218, 0.7);
 }
-.tile__mortgaged {
+.hotel {
   position: absolute;
   top: 2px;
-  left: 2px;
+  right: 2px;
   font-size: 10px;
   line-height: 1;
-  opacity: 0.85;
-  filter: grayscale(0.5) drop-shadow(0 0 4px rgba(239, 68, 68, 0.6));
+  z-index: 2;
+  filter: drop-shadow(0 0 2px rgba(247, 238, 218, 0.8));
 }
-.tile--owned.tile--street:has(.tile__mortgaged),
-.tile--owned.tile--railroad:has(.tile__mortgaged),
-.tile--owned.tile--utility:has(.tile__mortgaged) {
-  opacity: 0.6;
-  filter: grayscale(0.6);
+
+/* Special tiles: gentle parchment tints to hint at their type. */
+.board-tile.kind-go {
+  background: linear-gradient(145deg, #f0e4c8, #e5d5a8);
+}
+.board-tile.kind-chance,
+.board-tile.kind-chest {
+  background: linear-gradient(145deg, var(--card-alt), #f4e7c4);
+}
+.board-tile.kind-tax {
+  background: linear-gradient(145deg, var(--card-alt), #f0dcd0);
 }
 </style>

@@ -118,6 +118,8 @@ export type GamePhase =
   | "moving"
   | "action"
   | "buyPrompt"
+  | "triplesPick"
+  | "auction"
   | "ended";
 
 export interface GameLogEntry {
@@ -145,6 +147,14 @@ export interface TradeOffer {
   ts: number;
 }
 
+export interface AuctionState {
+  tileIndex: number;
+  highBid: number;
+  highBidderId: string | null;
+  passedIds: string[];
+  startedAt: number;
+}
+
 export interface RoomState {
   id: string;
   hostId: string;
@@ -159,6 +169,8 @@ export interface RoomState {
   properties: Record<number, OwnedProperty>;
   log: GameLogEntry[];
   lastCard: DrawnCard | null;
+  cardHistory: DrawnCard[];
+  auction: AuctionState | null;
   pendingTrade: TradeOffer | null;
   winnerId: string | null;
   createdAt: number;
@@ -204,7 +216,10 @@ export type ClientMessage =
   | { type: "proposeTrade"; tileIndex: number; cash: number }
   | { type: "respondTrade"; accept: boolean }
   | { type: "mortgage"; tileIndex: number }
-  | { type: "unmortgage"; tileIndex: number };
+  | { type: "unmortgage"; tileIndex: number }
+  | { type: "pickTripleTile"; tileIndex: number }
+  | { type: "placeBid"; amount: number }
+  | { type: "passAuction" };
 
 // ---------- Server → Client messages ----------
 export type ServerMessage =

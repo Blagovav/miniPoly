@@ -1,18 +1,22 @@
 <script setup lang="ts">
-import { ref, onUnmounted } from "vue";
+import { computed, ref, onUnmounted } from "vue";
 import { useI18n } from "vue-i18n";
 import { useRouter } from "vue-router";
 import { useTelegram } from "../composables/useTelegram";
 import { useWs } from "../composables/useWs";
 import { useGameStore } from "../stores/game";
+import Icon from "../components/Icon.vue";
 
-const { t } = useI18n();
+const { locale } = useI18n();
 const router = useRouter();
 const { initData, userName, haptic } = useTelegram();
 
+// Access: design-ref uses `isPrivate`; we keep our existing `isPublic` wiring (negated in template).
 const isPublic = ref(true);
 const maxPlayers = ref(4);
 const loading = ref(false);
+// Realm name — display-only for now (server doesn't support room names yet).
+const realmName = ref("Dunholm Keep");
 
 const ws = useWs();
 const game = useGameStore();
@@ -25,7 +29,49 @@ const off = ws.onMessage((m) => {
 });
 onUnmounted(off);
 
-function create() {
+const isRu = computed(() => locale.value === "ru");
+const L = computed(() => isRu.value
+  ? {
+      title: "Новая комната",
+      sub: "Палата писаря",
+      nameLabel: "Название",
+      access: "Доступ",
+      public: "Публичная",
+      private: "Приватная",
+      players: "Игроков",
+      playersHint: "От 2 до 6 лордов",
+      rules: "Правила",
+      ruleCash: "Стартовый капитал",
+      ruleAuctions: "Аукционы",
+      ruleAuctionsVal: "Вкл",
+      rulePace: "Скорость",
+      rulePaceVal: "Обычная",
+      ruleEntry: "Ставка",
+      create: "Созвать совет",
+      back: "Назад",
+    }
+  : {
+      title: "New Room",
+      sub: "Scribe’s Chamber",
+      nameLabel: "Realm name",
+      access: "Access",
+      public: "Public",
+      private: "Private",
+      players: "Players",
+      playersHint: "From 2 to 6 lords",
+      rules: "Rules",
+      ruleCash: "Starting cash",
+      ruleAuctions: "Auctions",
+      ruleAuctionsVal: "On",
+      rulePace: "Pace",
+      rulePaceVal: "Normal",
+      ruleEntry: "Entry",
+      create: "Open the Hall",
+      back: "Back",
+    });
+
+function createRoom() {
+  if (loading.value) return;
   haptic("medium");
   loading.value = true;
   ws.send({
@@ -36,179 +82,251 @@ function create() {
     maxPlayers: maxPlayers.value,
   });
 }
+
+function goBack() {
+  haptic("light");
+  router.back();
+}
 </script>
 
 <template>
-  <div class="create">
-    <header class="create__head">
-      <button class="btn btn--ghost back" @click="router.back()">←</button>
-      <h2 class="title">{{ t("home.create") }}</h2>
-    </header>
+  <div class="app create">
+    <div class="topbar">
+      <button class="icon-btn" aria-label="Back" @click="goBack">
+        <Icon name="back" :size="18"/>
+      </button>
+      <div class="title">
+        <h1 :style="{ fontFamily: 'var(--font-title)', fontSize: '22px', letterSpacing: '0.08em' }">
+          {{ L.title }}
+        </h1>
+        <div class="sub">{{ L.sub }}</div>
+      </div>
+      <button class="icon-btn" aria-label="scroll">
+        <Icon name="scroll" :size="18"/>
+      </button>
+    </div>
 
-    <div class="card form">
-      <div class="asname">
-        <span class="asname__label">{{ t("home.yourName") }}</span>
-        <span class="asname__value">{{ userName }}</span>
-        <button class="btn btn--ghost asname__edit" @click="router.push({ name: 'home' })">
-          ✏️
-        </button>
+    <div class="content">
+      <!-- Realm name (display-only for now) -->
+      <div class="field">
+        <label class="field__label">{{ L.nameLabel }}</label>
+        <input
+          v-model="realmName"
+          class="realm-input"
+          maxlength="32"
+        />
       </div>
 
-      <div class="toggle">
-        <button
-          :class="['toggle__btn', isPublic && 'active']"
-          @click="isPublic = true"
-        >
-          🌐 {{ t("home.public") }}
-        </button>
-        <button
-          :class="['toggle__btn', !isPublic && 'active']"
-          @click="isPublic = false"
-        >
-          🔒 {{ t("home.private") }}
-        </button>
-      </div>
-
-      <div class="players-field">
-        <div class="players-field__head">
-          <span>Игроков в комнате</span>
-          <span class="players-field__val">{{ maxPlayers }}</span>
+      <!-- Access: Public / Private -->
+      <div class="field">
+        <label class="field__label">{{ L.access }}</label>
+        <div class="access-grid">
+          <button
+            type="button"
+            :class="['access-btn', isPublic && 'active']"
+            @click="isPublic = true"
+          >
+            <Icon name="unlock" :size="16" :color="isPublic ? '#fff' : 'var(--ink-2)'"/>
+            <span>{{ L.public }}</span>
+          </button>
+          <button
+            type="button"
+            :class="['access-btn', !isPublic && 'active']"
+            @click="isPublic = false"
+          >
+            <Icon name="lock" :size="16" :color="!isPublic ? '#fff' : 'var(--ink-2)'"/>
+            <span>{{ L.private }}</span>
+          </button>
         </div>
-        <div class="players-field__row">
+      </div>
+
+      <!-- Players -->
+      <div class="field">
+        <div class="row between">
+          <label class="field__label">{{ L.players }}</label>
+          <div class="players-count">{{ maxPlayers }}</div>
+        </div>
+        <div class="players-grid">
           <button
             v-for="n in [2, 3, 4, 5, 6]"
             :key="n"
-            :class="['players-field__btn', maxPlayers === n && 'active']"
+            type="button"
+            :class="['player-btn', maxPlayers === n && 'active']"
             @click="maxPlayers = n"
           >
             {{ n }}
           </button>
         </div>
+        <div class="field__hint">
+          <Icon name="users" :size="12" color="var(--ink-3)"/>
+          <span>{{ L.playersHint }}</span>
+        </div>
       </div>
 
-      <button class="btn btn--primary big" :disabled="loading" @click="create">
-        ✨ {{ t("home.create") }}
+      <!-- Rules (display-only summary) -->
+      <div class="field">
+        <label class="field__label">{{ L.rules }}</label>
+        <div class="card rules-card">
+          <div class="rule-row">
+            <span>{{ L.ruleCash }}</span>
+            <span class="rule-val">◈ 1 500</span>
+          </div>
+          <div class="rule-row">
+            <span>{{ L.ruleAuctions }}</span>
+            <span class="rule-val">{{ L.ruleAuctionsVal }}</span>
+          </div>
+          <div class="rule-row">
+            <span>{{ L.rulePace }}</span>
+            <span class="rule-val">{{ L.rulePaceVal }}</span>
+          </div>
+          <div class="rule-row last">
+            <span>{{ L.ruleEntry }}</span>
+            <span class="rule-val">◈ 100</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Primary action -->
+      <button
+        class="btn btn-primary create-btn"
+        :disabled="loading"
+        @click="createRoom"
+      >
+        <Icon name="check" :size="16" color="#fff"/>
+        {{ L.create }}
       </button>
     </div>
   </div>
 </template>
 
 <style scoped>
-.create {
-  padding: 18px;
-  max-width: 480px;
-  margin: 0 auto;
-}
-.create__head {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin-bottom: 20px;
-}
-.back {
-  width: 40px;
-  height: 40px;
-  padding: 0;
-  border-radius: 12px;
-}
-.form {
-  padding: 22px;
+.app {
+  position: relative;
   display: flex;
   flex-direction: column;
-  gap: 18px;
+  min-height: 100dvh;
+  background: var(--bg);
 }
-.asname {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 12px 14px;
-  background: rgba(0, 0, 0, 0.25);
-  border: 1px solid var(--border);
-  border-radius: 12px;
+
+.field {
+  margin-bottom: 14px;
 }
-.asname__label {
+.field__label {
   font-size: 11px;
-  color: var(--text-mute);
-  text-transform: uppercase;
+  color: var(--ink-3);
   letter-spacing: 0.1em;
+  text-transform: uppercase;
+  font-weight: 500;
 }
-.asname__value {
-  flex: 1;
-  font-weight: 700;
-  font-size: 15px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.asname__edit {
-  width: 36px;
-  height: 36px;
-  padding: 0;
-  border-radius: 10px;
-  font-size: 14px;
-}
-.toggle {
+.field__hint {
   display: flex;
-  gap: 8px;
-  padding: 4px;
-  background: rgba(0, 0, 0, 0.25);
-  border-radius: 14px;
-  border: 1px solid var(--border);
-}
-.toggle__btn {
-  flex: 1;
-  padding: 12px;
-  border-radius: 10px;
-  color: var(--text-dim);
-  font-weight: 600;
-  font-size: 14px;
-  transition: all 0.2s ease;
-}
-.toggle__btn.active {
-  background: linear-gradient(135deg, var(--purple), #7e22ce);
-  color: #fff;
-  box-shadow: 0 4px 12px rgba(168, 85, 247, 0.3);
-}
-.big {
-  padding: 16px;
-  font-size: 16px;
-}
-.players-field {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-.players-field__head {
-  display: flex;
-  justify-content: space-between;
   align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+  font-size: 11px;
+  color: var(--ink-3);
+}
+
+.realm-input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 12px 14px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  font-family: var(--font-display);
+  font-size: 17px;
+  color: var(--ink);
+  margin-top: 6px;
+  outline: none;
+}
+.realm-input:focus { border-color: var(--primary); }
+
+.access-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-top: 6px;
+}
+.access-btn {
+  padding: 12px;
+  background: var(--card);
+  color: var(--ink);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  font-family: var(--font-body);
   font-size: 13px;
-  color: var(--text-dim);
+  font-weight: 500;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  transition: background 120ms, border-color 120ms, color 120ms;
 }
-.players-field__val {
-  font-weight: 800;
-  font-size: 18px;
-  color: var(--gold);
+.access-btn.active {
+  background: var(--primary);
+  color: #fff;
+  border-color: var(--primary);
 }
-.players-field__row {
+
+.players-count {
+  font-family: var(--font-display);
+  font-size: 16px;
+  color: var(--primary);
+}
+.players-grid {
+  margin-top: 10px;
   display: flex;
   gap: 6px;
+  justify-content: space-between;
 }
-.players-field__btn {
+.player-btn {
   flex: 1;
   padding: 12px 0;
-  border-radius: 10px;
-  background: rgba(0, 0, 0, 0.3);
-  border: 1px solid var(--border);
-  color: var(--text-dim);
-  font-weight: 700;
-  font-size: 15px;
-  transition: all 0.2s ease;
+  background: var(--card);
+  color: var(--ink);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  font-family: var(--font-display);
+  font-size: 16px;
+  cursor: pointer;
+  transition: background 120ms, border-color 120ms, color 120ms;
 }
-.players-field__btn.active {
-  background: linear-gradient(135deg, var(--purple), #7e22ce);
+.player-btn.active {
+  background: var(--primary);
   color: #fff;
-  border-color: transparent;
-  box-shadow: 0 4px 12px rgba(168, 85, 247, 0.35);
+  border-color: var(--primary);
+}
+
+.rules-card {
+  margin-top: 6px;
+  padding: 0;
+}
+.rule-row {
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--divider);
+  display: flex;
+  justify-content: space-between;
+  font-size: 13px;
+  color: var(--ink);
+}
+.rule-row.last {
+  border-bottom: none;
+}
+.rule-val {
+  color: var(--ink-2);
+  font-weight: 500;
+}
+
+.create-btn {
+  width: 100%;
+  padding: 14px 20px;
+  font-size: 15px;
+  margin-top: 4px;
+}
+.create-btn[disabled] {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 </style>

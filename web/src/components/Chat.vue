@@ -5,6 +5,9 @@ import { useGameStore } from "../stores/game";
 import { useInventoryStore } from "../stores/inventory";
 import { SHOP_ITEMS } from "../shop/items";
 import { useTelegram } from "../composables/useTelegram";
+import Icon from "./Icon.vue";
+import Sigil from "./Sigil.vue";
+import { ORDERED_PLAYER_COLORS } from "../utils/palette";
 
 const props = defineProps<{ onSend: (text: string) => void }>();
 
@@ -13,16 +16,16 @@ const game = useGameStore();
 const inv = useInventoryStore();
 const { haptic } = useTelegram();
 
-function playerOf(id: string) {
-  return game.room?.players.find((p) => p.id === id) ?? null;
+function playerIndex(id: string): number {
+  return game.room?.players.findIndex((p) => p.id === id) ?? -1;
 }
 function playerColor(id: string): string {
-  return playerOf(id)?.color ?? "#94a3b8";
+  const idx = playerIndex(id);
+  if (idx < 0) return ORDERED_PLAYER_COLORS[0];
+  return ORDERED_PLAYER_COLORS[idx % ORDERED_PLAYER_COLORS.length];
 }
-function playerIcon(id: string): string {
-  const p = playerOf(id);
-  if (!p || !p.token) return "●";
-  return SHOP_ITEMS.find((i) => i.id === p.token)?.icon ?? "●";
+function isMine(id: string): boolean {
+  return !!game.me && id === game.me.id;
 }
 
 const open = ref(false);
@@ -72,8 +75,8 @@ watch(
 
 <template>
   <div :class="['chat', open && 'chat--open']">
-    <button class="chat__toggle" @click="toggle">
-      <span>💬</span>
+    <button class="chat__toggle" @click="toggle" aria-label="chat">
+      <Icon name="chat" :size="22" color="#f7eeda"/>
       <span v-if="!open && game.unreadChat > 0" class="chat__badge">
         {{ game.unreadChat }}
       </span>
@@ -82,8 +85,13 @@ watch(
     <transition name="chat-slide">
       <div v-if="open" class="chat__panel card">
         <div class="chat__header">
-          <span>💬 {{ t("chat.title") }}</span>
-          <button class="chat__close" @click="toggle">✕</button>
+          <div class="chat__header-text">
+            <div class="chat__eyebrow">Pigeon roost</div>
+            <div class="chat__title">{{ t("chat.title") }}</div>
+          </div>
+          <button class="chat__close" @click="toggle" aria-label="close">
+            <Icon name="x" :size="14" color="var(--ink-3)"/>
+          </button>
         </div>
 
         <div ref="list" class="chat__list">
@@ -94,18 +102,21 @@ watch(
             v-for="m in game.chat"
             :key="m.id"
             class="chat__msg"
+            :class="{ 'chat__msg--me': isMine(m.fromId) }"
           >
-            <span class="chat__icon" :style="{ background: playerColor(m.fromId) }">
-              {{ playerIcon(m.fromId) }}
-            </span>
-            <span class="chat__from" :style="{ color: playerColor(m.fromId) }">
-              {{ m.from }}:
-            </span>
-            <span class="chat__text">{{ m.text }}</span>
+            <Sigil
+              :name="m.from"
+              :color="playerColor(m.fromId)"
+              :size="26"
+            />
+            <div class="chat__bubble" :class="{ 'chat__bubble--me': isMine(m.fromId) }">
+              <div v-if="!isMine(m.fromId)" class="chat__from">{{ m.from }}</div>
+              <div class="chat__text">{{ m.text }}</div>
+            </div>
           </div>
         </div>
 
-        <div v-if="ownedEmotes.length > 0" class="chat__emotes">
+        <div v-if="ownedEmotes.length > 0" class="chat__emotes rail">
           <button
             v-for="e in ownedEmotes"
             :key="e.id"
@@ -123,8 +134,13 @@ watch(
             maxlength="200"
             @keydown.enter="send"
           />
-          <button class="btn btn--primary send" :disabled="!draft.trim()" @click="send">
-            →
+          <button
+            class="btn btn-primary chat__send"
+            :disabled="!draft.trim()"
+            @click="send"
+            aria-label="send"
+          >
+            <Icon name="send" :size="15" color="#fff"/>
           </button>
         </div>
       </div>
@@ -139,154 +155,207 @@ watch(
   right: 16px;
   z-index: 80;
 }
+
+/* ─── Floating bubble ─── */
 .chat__toggle {
   width: 52px;
   height: 52px;
   border-radius: 50%;
-  background: linear-gradient(135deg, var(--purple), #7e22ce);
-  color: #fff;
-  font-size: 22px;
+  background: linear-gradient(180deg, var(--primary-soft) 0%, var(--primary) 60%, var(--primary-deep) 100%);
+  color: #f7eeda;
   display: grid;
   place-items: center;
-  box-shadow: 0 8px 24px -6px rgba(168, 85, 247, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.2);
+  box-shadow:
+    0 4px 12px rgba(62, 34, 114, 0.35),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2);
+  border: 1px solid var(--primary-deep);
   position: relative;
-  transition: transform 0.15s ease;
+  transition: transform 0.12s ease, filter 0.12s ease;
 }
-.chat__toggle:active { transform: scale(0.92); }
+.chat__toggle:hover { filter: brightness(1.05); }
+.chat__toggle:active { transform: scale(0.94); }
+
 .chat__badge {
   position: absolute;
   top: -2px;
   right: -2px;
-  background: var(--red);
-  color: #fff;
-  font-size: 11px;
-  font-weight: 700;
+  background: var(--accent);
+  color: #f7eeda;
+  font-size: 10px;
+  font-family: var(--font-mono);
+  font-weight: 600;
   padding: 2px 6px;
   border-radius: 10px;
   min-width: 18px;
   text-align: center;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+  border: 1px solid var(--accent);
 }
 
+/* ─── Drawer panel ─── */
 .chat__panel {
   position: fixed;
   right: 16px;
   bottom: 80px;
   width: min(340px, calc(100vw - 32px));
-  height: min(420px, calc(100vh - 180px));
+  height: min(440px, calc(100vh - 180px));
   display: flex;
   flex-direction: column;
   padding: 12px;
+  background: var(--card-alt);
+  border: 1px solid var(--line);
+  box-shadow: 0 12px 32px rgba(42, 29, 16, 0.18);
   overflow: hidden;
 }
+
 .chat__header {
   display: flex;
   justify-content: space-between;
-  align-items: center;
-  font-weight: 700;
-  padding-bottom: 8px;
-  border-bottom: 1px solid var(--border);
-  margin-bottom: 8px;
+  align-items: flex-start;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--divider);
+  margin-bottom: 10px;
+}
+.chat__header-text { text-align: left; }
+.chat__eyebrow {
+  font-size: 10px;
+  letter-spacing: 0.15em;
+  color: var(--ink-3);
+  text-transform: uppercase;
+}
+.chat__title {
+  font-family: var(--font-display);
+  font-size: 16px;
+  color: var(--ink);
+  margin-top: 1px;
 }
 .chat__close {
-  color: var(--text-mute);
-  font-size: 18px;
   width: 28px;
   height: 28px;
-  border-radius: 8px;
+  border-radius: 50%;
+  background: var(--card);
+  border: 1px solid var(--line);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--ink-3);
+  flex-shrink: 0;
 }
-.chat__close:hover { color: var(--text); background: rgba(255, 255, 255, 0.05); }
+.chat__close:hover { background: var(--bg); }
 
+/* ─── Messages ─── */
 .chat__list {
   flex: 1;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  padding-right: 4px;
+  gap: 8px;
+  padding-right: 2px;
+  scrollbar-width: thin;
 }
 .chat__empty {
   text-align: center;
-  color: var(--text-mute);
+  color: var(--ink-3);
   font-size: 12px;
   margin: auto;
   padding: 20px;
+  font-family: var(--font-display);
+  font-style: italic;
 }
+
 .chat__msg {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+.chat__msg--me { flex-direction: row-reverse; }
+
+.chat__bubble {
+  max-width: 72%;
+  padding: 7px 11px;
+  background: var(--card);
+  color: var(--ink);
+  border: 1px solid var(--line);
+  border-radius: 10px 10px 10px 3px;
   font-size: 13px;
   line-height: 1.4;
   word-break: break-word;
-  display: flex;
-  align-items: flex-start;
-  gap: 6px;
+  font-family: var(--font-body);
 }
-.chat__icon {
-  width: 18px;
-  height: 18px;
-  border-radius: 50%;
-  display: inline-grid;
-  place-items: center;
-  flex-shrink: 0;
-  font-size: 10px;
-  color: #fff;
-  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.2);
-  margin-top: 1px;
-}
-.chat__from {
-  font-weight: 700;
-  margin-right: 4px;
-  flex-shrink: 0;
-}
-.chat__text {
-  flex: 1;
+.chat__bubble--me {
+  background: var(--primary);
+  color: #f7eeda;
+  border: none;
+  border-radius: 10px 10px 3px 10px;
+  box-shadow: 0 1px 2px rgba(62, 34, 114, 0.25);
 }
 
+.chat__from {
+  font-family: var(--font-display);
+  font-size: 10px;
+  color: var(--ink-3);
+  font-weight: 600;
+  margin-bottom: 2px;
+  letter-spacing: 0.02em;
+}
+.chat__text { font-family: var(--font-body); }
+
+/* ─── Emotes ─── */
 .chat__emotes {
-  display: flex;
-  gap: 4px;
   padding: 8px 0;
-  overflow-x: auto;
-  border-top: 1px solid var(--border);
+  border-top: 1px solid var(--divider);
 }
 .chat__emote {
-  width: 36px;
-  height: 36px;
-  border-radius: 10px;
-  background: rgba(0, 0, 0, 0.3);
-  border: 1px solid var(--border);
-  font-size: 18px;
-  transition: transform 0.1s;
+  width: 34px;
+  height: 34px;
+  flex-shrink: 0;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  font-size: 16px;
+  font-family: var(--font-display);
+  color: var(--ink);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.1s, border-color 0.15s;
 }
-.chat__emote:active { transform: scale(0.9); }
+.chat__emote:hover { border-color: var(--primary); }
+.chat__emote:active { transform: scale(0.92); }
 
+/* ─── Input ─── */
 .chat__input-row {
   display: flex;
   gap: 6px;
-  padding-top: 8px;
-  border-top: 1px solid var(--border);
+  padding-top: 10px;
+  border-top: 1px solid var(--divider);
 }
 .chat__input-row input {
   flex: 1;
   padding: 10px 12px;
-  background: rgba(0, 0, 0, 0.3);
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  color: var(--text);
-  font-size: 14px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  font-size: 13px;
+  color: var(--ink);
+  font-family: var(--font-body);
   outline: none;
 }
-.chat__input-row input:focus { border-color: var(--purple); }
-.send {
+.chat__input-row input:focus { border-color: var(--primary); }
+.chat__input-row input::placeholder { color: var(--ink-3); }
+
+.chat__send {
   width: 44px;
   padding: 0;
-  font-size: 20px;
 }
+.chat__send:disabled { opacity: 0.45; }
 
+/* ─── Slide transition ─── */
 .chat-slide-enter-active, .chat-slide-leave-active {
   transition: transform 0.25s cubic-bezier(0.3, 1.2, 0.4, 1), opacity 0.2s ease;
 }
 .chat-slide-enter-from, .chat-slide-leave-to {
-  transform: translateY(20px) scale(0.95);
+  transform: translateY(20px) scale(0.96);
   opacity: 0;
 }
 </style>

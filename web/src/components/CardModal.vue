@@ -30,22 +30,35 @@ function close() {
 
 <template>
   <transition name="card-pop">
-    <div v-if="visible && current" class="card-overlay" @click="close">
+    <div v-if="visible && current" class="modal-scrim" @click="close">
       <div
-        :class="['draw-card', current.deck === 'chance' ? 'draw-card--chance' : 'draw-card--chest']"
+        class="decree"
+        :class="current.deck === 'chance' ? 'decree--chance' : 'decree--chest'"
         @click.stop
       >
-        <div class="draw-card__head">
-          {{ current.deck === "chance" ? "CHANCE" : "COMMUNITY CHEST" }}
+        <!-- Corner flourishes -->
+        <div class="flourish flourish--tl" />
+        <div class="flourish flourish--tr" />
+        <div class="flourish flourish--bl" />
+        <div class="flourish flourish--br" />
+
+        <div class="decree__eyebrow">
+          {{ current.deck === "chance"
+            ? (locale === "ru" ? "Указ" : "Royal Decree")
+            : (locale === "ru" ? "Сундук казны" : "Town Chest") }}
         </div>
-        <div class="draw-card__icon">
-          {{ current.deck === "chance" ? "❓" : "🎁" }}
+
+        <!-- Seal -->
+        <div class="decree__seal">
+          {{ current.deck === "chance" ? "?" : "⎔" }}
         </div>
-        <div class="draw-card__text">
+
+        <div class="decree__text">
           {{ current.text[locale as Locale] }}
         </div>
-        <button class="btn btn--primary draw-card__close" @click="close">
-          OK
+
+        <button class="btn btn-primary decree__close" @click="close">
+          {{ locale === "ru" ? "Принять волю" : "As the crown wills" }}
         </button>
       </div>
     </div>
@@ -53,64 +66,112 @@ function close() {
 </template>
 
 <style scoped>
-.card-overlay {
+.modal-scrim {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.65);
-  backdrop-filter: blur(8px);
-  z-index: 120;
-  display: grid;
-  place-items: center;
+  background: rgba(26, 15, 5, 0.5);
+  backdrop-filter: blur(2px);
+  -webkit-backdrop-filter: blur(2px);
+  z-index: 520;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   padding: 20px;
 }
-.draw-card {
-  width: min(320px, 100%);
-  padding: 24px;
-  border-radius: 18px;
+
+.decree {
+  position: relative;
+  width: min(340px, 100%);
+  padding: 24px 22px 20px;
+  background: var(--card-alt);
+  border-radius: 10px;
   text-align: center;
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 12px;
   align-items: center;
-  box-shadow: 0 30px 80px -20px rgba(0, 0, 0, 0.8), inset 0 1px 0 rgba(255, 255, 255, 0.2);
-  animation: card-float 0.6s ease-out;
+  box-shadow: 0 20px 60px rgba(26, 15, 5, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.4);
+  animation: scrollUnfurl 360ms cubic-bezier(0.34, 1.56, 0.64, 1);
 }
-.draw-card--chance {
-  background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
-  color: #1a1000;
+.decree--chance {
+  border: 2px solid var(--gold);
+  background:
+    radial-gradient(ellipse at 50% 0%, rgba(212, 168, 74, 0.15), transparent 65%),
+    var(--card-alt);
 }
-.draw-card--chest {
-  background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
-  color: #e0f2fe;
-}
-.draw-card__head {
-  font-size: 11px;
-  font-weight: 900;
-  letter-spacing: 0.3em;
-  opacity: 0.75;
-}
-.draw-card__icon {
-  font-size: 54px;
-  filter: drop-shadow(0 6px 12px rgba(0, 0, 0, 0.3));
-}
-.draw-card__text {
-  font-size: 17px;
-  font-weight: 700;
-  line-height: 1.35;
-}
-.draw-card__close {
-  background: rgba(0, 0, 0, 0.75);
-  color: #fff;
-  padding: 10px 28px;
-  border-radius: 999px;
-  font-weight: 700;
-  margin-top: 4px;
+.decree--chest {
+  border: 2px solid var(--primary);
+  background:
+    radial-gradient(ellipse at 50% 0%, rgba(138, 104, 208, 0.15), transparent 65%),
+    var(--card-alt);
 }
 
-@keyframes card-float {
-  0% { transform: rotateY(180deg) translateY(20px) scale(0.8); opacity: 0; }
-  60% { transform: rotateY(0) translateY(-4px) scale(1.03); opacity: 1; }
-  100% { transform: rotateY(0) translateY(0) scale(1); opacity: 1; }
+/* ── Corner flourishes ── */
+.flourish {
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  pointer-events: none;
+}
+.flourish--tl { top: -1px; left: -1px; border-top-style: solid; border-left-style: solid; border-top-width: 2px; border-left-width: 2px; }
+.flourish--tr { top: -1px; right: -1px; border-top-style: solid; border-right-style: solid; border-top-width: 2px; border-right-width: 2px; }
+.flourish--bl { bottom: -1px; left: -1px; border-bottom-style: solid; border-left-style: solid; border-bottom-width: 2px; border-left-width: 2px; }
+.flourish--br { bottom: -1px; right: -1px; border-bottom-style: solid; border-right-style: solid; border-bottom-width: 2px; border-right-width: 2px; }
+.decree--chance .flourish { border-color: var(--gold); }
+.decree--chest .flourish { border-color: var(--primary); }
+
+/* ── Eyebrow ── */
+.decree__eyebrow {
+  font-family: var(--font-title);
+  font-size: 10px;
+  letter-spacing: 0.25em;
+  color: var(--ink-3);
+  text-transform: uppercase;
+}
+
+/* ── Seal ── */
+.decree__seal {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  margin: 4px 0 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-display);
+  font-size: 30px;
+  color: #fff;
+  box-shadow: inset 0 2px 3px rgba(255, 255, 255, 0.3), inset 0 -2px 3px rgba(0, 0, 0, 0.3), 0 6px 14px rgba(0, 0, 0, 0.25);
+}
+.decree--chance .decree__seal {
+  background: radial-gradient(circle at 35% 30%, #d4a84a 0%, #b8892e 55%, #8b6914 100%);
+}
+.decree--chest .decree__seal {
+  background: radial-gradient(circle at 35% 30%, #8a68d0 0%, #5a3a9a 55%, #3e2272 100%);
+}
+
+/* ── Text ── */
+.decree__text {
+  font-family: var(--font-display);
+  font-size: 16px;
+  color: var(--ink);
+  line-height: 1.45;
+  max-width: 100%;
+}
+
+/* ── Button ── */
+.decree__close {
+  width: 100%;
+  margin-top: 6px;
+  padding: 12px;
+  font-size: 14px;
+}
+
+/* ── Animations ── */
+@keyframes scrollUnfurl {
+  0% { transform: scaleY(0.25) translateY(-30px); opacity: 0; }
+  60% { transform: scaleY(1.05) translateY(4px); opacity: 1; }
+  100% { transform: scaleY(1) translateY(0); opacity: 1; }
 }
 .card-pop-enter-active, .card-pop-leave-active { transition: opacity 0.25s ease; }
 .card-pop-enter-from, .card-pop-leave-to { opacity: 0; }

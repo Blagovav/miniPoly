@@ -1,18 +1,48 @@
 <script setup lang="ts">
-import { onMounted, ref } from "vue";
+import { computed, onMounted, ref } from "vue";
 import { useI18n } from "vue-i18n";
 import { useRouter } from "vue-router";
 import type { PublicRoomSummary } from "../../../shared/types";
 import { useTelegram } from "../composables/useTelegram";
+import Icon from "../components/Icon.vue";
+import Sigil from "../components/Sigil.vue";
+import { ORDERED_PLAYER_COLORS } from "../utils/palette";
 
-const { t } = useI18n();
+const { locale } = useI18n();
 const router = useRouter();
 const { haptic } = useTelegram();
 
 const rooms = ref<PublicRoomSummary[]>([]);
 const loading = ref(false);
+const codeInput = ref("");
+const activeFilter = ref(0);
 
 const API_URL = (import.meta.env.VITE_API_URL as string) || "";
+
+const isRu = computed(() => locale.value === "ru");
+const L = computed(() => isRu.value
+  ? {
+      title: "Таверна",
+      subtitle: (n: number) => `Открытые столы · ${n}`,
+      codePlaceholder: "Введите код…",
+      create: "Создать",
+      filters: ["Все", "Публичные", "Друзья", "Ставка"],
+      empty: "Пока нет открытых столов. Создай первый!",
+      host: "Хозяин",
+      stake: "ставка",
+      refresh: "Обновить",
+    }
+  : {
+      title: "The Tavern",
+      subtitle: (n: number) => `Open tables · ${n}`,
+      codePlaceholder: "Enter code…",
+      create: "Create",
+      filters: ["All", "Public", "Friends", "Stakes"],
+      empty: "No open tables yet. Be the first!",
+      host: "Host",
+      stake: "stake",
+      refresh: "Refresh",
+    });
 
 async function load() {
   loading.value = true;
@@ -30,118 +60,296 @@ function join(id: string) {
   router.push({ name: "room", params: { id } });
 }
 
+function joinFromInput() {
+  const code = codeInput.value.trim().toUpperCase();
+  if (!code) return;
+  join(code);
+}
+
+function goBack() {
+  haptic("light");
+  router.back();
+}
+
+function goCreate() {
+  haptic("light");
+  router.push({ name: "create" });
+}
+
+// Deterministic color for a host name so the sigil is stable across renders.
+function colorFor(name: string): string {
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) hash = (hash * 31 + name.charCodeAt(i)) | 0;
+  const idx = Math.abs(hash) % ORDERED_PLAYER_COLORS.length;
+  return ORDERED_PLAYER_COLORS[idx];
+}
+
+// Stable, tongue-in-cheek "stake" per room so the UI isn't empty. Does NOT hit the API.
+function stakeFor(id: string): number {
+  const stakes = [100, 250, 500, 1000];
+  let hash = 0;
+  for (let i = 0; i < id.length; i++) hash = (hash * 31 + id.charCodeAt(i)) | 0;
+  return stakes[Math.abs(hash) % stakes.length];
+}
+
 onMounted(load);
 </script>
 
 <template>
-  <div class="rooms">
-    <header class="rooms__head">
-      <button class="btn btn--ghost back" @click="router.back()">←</button>
-      <h2 class="title">{{ t("rooms.title") }}</h2>
-      <button class="btn btn--ghost refresh" :disabled="loading" @click="load">
-        <span :class="{ spin: loading }">🔄</span>
+  <div class="app rooms">
+    <div class="topbar">
+      <button class="icon-btn" aria-label="back" @click="goBack">
+        <Icon name="back" :size="18"/>
       </button>
-    </header>
-
-    <div v-if="rooms.length === 0" class="empty card">
-      <div class="empty__icon">🎲</div>
-      <p>{{ t("rooms.empty") }}</p>
-      <button class="btn btn--primary" @click="router.push({ name: 'create' })">
-        ✨ {{ t("home.create") }}
+      <div class="title">
+        <h1>{{ L.title }}</h1>
+        <div class="sub">{{ L.subtitle(rooms.length) }}</div>
+      </div>
+      <button
+        class="icon-btn"
+        :aria-label="L.refresh"
+        :disabled="loading"
+        @click="load"
+      >
+        <span :class="{ spin: loading }" style="display: flex;">
+          <Icon name="search" :size="18"/>
+        </span>
       </button>
     </div>
 
-    <div v-else class="rooms__list">
-      <button
-        v-for="r in rooms"
-        :key="r.id"
-        class="room-card"
-        @click="join(r.id)"
-      >
-        <div class="room-card__left">
-          <div class="room-card__code">{{ r.id }}</div>
-          <div class="room-card__host">👤 {{ r.hostName }}</div>
+    <div class="content">
+      <!-- Search + Create row -->
+      <div class="row" style="gap: 8px; margin-bottom: 12px;">
+        <div class="card search-card">
+          <Icon name="search" :size="16" color="var(--ink-3)"/>
+          <input
+            v-model="codeInput"
+            class="search-input"
+            :placeholder="L.codePlaceholder"
+            maxlength="12"
+            @keydown.enter="joinFromInput"
+          />
         </div>
-        <div class="room-card__right">
-          <div class="room-card__players">
-            {{ r.playerCount }} / {{ r.maxPlayers }}
+        <button class="btn btn-primary create-btn" @click="goCreate">
+          {{ L.create }}
+        </button>
+      </div>
+
+      <!-- Filter chips -->
+      <div class="filters" style="margin-bottom: 12px;">
+        <button
+          v-for="(f, i) in L.filters"
+          :key="i"
+          class="filter-chip"
+          :class="{ active: activeFilter === i }"
+          @click="activeFilter = i"
+        >{{ f }}</button>
+      </div>
+
+      <!-- Empty state -->
+      <div v-if="!loading && rooms.length === 0" class="card empty">
+        <div class="empty__icon">
+          <Icon name="tavern" :size="28" color="var(--ink-3)"/>
+        </div>
+        <p>{{ L.empty }}</p>
+        <button class="btn btn-primary" @click="goCreate">
+          <Icon name="plus" :size="14" color="#fff"/>
+          {{ L.create }}
+        </button>
+      </div>
+
+      <!-- Rooms list -->
+      <div v-else class="rooms-list">
+        <button
+          v-for="r in rooms"
+          :key="r.id"
+          class="room-row"
+          @click="join(r.id)"
+        >
+          <Sigil :name="r.hostName" :color="colorFor(r.hostName)" :size="40"/>
+          <div class="room-row__body">
+            <div class="row" style="gap: 6px;">
+              <div class="room-row__code">{{ r.id }}</div>
+              <div v-if="r.playerCount >= r.maxPlayers" class="live-pill">LIVE</div>
+            </div>
+            <div class="room-row__meta">
+              {{ L.host }} · {{ r.hostName }} · {{ stakeFor(r.id) }}◈ {{ L.stake }}
+            </div>
           </div>
-          <div class="room-card__cta">{{ t("rooms.join") }} →</div>
-        </div>
-      </button>
+          <div class="room-row__right">
+            <div class="room-row__count">{{ r.playerCount }}/{{ r.maxPlayers }}</div>
+            <div class="seat-dots">
+              <div
+                v-for="i in r.maxPlayers"
+                :key="i"
+                class="seat-dot"
+                :class="{ filled: i <= r.playerCount }"
+              />
+            </div>
+          </div>
+        </button>
+      </div>
     </div>
   </div>
 </template>
 
 <style scoped>
-.rooms {
-  padding: 18px;
-  max-width: 560px;
-  margin: 0 auto;
-}
-.rooms__head {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin-bottom: 20px;
-}
-.rooms__head .title { flex: 1; font-size: 22px; }
-.back, .refresh {
-  width: 40px;
-  height: 40px;
-  padding: 0;
-  border-radius: 12px;
-}
-.spin { animation: spin 0.8s linear infinite; display: inline-block; }
-@keyframes spin { to { transform: rotate(360deg); } }
-
-.empty {
-  padding: 40px 24px;
-  text-align: center;
+.app {
+  position: relative;
   display: flex;
   flex-direction: column;
-  gap: 16px;
-  align-items: center;
+  min-height: 100dvh;
+  background: var(--bg);
 }
-.empty__icon { font-size: 48px; }
-.empty p { color: var(--text-dim); margin: 0; }
 
-.rooms__list {
+/* Topbar back icon color alignment */
+.icon-btn :deep(svg) { color: var(--ink-2); }
+.spin { animation: spin 0.8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* Search input card */
+.search-card {
+  flex: 1;
+  padding: 10px 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.search-input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  outline: none;
+  font-size: 13px;
+  font-family: var(--font-body);
+  color: var(--ink);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  min-width: 0;
+}
+.search-input::placeholder {
+  color: var(--ink-3);
+  text-transform: none;
+  letter-spacing: normal;
+}
+.create-btn {
+  padding: 10px 16px;
+  white-space: nowrap;
+}
+
+/* Filter chips */
+.filters {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.filter-chip {
+  padding: 6px 12px;
+  background: transparent;
+  color: var(--ink-2);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  font-size: 12px;
+  font-family: var(--font-body);
+  font-weight: 500;
+  cursor: pointer;
+  line-height: 1.2;
+}
+.filter-chip.active {
+  background: var(--primary);
+  color: #fff;
+  border-color: var(--primary);
+}
+
+/* Rooms list */
+.rooms-list {
   display: flex;
   flex-direction: column;
   gap: 10px;
 }
-.room-card {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 16px 18px;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 14px;
+.room-row {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 12px 14px;
   text-align: left;
-  transition: all 0.2s ease;
-  backdrop-filter: blur(12px);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-family: var(--font-body);
+  color: var(--ink);
+  transition: transform 80ms, border-color 160ms;
 }
-.room-card:hover {
-  border-color: var(--neon);
-  box-shadow: 0 0 0 1px var(--neon), 0 8px 24px -10px rgba(34, 197, 94, 0.45);
-  transform: translateY(-1px);
+.room-row:active { transform: translateY(1px); }
+.room-row:hover { border-color: var(--line-strong); }
+
+.room-row__body { flex: 1; min-width: 0; }
+.room-row__code {
+  font-family: var(--font-display);
+  font-size: 16px;
+  color: var(--ink);
+  letter-spacing: 0.05em;
 }
-.room-card__code {
-  font-weight: 800;
-  font-size: 18px;
-  letter-spacing: 0.08em;
-  background: linear-gradient(135deg, #fff, var(--gold));
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
+.room-row__meta {
+  font-size: 11px;
+  color: var(--ink-3);
+  margin-top: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
-.room-card__host { color: var(--text-dim); font-size: 13px; margin-top: 2px; }
-.room-card__right { text-align: right; }
-.room-card__players {
+.room-row__right { text-align: right; flex-shrink: 0; }
+.room-row__count {
+  font-family: var(--font-display);
+  font-size: 15px;
+  color: var(--ink);
+}
+.seat-dots {
+  display: flex;
+  gap: 2px;
+  margin-top: 4px;
+  justify-content: flex-end;
+}
+.seat-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  background: var(--line-strong);
+}
+.seat-dot.filled { background: var(--emerald); }
+
+.live-pill {
+  padding: 2px 6px;
+  background: rgba(139, 26, 26, 0.12);
+  color: var(--accent);
+  font-size: 9px;
   font-weight: 700;
-  color: var(--neon);
+  letter-spacing: 0.1em;
+  border-radius: 3px;
+  line-height: 1.2;
 }
-.room-card__cta { color: var(--text-mute); font-size: 12px; margin-top: 2px; }
+
+/* Empty state */
+.empty {
+  padding: 32px 20px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  align-items: center;
+}
+.empty__icon {
+  width: 56px; height: 56px;
+  border-radius: 50%;
+  background: rgba(90, 58, 24, 0.06);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.empty p {
+  color: var(--ink-3);
+  margin: 0;
+  font-size: 13px;
+}
 </style>

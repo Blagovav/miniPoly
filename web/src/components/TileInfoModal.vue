@@ -5,6 +5,9 @@ import { BOARD, GROUP_COLORS, GROUP_SIZE } from "../../../shared/board";
 import type { Locale, StreetTile } from "../../../shared/types";
 import { SHOP_ITEMS } from "../shop/items";
 import { useGameStore } from "../stores/game";
+import { ORDERED_PLAYER_COLORS } from "../utils/palette";
+import Icon from "./Icon.vue";
+import Sigil from "./Sigil.vue";
 
 const props = defineProps<{
   onBuildHouse?: (tileIndex: number) => void;
@@ -12,6 +15,7 @@ const props = defineProps<{
   onProposeTrade?: (tileIndex: number, cash: number) => void;
   onMortgage?: (tileIndex: number) => void;
   onUnmortgage?: (tileIndex: number) => void;
+  onPickTripleTile?: (tileIndex: number) => void;
 }>();
 
 const { locale } = useI18n();
@@ -37,6 +41,15 @@ const ownerIcon = computed(() => {
   return SHOP_ITEMS.find((i) => i.id === p.token)?.icon ?? "●";
 });
 
+/** Stable medieval hue tied to the owner's seat index in the room. */
+const ownerColor = computed(() => {
+  const o = owner.value;
+  if (!o || !game.room) return "var(--ink-3)";
+  const idx = game.room.players.findIndex((pp) => pp.id === o.id);
+  if (idx < 0) return o.color || "var(--ink-3)";
+  return ORDERED_PLAYER_COLORS[idx % ORDERED_PLAYER_COLORS.length];
+});
+
 const bandColor = computed(() => {
   const t = tile.value;
   if (!t || t.kind !== "street") return null;
@@ -51,21 +64,21 @@ const rentRows = computed<RentRow[]>(() => {
   if (t.kind === "street") {
     const s = t as StreetTile;
     return [
-      { label: loc.value === "ru" ? "Базовая" : "Base",       value: `$${s.rent[0]}` },
-      { label: loc.value === "ru" ? "Монополия"  : "Monopoly", value: `$${s.rent[0] * 2}` },
-      { label: loc.value === "ru" ? "1 дом"  : "1 house",     value: `$${s.rent[1]}` },
-      { label: loc.value === "ru" ? "2 дома"  : "2 houses",   value: `$${s.rent[2]}` },
-      { label: loc.value === "ru" ? "3 дома"  : "3 houses",   value: `$${s.rent[3]}` },
-      { label: loc.value === "ru" ? "4 дома"  : "4 houses",   value: `$${s.rent[4]}` },
-      { label: loc.value === "ru" ? "Отель"   : "Hotel",      value: `$${s.rent[5]}` },
+      { label: loc.value === "ru" ? "Базовая" : "Base",       value: `◈ ${s.rent[0]}` },
+      { label: loc.value === "ru" ? "Монополия"  : "Monopoly", value: `◈ ${s.rent[0] * 2}` },
+      { label: loc.value === "ru" ? "1 дом"  : "1 house",     value: `◈ ${s.rent[1]}` },
+      { label: loc.value === "ru" ? "2 дома"  : "2 houses",   value: `◈ ${s.rent[2]}` },
+      { label: loc.value === "ru" ? "3 дома"  : "3 houses",   value: `◈ ${s.rent[3]}` },
+      { label: loc.value === "ru" ? "4 дома"  : "4 houses",   value: `◈ ${s.rent[4]}` },
+      { label: loc.value === "ru" ? "Замок"   : "Castle",     value: `◈ ${s.rent[5]}` },
     ];
   }
   if (t.kind === "railroad") {
     return [
-      { label: loc.value === "ru" ? "1 ж/д" : "1 RR", value: "$25" },
-      { label: loc.value === "ru" ? "2 ж/д" : "2 RR", value: "$50" },
-      { label: loc.value === "ru" ? "3 ж/д" : "3 RR", value: "$100" },
-      { label: loc.value === "ru" ? "4 ж/д" : "4 RR", value: "$200" },
+      { label: loc.value === "ru" ? "1 ж/д" : "1 RR", value: "◈ 25" },
+      { label: loc.value === "ru" ? "2 ж/д" : "2 RR", value: "◈ 50" },
+      { label: loc.value === "ru" ? "3 ж/д" : "3 RR", value: "◈ 100" },
+      { label: loc.value === "ru" ? "4 ж/д" : "4 RR", value: "◈ 200" },
     ];
   }
   if (t.kind === "utility") {
@@ -82,15 +95,15 @@ const description = computed<string | null>(() => {
   if (!t) return null;
   switch (t.kind) {
     case "go":
-      return loc.value === "ru" ? "Проходя — получи $200" : "Collect $200 when you pass";
+      return loc.value === "ru" ? "Проходя — получи ◈ 200" : "Collect ◈ 200 when you pass";
     case "jail":
       return loc.value === "ru" ? "Тюрьма / В гостях" : "Jail / Just Visiting";
     case "goToJail":
-      return loc.value === "ru" ? "Отправляешься в тюрьму без сбора $200" : "Go to Jail — do not pass GO";
+      return loc.value === "ru" ? "Отправляешься в тюрьму без сбора ◈ 200" : "Go to Jail — do not pass GO";
     case "freeParking":
       return loc.value === "ru" ? "Просто отдых — ничего не происходит" : "Rest — no effect";
     case "tax":
-      return loc.value === "ru" ? `Заплати $${t.amount}` : `Pay $${t.amount}`;
+      return loc.value === "ru" ? `Заплати ◈ ${t.amount}` : `Pay ◈ ${t.amount}`;
     case "chance":
       return loc.value === "ru" ? "Тяни карту Шанс — может быть что угодно" : "Draw a Chance card — could be anything";
     case "chest":
@@ -105,15 +118,15 @@ const iconText = computed(() => {
   if (!t) return "";
   switch (t.kind) {
     case "go": return "▶";
-    case "jail": return "🔒";
-    case "goToJail": return "👮";
-    case "freeParking": return "🅿️";
-    case "chance": return "❓";
-    case "chest": return "🎁";
-    case "tax": return "💸";
-    case "railroad": return "🚂";
-    case "utility": return t.index === 12 ? "💡" : "💧";
-    case "street": return "🏠";
+    case "jail": return "⛓";
+    case "goToJail": return "⚔";
+    case "freeParking": return "♜";
+    case "chance": return "?";
+    case "chest": return "⎔";
+    case "tax": return "◈";
+    case "railroad": return "♞";
+    case "utility": return t.index === 12 ? "✦" : "≈";
+    case "street": return "⌂";
     default: return "";
   }
 });
@@ -136,16 +149,47 @@ const hasMonopoly = computed(() => {
   return groupTiles.every((gt) => game.room?.properties[gt.index]?.ownerId === owned.value?.ownerId);
 });
 
+function groupLevel(tileIndex: number): number {
+  const o = game.room?.properties[tileIndex];
+  if (!o) return 0;
+  return o.hotel ? 5 : o.houses;
+}
+const groupOthersLevels = computed<number[]>(() => {
+  const t = tile.value;
+  if (!t || t.kind !== "street") return [];
+  const g = (t as StreetTile).group;
+  return BOARD
+    .filter((x) => x.kind === "street" && (x as StreetTile).group === g && x.index !== t.index)
+    .map((x) => groupLevel(x.index));
+});
+const evenBuildOk = computed(() => {
+  const o = owned.value;
+  if (!o) return false;
+  const mine = o.hotel ? 5 : o.houses;
+  const minOther = groupOthersLevels.value.length ? Math.min(...groupOthersLevels.value) : mine;
+  return mine <= minOther;
+});
+const evenSellOk = computed(() => {
+  const o = owned.value;
+  if (!o) return false;
+  const mine = o.hotel ? 5 : o.houses;
+  const maxOther = groupOthersLevels.value.length ? Math.max(...groupOthersLevels.value) : 0;
+  return mine >= maxOther;
+});
+
 const canBuild = computed(() => {
   if (!isMineStreet.value || !hasMonopoly.value) return false;
   const o = owned.value;
   if (!o || o.mortgaged) return false;
-  return !o.hotel;
+  if (o.hotel) return false;
+  return evenBuildOk.value;
 });
 
 const canSell = computed(() => {
   const o = owned.value;
-  return !!isMineStreet.value && !!o && (o.houses > 0 || o.hotel);
+  if (!isMineStreet.value || !o) return false;
+  if (o.houses <= 0 && !o.hotel) return false;
+  return evenSellOk.value;
 });
 
 const buildCost = computed(() => {
@@ -216,136 +260,244 @@ function mortgage() {
 function unmortgage() {
   if (tile.value) props.onUnmortgage?.(tile.value.index);
 }
+
+const canPickTriple = computed(() => {
+  return game.room?.phase === "triplesPick"
+    && !!game.me
+    && !!game.currentPlayer
+    && game.me.id === game.currentPlayer.id
+    && !!tile.value;
+});
+function pickTriple() {
+  if (tile.value) {
+    props.onPickTripleTile?.(tile.value.index);
+    game.selectTile(null);
+  }
+}
+
+const isRu = computed(() => loc.value === "ru");
 </script>
 
 <template>
   <transition name="fade">
-    <div v-if="tile" class="overlay" @click="close">
-      <div class="info-card" @click.stop>
-        <div v-if="bandColor" class="info-card__band" :style="{ background: bandColor }" />
+    <div v-if="tile" class="modal-scrim" @click="close">
+      <div
+        class="modal-card"
+        :style="bandColor ? { borderTopColor: bandColor } : undefined"
+        @click.stop
+      >
+        <div class="grab-handle" />
 
-        <div class="info-card__head">
-          <div class="info-card__icon">{{ iconText }}</div>
-          <div class="info-card__title">{{ tile.name[loc] }}</div>
-          <button class="info-card__close" @click="close">✕</button>
-        </div>
-
-        <div v-if="tile.kind === 'street' || tile.kind === 'railroad' || tile.kind === 'utility'" class="info-card__price">
-          <span class="label">{{ loc === "ru" ? "Цена" : "Price" }}</span>
-          <span class="val money">${{ tile.price }}</span>
-        </div>
-
-        <div v-if="rentRows.length" class="rent-table">
-          <div v-for="r in rentRows" :key="r.label" class="rent-row">
-            <span class="rent-row__label">{{ r.label }}</span>
-            <span class="rent-row__val money">{{ r.value }}</span>
-          </div>
-        </div>
-
-        <div v-if="tile.kind === 'street'" class="info-extra">
-          <div class="info-extra__row">
-            <span class="label">{{ loc === "ru" ? "Дом/отель" : "House/hotel" }}</span>
-            <span class="val">${{ tile.houseCost }}</span>
-          </div>
-          <div class="info-extra__row">
-            <span class="label">{{ loc === "ru" ? "Залог" : "Mortgage" }}</span>
-            <span class="val">${{ tile.mortgage }}</span>
-          </div>
-        </div>
-
-        <div v-if="tile.kind === 'railroad' || tile.kind === 'utility'" class="info-extra">
-          <div class="info-extra__row">
-            <span class="label">{{ loc === "ru" ? "Залог" : "Mortgage" }}</span>
-            <span class="val">${{ tile.mortgage }}</span>
-          </div>
-        </div>
-
-        <div v-if="description" class="info-desc">{{ description }}</div>
-
-        <div v-if="owner" class="owner-panel" :style="{ borderColor: owner.color }">
-          <div class="owner-panel__head">
-            {{ loc === "ru" ? "Владелец" : "Owner" }}
-          </div>
-          <div class="owner-panel__row">
-            <span class="owner-panel__token" :style="{ background: owner.color }">
-              {{ ownerIcon }}
-            </span>
-            <span class="owner-panel__name">{{ owner.name }}</span>
-            <span v-if="owned?.mortgaged" class="chip mortgage-chip">{{ loc === "ru" ? "В залоге" : "Mortgaged" }}</span>
-          </div>
-          <div v-if="owned && (owned.houses || owned.hotel)" class="owner-panel__buildings">
-            <span v-if="owned.hotel">🏨 {{ loc === "ru" ? "Отель" : "Hotel" }}</span>
-            <span v-else-if="owned.houses > 0">
-              <span v-for="n in owned.houses" :key="n">🏠</span>
-            </span>
-          </div>
-        </div>
-        <div v-else-if="tile.kind === 'street' || tile.kind === 'railroad' || tile.kind === 'utility'" class="free-chip">
-          {{ loc === "ru" ? "Свободно" : "Unowned" }}
-        </div>
-
-        <!-- Build / sell actions -->
-        <div v-if="isMineStreet" class="build-actions">
-          <button
-            class="btn btn--neon"
-            :disabled="!canBuild"
-            @click="build"
+        <!-- Header: icon + name + close -->
+        <div class="head">
+          <div
+            class="head__icon"
+            :style="bandColor ? { background: bandColor, color: '#fff' } : undefined"
           >
-            {{ owned?.houses === 4 ? "🏨 Построить отель" : "🏠 Построить дом" }}
-            <span class="build-actions__cost">${{ buildCost }}</span>
+            {{ iconText }}
+          </div>
+          <div class="head__body">
+            <div v-if="tile.kind === 'street'" class="head__kicker">
+              {{ (tile as StreetTile).group.toUpperCase() }}
+              {{ isRu ? "КВАРТАЛ" : "QUARTER" }}
+            </div>
+            <div v-else class="head__kicker">
+              {{ isRu ? "ГРАМОТА" : "DEED" }}
+            </div>
+            <div class="head__title">{{ tile.name[loc] }}</div>
+          </div>
+          <button class="icon-btn head__close" @click="close" aria-label="close">
+            <Icon name="x" :size="16" color="var(--ink-2)" />
           </button>
-          <button
-            class="btn btn--ghost"
-            :disabled="!canSell"
-            @click="sell"
-          >
-            💰 Продать за ${{ Math.floor(buildCost / 2) }}
+        </div>
+
+        <!-- Price row -->
+        <div
+          v-if="tile.kind === 'street' || tile.kind === 'railroad' || tile.kind === 'utility'"
+          class="price-row row between"
+        >
+          <span class="price-row__label">{{ isRu ? "Цена" : "Price" }}</span>
+          <span class="price-row__val">◈ {{ tile.price }}</span>
+        </div>
+
+        <!-- Rent table -->
+        <div v-if="rentRows.length" class="rent">
+          <div class="rent__head">{{ isRu ? "Аренда" : "Rent schedule" }}</div>
+          <div class="rent__table">
+            <div
+              v-for="(r, i) in rentRows"
+              :key="r.label"
+              class="rent__row"
+              :class="{ 'rent__row--last': i === rentRows.length - 1 }"
+            >
+              <span class="rent__label">{{ r.label }}</span>
+              <span class="rent__val">{{ r.value }}</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Extra stats: house / mortgage -->
+        <div v-if="tile.kind === 'street'" class="stat-grid">
+          <div class="stat-box">
+            <div class="stat-box__label">{{ isRu ? "Дом" : "House" }}</div>
+            <div class="stat-box__val">◈ {{ (tile as StreetTile).houseCost }}</div>
+          </div>
+          <div class="stat-box">
+            <div class="stat-box__label">{{ isRu ? "Замок" : "Castle" }}</div>
+            <div class="stat-box__val">◈ {{ (tile as StreetTile).houseCost }}</div>
+          </div>
+          <div class="stat-box">
+            <div class="stat-box__label">{{ isRu ? "Залог" : "Mortgage" }}</div>
+            <div class="stat-box__val">◈ {{ (tile as StreetTile).mortgage }}</div>
+          </div>
+        </div>
+        <div v-else-if="tile.kind === 'railroad' || tile.kind === 'utility'" class="stat-grid">
+          <div class="stat-box">
+            <div class="stat-box__label">{{ isRu ? "Залог" : "Mortgage" }}</div>
+            <div class="stat-box__val">◈ {{ (tile as any).mortgage }}</div>
+          </div>
+        </div>
+
+        <!-- Flavor description for non-property tiles -->
+        <div v-if="description" class="desc">{{ description }}</div>
+
+        <!-- Owner panel -->
+        <div v-if="owner" class="owner">
+          <div class="owner__head">{{ isRu ? "Владелец" : "Owner" }}</div>
+          <div class="owner__row">
+            <Sigil :name="owner.name" :color="ownerColor" :size="32" />
+            <span class="owner__name">{{ owner.name }}</span>
+            <span v-if="owned?.mortgaged" class="chip owner__mortgage">
+              <Icon name="lock" :size="11" color="var(--accent)" />
+              {{ isRu ? "В залоге" : "Mortgaged" }}
+            </span>
+          </div>
+          <div v-if="owned && (owned.houses || owned.hotel)" class="owner__buildings">
+            <span v-if="owned.hotel" class="owner__castle">
+              ♖ {{ isRu ? "Замок" : "Castle" }}
+            </span>
+            <span v-else-if="owned.houses > 0" class="owner__houses">
+              <span v-for="n in owned.houses" :key="n">⌂</span>
+            </span>
+          </div>
+        </div>
+        <div
+          v-else-if="tile.kind === 'street' || tile.kind === 'railroad' || tile.kind === 'utility'"
+          class="free"
+        >
+          <Icon name="scroll" :size="14" color="var(--emerald)" />
+          {{ isRu ? "Свободно — земля без владельца" : "Unclaimed land" }}
+        </div>
+
+        <!-- Triples: jump to tile -->
+        <div v-if="canPickTriple" class="actions">
+          <button class="btn btn-primary triples-btn" @click="pickTriple">
+            <Icon name="dice" :size="16" color="#fff" />
+            {{ isRu ? "Переместиться сюда" : "Leap to this square" }}
           </button>
-          <p v-if="!hasMonopoly" class="build-actions__hint">
-            Нужна вся цветовая группа, чтобы строить
+          <p class="hint">
+            {{ isRu ? "Телепорт без бонуса за проход СТАРТ" : "No pass-GO bonus" }}
           </p>
         </div>
 
-        <!-- Залог / выкуп из залога (для владельца) -->
-        <div v-if="isMineProperty && (canMortgage || canUnmortgage)" class="build-actions">
+        <!-- Build / sell actions -->
+        <div v-if="isMineStreet" class="actions">
+          <button
+            class="btn btn-primary build-btn"
+            :disabled="!canBuild"
+            @click="build"
+          >
+            <Icon :name="owned?.houses === 4 ? 'castle' : 'home'" :size="16" color="#fff" />
+            <span class="build-btn__text">
+              {{ owned?.houses === 4
+                ? (isRu ? "Возвести замок" : "Raise a castle")
+                : (isRu ? "Построить дом" : "Build a house") }}
+            </span>
+            <span class="build-btn__cost">◈ {{ buildCost }}</span>
+          </button>
+          <button
+            class="btn btn-ghost sell-btn"
+            :disabled="!canSell"
+            @click="sell"
+          >
+            <Icon name="coin" :size="15" color="var(--gold)" />
+            <span class="build-btn__text">
+              {{ isRu ? "Продать" : "Sell" }}
+            </span>
+            <span class="build-btn__cost">◈ {{ Math.floor(buildCost / 2) }}</span>
+          </button>
+          <p v-if="!hasMonopoly" class="hint">
+            {{ isRu
+              ? "Нужна вся цветовая группа, чтобы строить"
+              : "You need the full colour group to build" }}
+          </p>
+          <p v-else-if="hasMonopoly && !evenBuildOk && !owned?.hotel" class="hint">
+            {{ isRu
+              ? "Сначала достройся на других улицах группы (равномерная стройка)"
+              : "Build evenly across the group first" }}
+          </p>
+          <p v-else-if="(owned?.houses || owned?.hotel) && !evenSellOk" class="hint">
+            {{ isRu
+              ? "Сначала снеси с более застроенных улиц группы"
+              : "Sell from the more-developed streets first" }}
+          </p>
+        </div>
+
+        <!-- Mortgage / unmortgage (owner only) -->
+        <div v-if="isMineProperty && (canMortgage || canUnmortgage)" class="actions">
           <button
             v-if="canMortgage"
-            class="btn btn--ghost"
+            class="btn btn-wax"
             @click="mortgage"
           >
-            🔒 Заложить банку · +${{ mortgageValue }}
+            <Icon name="lock" :size="15" color="#fff" />
+            <span class="build-btn__text">{{ isRu ? "Заложить" : "Mortgage" }}</span>
+            <span class="build-btn__cost">+ ◈ {{ mortgageValue }}</span>
           </button>
           <button
             v-if="canUnmortgage"
-            class="btn btn--neon"
+            class="btn btn-emerald"
             @click="unmortgage"
           >
-            🔓 Выкупить из залога · −${{ unmortgageCost }}
+            <Icon name="unlock" :size="15" color="#fff" />
+            <span class="build-btn__text">{{ isRu ? "Выкупить из залога" : "Redeem" }}</span>
+            <span class="build-btn__cost">− ◈ {{ unmortgageCost }}</span>
           </button>
         </div>
 
-        <!-- Предложить выкуп у чужого владельца -->
-        <div v-if="canPropose" class="build-actions">
+        <!-- Propose trade to the current owner -->
+        <div v-if="canPropose" class="actions">
           <div v-if="!proposeOpen">
-            <button class="btn btn--primary" @click="openPropose">
-              💱 Предложить выкуп
+            <button class="btn btn-primary propose-btn" @click="openPropose">
+              <Icon name="trade" :size="16" color="#fff" />
+              {{ isRu ? "Предложить выкуп" : "Propose a deal" }}
             </button>
           </div>
           <div v-else class="propose-form">
             <label class="propose-form__label">
-              Сколько предлагаешь?
-              <input
-                v-model.number="proposeCash"
-                type="number"
-                min="1"
-                :max="game.me?.cash ?? 0"
-                class="propose-form__input"
-              />
+              {{ isRu ? "Сколько предлагаешь?" : "Your offer" }}
+              <div class="propose-form__input-wrap">
+                <span class="propose-form__glyph">◈</span>
+                <input
+                  v-model.number="proposeCash"
+                  type="number"
+                  min="1"
+                  :max="game.me?.cash ?? 0"
+                  class="propose-form__input"
+                />
+              </div>
             </label>
             <div class="propose-form__row">
-              <button class="btn btn--ghost" @click="proposeOpen = false">Отмена</button>
-              <button class="btn btn--neon" :disabled="!proposeCash || proposeCash <= 0" @click="sendPropose">
-                Отправить
+              <button class="btn btn-ghost" @click="proposeOpen = false">
+                {{ isRu ? "Отмена" : "Cancel" }}
+              </button>
+              <button
+                class="btn btn-primary"
+                :disabled="!proposeCash || proposeCash <= 0"
+                @click="sendPropose"
+              >
+                <Icon name="send" :size="14" color="#fff" />
+                {{ isRu ? "Отправить" : "Send" }}
               </button>
             </div>
           </div>
@@ -356,207 +508,392 @@ function unmortgage() {
 </template>
 
 <style scoped>
-.overlay {
+/* ── Scrim: absolute over the full viewport, sheet docked to bottom ── */
+.modal-scrim {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.65);
-  backdrop-filter: blur(10px);
+  background: rgba(26, 15, 5, 0.5);
+  backdrop-filter: blur(2px);
+  -webkit-backdrop-filter: blur(2px);
   z-index: 110;
-  display: grid;
-  place-items: center;
-  padding: 20px;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
 }
-.info-card {
-  width: min(360px, 100%);
-  background: var(--surface-strong);
-  border: 1px solid var(--border-strong);
-  border-radius: 18px;
-  padding: 0;
-  overflow: hidden;
-  box-shadow: 0 30px 80px -20px rgba(0, 0, 0, 0.8);
-  animation: info-pop 0.25s cubic-bezier(0.3, 1.2, 0.4, 1);
-}
-.info-card__band {
-  height: 10px;
+
+.modal-card {
   width: 100%;
+  max-width: 480px;
+  max-height: 85dvh;
+  overflow-y: auto;
+  background: var(--card-alt);
+  border-top: 3px solid var(--primary);
+  border-radius: 16px 16px 0 0;
+  padding: 14px 16px calc(20px + var(--csab, 0px));
+  animation: sheet-unfurl 320ms cubic-bezier(0.34, 1.56, 0.64, 1);
+  transform-origin: bottom;
+  position: relative;
+  box-shadow: 0 -8px 24px rgba(42, 29, 16, 0.25);
 }
-.info-card__head {
+
+.grab-handle {
+  width: 40px;
+  height: 4px;
+  background: var(--line-strong);
+  border-radius: 2px;
+  margin: -4px auto 12px;
+}
+
+/* ── Header ── */
+.head {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 14px 16px 10px;
-  border-bottom: 1px solid var(--border);
+  gap: 12px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--divider);
+  margin-bottom: 12px;
 }
-.info-card__icon {
-  font-size: 26px;
+.head__icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  color: var(--ink);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-display);
+  font-size: 22px;
+  flex-shrink: 0;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.3);
+}
+.head__body {
+  flex: 1;
+  min-width: 0;
+}
+.head__kicker {
+  font-size: 9px;
+  letter-spacing: 0.18em;
+  color: var(--ink-3);
+  text-transform: uppercase;
+  font-family: var(--font-title);
   line-height: 1;
 }
-.info-card__title {
-  flex: 1;
-  font-weight: 800;
-  font-size: 17px;
-  line-height: 1.2;
+.head__title {
+  font-family: var(--font-display);
+  font-size: 19px;
+  color: var(--ink);
+  line-height: 1.15;
+  margin-top: 4px;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
-.info-card__close {
-  width: 30px;
-  height: 30px;
-  border-radius: 8px;
-  color: var(--text-mute);
-  font-size: 16px;
-}
-.info-card__close:hover { color: var(--text); background: rgba(255, 255, 255, 0.05); }
-
-.info-card__price {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 10px 16px;
-  border-bottom: 1px solid var(--border);
-  font-size: 14px;
-}
-.info-card__price .val { font-size: 17px; }
-
-.rent-table {
-  display: flex;
-  flex-direction: column;
-  padding: 6px 0;
-  border-bottom: 1px solid var(--border);
-}
-.rent-row {
-  display: flex;
-  justify-content: space-between;
-  padding: 6px 16px;
-  font-size: 13px;
-}
-.rent-row__label { color: var(--text-dim); }
-
-.info-extra {
-  padding: 8px 16px;
-  border-bottom: 1px solid var(--border);
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-.info-extra__row {
-  display: flex;
-  justify-content: space-between;
-  font-size: 13px;
-}
-.label { color: var(--text-dim); }
-.val { font-weight: 600; }
-
-.info-desc {
-  padding: 12px 16px;
-  color: var(--text-dim);
-  font-size: 13px;
-  line-height: 1.4;
-  border-bottom: 1px solid var(--border);
+.head__close {
+  width: 32px;
+  height: 32px;
 }
 
-.owner-panel {
-  margin: 12px 16px 14px;
+/* ── Price row ── */
+.price-row {
   padding: 10px 12px;
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  background: rgba(0, 0, 0, 0.25);
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  margin-bottom: 12px;
 }
-.owner-panel__head {
+.price-row__label {
   font-size: 11px;
-  color: var(--text-mute);
-  text-transform: uppercase;
   letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+.price-row__val {
+  font-family: var(--font-mono);
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--gold);
+}
+
+/* ── Rent table ── */
+.rent {
+  margin-bottom: 12px;
+}
+.rent__head {
+  font-size: 11px;
+  color: var(--ink-3);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
   margin-bottom: 6px;
 }
-.owner-panel__row {
+.rent__table {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  overflow: hidden;
+}
+.rent__row {
   display: flex;
+  justify-content: space-between;
   align-items: center;
-  gap: 8px;
-}
-.owner-panel__token {
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
-  display: grid;
-  place-items: center;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--divider);
   font-size: 13px;
-  color: #fff;
-  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.3);
 }
-.owner-panel__name {
-  font-weight: 700;
-  flex: 1;
+.rent__row--last {
+  border-bottom: none;
 }
-.mortgage-chip {
-  background: rgba(239, 68, 68, 0.15);
-  color: var(--red);
-  border-color: rgba(239, 68, 68, 0.35);
+.rent__label {
+  color: var(--ink-2);
 }
-.owner-panel__buildings {
-  margin-top: 6px;
-  font-size: 14px;
-}
-
-.free-chip {
-  margin: 12px 16px 14px;
-  padding: 10px 12px;
-  text-align: center;
-  background: rgba(34, 197, 94, 0.12);
-  border: 1px solid rgba(34, 197, 94, 0.35);
-  border-radius: 12px;
-  color: var(--neon);
+.rent__val {
+  font-family: var(--font-mono);
+  color: var(--ink);
   font-weight: 600;
 }
 
-.build-actions {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  padding: 0 16px 14px;
+/* ── Stat grid (house / mortgage / etc) ── */
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(90px, 1fr));
+  gap: 8px;
+  margin-bottom: 12px;
 }
-.build-actions .btn {
-  padding: 12px;
+.stat-box {
+  text-align: center;
+  padding: 8px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+.stat-box__label {
+  font-size: 10px;
+  color: var(--ink-3);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+.stat-box__val {
+  font-family: var(--font-mono);
   font-size: 14px;
+  color: var(--ink);
+  margin-top: 2px;
+  font-weight: 600;
+}
+
+/* ── Flavor description ── */
+.desc {
+  padding: 12px 14px;
+  background: var(--card);
+  border: 1px dashed var(--line-strong);
+  border-radius: 8px;
+  color: var(--ink-2);
+  font-size: 13px;
+  line-height: 1.4;
+  margin-bottom: 12px;
+  font-family: var(--font-display);
+  font-style: italic;
+}
+
+/* ── Owner panel ── */
+.owner {
+  padding: 10px 12px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  margin-bottom: 12px;
+}
+.owner__head {
+  font-size: 10px;
+  color: var(--ink-3);
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  margin-bottom: 8px;
+}
+.owner__row {
   display: flex;
-  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+}
+.owner__name {
+  flex: 1;
+  font-family: var(--font-display);
+  font-size: 14px;
+  color: var(--ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.owner__mortgage {
+  background: rgba(139, 26, 26, 0.08);
+  border-color: rgba(139, 26, 26, 0.3);
+  color: var(--accent);
+  font-weight: 600;
+}
+.owner__buildings {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--divider);
+  font-family: var(--font-display);
+  font-size: 14px;
+  color: var(--ink-2);
+  display: flex;
+  gap: 6px;
   align-items: center;
 }
-.build-actions__cost {
-  font-variant-numeric: tabular-nums;
-  opacity: 0.85;
+.owner__castle {
+  color: var(--gold);
+  font-weight: 600;
+  letter-spacing: 0.05em;
 }
-.build-actions__hint {
+.owner__houses {
+  letter-spacing: 0.15em;
+  color: var(--emerald);
+  font-size: 16px;
+}
+
+/* ── Free chip ── */
+.free {
+  padding: 10px 12px;
+  background: rgba(45, 122, 79, 0.08);
+  border: 1px solid rgba(45, 122, 79, 0.3);
+  border-radius: 8px;
+  color: var(--emerald);
+  font-size: 12px;
+  font-family: var(--font-display);
+  letter-spacing: 0.03em;
+  text-align: center;
+  margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+/* ── Action blocks ── */
+.actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.actions .btn {
+  width: 100%;
+  padding: 12px 14px;
+  font-size: 14px;
+  justify-content: space-between;
+}
+.actions .btn > :first-child {
+  flex-shrink: 0;
+}
+.build-btn__text {
+  flex: 1;
+  text-align: left;
+  margin-left: 4px;
+}
+.build-btn__cost {
+  font-family: var(--font-mono);
+  font-weight: 600;
+  opacity: 0.92;
+}
+.sell-btn .build-btn__cost {
+  color: var(--gold);
+}
+.triples-btn {
+  background: linear-gradient(180deg, var(--gold-soft) 0%, var(--gold) 100%);
+  color: #2a1d10;
+  animation: triples-breath 1.4s ease-in-out infinite;
+  border: 1px solid rgba(90, 58, 24, 0.25);
+  box-shadow: 0 4px 12px rgba(184, 137, 46, 0.35);
+  justify-content: center;
+  gap: 8px;
+}
+.triples-btn :deep(svg) { color: #2a1d10; }
+.propose-btn {
+  justify-content: center;
+  gap: 8px;
+}
+
+.hint {
   font-size: 11px;
-  color: var(--text-mute);
+  color: var(--ink-3);
   text-align: center;
   margin: 2px 0 0;
+  font-family: var(--font-display);
+  font-style: italic;
+  line-height: 1.3;
 }
-.propose-form { display: flex; flex-direction: column; gap: 8px; }
+
+/* ── Propose form ── */
+.propose-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
 .propose-form__label {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  font-size: 12px;
-  color: var(--text-dim);
+  gap: 6px;
+  font-size: 11px;
+  color: var(--ink-3);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
 }
-.propose-form__input {
+.propose-form__input-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   padding: 10px 12px;
-  background: rgba(0, 0, 0, 0.3);
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  color: var(--text);
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+.propose-form__input-wrap:focus-within {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(90, 58, 154, 0.1);
+}
+.propose-form__glyph {
+  color: var(--gold);
+  font-family: var(--font-mono);
   font-size: 16px;
   font-weight: 700;
-  font-variant-numeric: tabular-nums;
-  outline: none;
 }
-.propose-form__input:focus { border-color: var(--purple); }
-.propose-form__row { display: flex; gap: 6px; }
-.propose-form__row .btn { flex: 1; padding: 10px; }
+.propose-form__input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  color: var(--ink);
+  font-family: var(--font-mono);
+  font-size: 16px;
+  font-weight: 700;
+  outline: none;
+  padding: 0;
+  text-transform: none;
+  letter-spacing: 0;
+}
+.propose-form__row {
+  display: flex;
+  gap: 8px;
+}
+.propose-form__row .btn {
+  flex: 1;
+  padding: 12px;
+  justify-content: center;
+}
 
-@keyframes info-pop {
-  0% { transform: translateY(30px) scale(0.9); opacity: 0; }
-  100% { transform: translateY(0) scale(1); opacity: 1; }
+/* ── Animations ── */
+@keyframes sheet-unfurl {
+  0% { transform: translateY(100%); opacity: 0; }
+  100% { transform: translateY(0); opacity: 1; }
+}
+@keyframes triples-breath {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.015); }
 }
 .fade-enter-active, .fade-leave-active { transition: opacity 0.2s ease; }
 .fade-enter-from, .fade-leave-to { opacity: 0; }
+.fade-enter-active .modal-card,
+.fade-leave-active .modal-card {
+  transition: transform 0.22s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.fade-leave-to .modal-card { transform: translateY(20%); }
 </style>

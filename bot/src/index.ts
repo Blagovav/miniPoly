@@ -124,6 +124,33 @@ app.post<{ Body: { tgUserId: number; roomId: string; playerName: string } }>(
   },
 );
 
+// Отправить инвайт в комнату другу в Telegram-DM.
+app.post<{ Body: { tgUserId: number; roomId: string; fromName: string } }>(
+  "/invite/send",
+  async (req, reply) => {
+    if (!bot) return reply.code(503).send({ ok: false, reason: "no bot" });
+    const { tgUserId, roomId, fromName } = req.body;
+    if (!tgUserId || !roomId) return reply.code(400).send({ ok: false, reason: "bad request" });
+
+    const url = `${WEBAPP_URL}?room=${encodeURIComponent(roomId)}`;
+    const kb = new InlineKeyboard().webApp(`🎲 Войти в комнату ${roomId}`, url);
+    const safeName = String(fromName || "Игрок").replace(/[<>&]/g, "");
+
+    try {
+      await bot.api.sendMessage(
+        tgUserId,
+        `🎲 <b>${safeName}</b> зовёт тебя в партию Minipoly!\n\nКомната <b>${roomId}</b> ждёт — жми кнопку и присоединяйся.`,
+        { reply_markup: kb, parse_mode: "HTML" },
+      );
+      return { ok: true };
+    } catch (err: any) {
+      const reason = err?.description || err?.message || "send failed";
+      console.error("[bot] invite send failed:", reason);
+      return reply.code(200).send({ ok: false, reason });
+    }
+  },
+);
+
 // Создать invoice-link для Telegram Stars.
 app.post<{ Body: { tgUserId: number; itemId: string; title: string; stars: number } }>(
   "/invoice/create",

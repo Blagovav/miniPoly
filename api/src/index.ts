@@ -58,6 +58,28 @@ app.get<{ Params: { tgUserId: string } }>("/api/users/:tgUserId/purchases", asyn
   return { items };
 });
 
+// Послать инвайт в комнату другу через бота.
+app.post<{ Body: { tgUserId: number; roomId: string; fromName: string } }>(
+  "/api/invites/send",
+  async (req, reply) => {
+    const { tgUserId, roomId, fromName } = req.body ?? ({} as any);
+    if (!tgUserId || !roomId) return reply.code(400).send({ ok: false, error: "bad request" });
+    const room = getRoom(roomId);
+    if (!room) return reply.code(404).send({ ok: false, error: "room not found" });
+    try {
+      const res = await fetch(`${config.botUrl}/invite/send`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ tgUserId, roomId, fromName }),
+      });
+      const data = await res.json().catch(() => ({}));
+      return data;
+    } catch {
+      return reply.code(502).send({ ok: false, error: "bot unreachable" });
+    }
+  },
+);
+
 // Создать инвойс для покупки за Telegram Stars. Перенаправляет в бота.
 app.post<{ Body: { tgUserId: number; itemId: string; title: string; stars: number } }>(
   "/api/stars/invoice",

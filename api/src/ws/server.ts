@@ -10,6 +10,9 @@ import {
   endTurn,
   leaveActiveGame,
   mortgageProperty,
+  moveToTripleTile,
+  passAuction,
+  placeBid,
   proposeTrade,
   reassignHostIfNeeded,
   removePlayer,
@@ -149,6 +152,12 @@ function handleMessage(conn: Conn, ws: WebSocket, msg: ClientMessage): void {
       return handleMortgage(conn, msg.tileIndex);
     case "unmortgage":
       return handleUnmortgage(conn, msg.tileIndex);
+    case "pickTripleTile":
+      return handlePickTripleTile(conn, msg.tileIndex);
+    case "placeBid":
+      return handlePlaceBid(conn, msg.amount);
+    case "passAuction":
+      return handlePassAuction(conn);
     default:
       conn.send({ type: "error", message: "unknown message" });
   }
@@ -264,6 +273,53 @@ function handleRoll(conn: Conn): void {
     from: result.from,
     to: result.to,
   });
+  sendState(ctx.room.id);
+  onStateChange(ctx.room);
+}
+
+function handlePickTripleTile(conn: Conn, tileIndex: number): void {
+  const ctx = getRoomAndPlayer(conn);
+  if (!ctx || !ctx.p) return;
+  if (ctx.room.players[ctx.room.currentTurn].id !== ctx.p.id) {
+    conn.send({ type: "error", message: "not your turn" });
+    return;
+  }
+  const result = moveToTripleTile(ctx.room, tileIndex);
+  if (!result) {
+    conn.send({ type: "error", message: "can't pick tile" });
+    return;
+  }
+  broadcast(ctx.room.id, {
+    type: "diceRolled",
+    by: ctx.p.id,
+    dice: ctx.room.dice ?? [0, 0],
+    speedDie: ctx.room.speedDie,
+    from: result.from,
+    to: result.to,
+  });
+  sendState(ctx.room.id);
+  onStateChange(ctx.room);
+}
+
+function handlePlaceBid(conn: Conn, amount: number): void {
+  const ctx = getRoomAndPlayer(conn);
+  if (!ctx || !ctx.p) return;
+  const res = placeBid(ctx.room, ctx.p.id, amount);
+  if (!res.ok) {
+    conn.send({ type: "error", message: res.error ?? "bid failed" });
+    return;
+  }
+  sendState(ctx.room.id);
+}
+
+function handlePassAuction(conn: Conn): void {
+  const ctx = getRoomAndPlayer(conn);
+  if (!ctx || !ctx.p) return;
+  const res = passAuction(ctx.room, ctx.p.id);
+  if (!res.ok) {
+    conn.send({ type: "error", message: res.error ?? "pass failed" });
+    return;
+  }
   sendState(ctx.room.id);
   onStateChange(ctx.room);
 }

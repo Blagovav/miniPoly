@@ -1,21 +1,57 @@
 <script setup lang="ts">
-import { ref, onMounted } from "vue";
+import { computed, ref, onMounted } from "vue";
 import { useI18n } from "vue-i18n";
 import { useRouter } from "vue-router";
 import { setLocale } from "../i18n";
 import { useInventoryStore } from "../stores/inventory";
 import { useTelegram } from "../composables/useTelegram";
+import Icon from "../components/Icon.vue";
+import Sigil from "../components/Sigil.vue";
+import { PLAYER_COLORS } from "../utils/palette";
 
-const { t, locale } = useI18n();
+const { locale } = useI18n();
 const router = useRouter();
 const inv = useInventoryStore();
-const { haptic, notify, userName, setUserName, tg } = useTelegram();
+const { haptic, notify, userName, setUserName, tg, close: closeMiniApp } = useTelegram();
 
-const bonusAmount = ref<number>(0);
+const isRu = computed(() => locale.value === "ru");
+const L = computed(() => isRu.value
+  ? {
+      title: "MINI · POLY",
+      sub: "Королевство торговли",
+      hero: `Добро пожаловать, ${userName.value || "лорд"}`,
+      retinue: "Ваша свита ждёт приказаний.",
+      play: "Играть",
+      tavernT: "Таверна", tavernS: "Найти игру",
+      scribeT: "Писарь",  scribeS: "Новая комната",
+      shopT: "Ярмарка",   shopS: "Товары и гербы",
+      friendsT: "Друзья", friendsS: "Свиток союзников",
+      lastMatch: "Последняя игра",
+      alliesInPlay: "Союзники в игре",
+      closeApp: "Закрыть",
+      daily: "Ежедневный бонус",
+      yourName: "Твоё имя",
+    }
+  : {
+      title: "MINI · POLY",
+      sub: "The Realm of Commerce",
+      hero: `Welcome, ${userName.value || "my lord"}`,
+      retinue: "Your retinue awaits your command.",
+      play: "Play",
+      tavernT: "The Tavern", tavernS: "Find a game",
+      scribeT: "Scribe",     scribeS: "New room",
+      shopT: "Bazaar",       shopS: "Tokens & crests",
+      friendsT: "Friends",   friendsS: "Scroll of allies",
+      lastMatch: "Recent match",
+      alliesInPlay: "Allies in play",
+      closeApp: "Close",
+      daily: "Daily bonus",
+      yourName: "Your name",
+    });
+
+const bonusAmount = ref(0);
 const bonusToast = ref(false);
-
 onMounted(() => {
-  // Даём ежедневный бонус автоматически при открытии, если сегодня ещё не получал.
   const got = inv.claimDailyBonus();
   if (got > 0) {
     bonusAmount.value = got;
@@ -27,124 +63,171 @@ onMounted(() => {
 
 const editingName = ref(false);
 const nameDraft = ref(userName.value);
+function startEditName() { nameDraft.value = userName.value; editingName.value = true; }
+function saveName() { setUserName(nameDraft.value); editingName.value = false; }
 
-const { close: closeMiniApp } = useTelegram();
+function go(name: string) { haptic("light"); router.push({ name }); }
+function toggleLocale() { setLocale(isRu.value ? "en" : "ru"); }
+function closeApp() { closeMiniApp(); }
 
-function closeApp() {
-  closeMiniApp();
+// Демо-данные для «Последняя игра» и «Союзники в игре» — временно, пока
+// серверные endpoints для last-match/online-friends не поднимем.
+// TODO: заменить на реальные данные (GET /api/users/:id/last-match, и friends.status).
+const allies = computed(() => [
+  { n: "Elara",  c: PLAYER_COLORS.elara,  s: "Playing" },
+  { n: "Magnus", c: PLAYER_COLORS.magnus, s: "Online" },
+  { n: "Finn",   c: PLAYER_COLORS.finn,   s: "Lobby" },
+  { n: "Oren",   c: PLAYER_COLORS.oren,   s: "Idle" },
+  { n: "Lady",   c: PLAYER_COLORS.lady,   s: "Online" },
+]);
+
+function allyDotColor(status: string): string {
+  if (status === "Playing") return "var(--emerald)";
+  if (status === "Online") return "var(--gold)";
+  return "var(--ink-4)";
 }
 
-function go(name: string) {
-  haptic("light");
-  router.push({ name });
-}
-
-function toggleLocale() {
-  setLocale(locale.value === "ru" ? "en" : "ru");
-}
-
-function startEditName() {
-  nameDraft.value = userName.value;
-  editingName.value = true;
-}
-
-function saveName() {
-  setUserName(nameDraft.value);
-  editingName.value = false;
-}
+const avatarInitial = computed(() => (userName.value?.[0] ?? "L").toUpperCase());
 </script>
 
 <template>
-  <div class="home">
-    <header class="home__header">
-      <div class="home__brand">
-        <div class="logo">🎲</div>
-        <div>
-          <h1 class="title">{{ t("app.title") }}</h1>
-          <p class="subtitle">{{ t("app.subtitle") }}</p>
-        </div>
+  <div class="app home">
+    <div class="topbar">
+      <button class="avatar-btn" @click="startEditName">{{ avatarInitial }}</button>
+      <div class="title">
+        <h1 :style="{ fontFamily: 'var(--font-title)', fontSize: '22px', letterSpacing: '0.08em' }">{{ L.title }}</h1>
+        <div class="sub">{{ L.sub }}</div>
       </div>
-      <div class="home__meta">
-        <button class="chip" @click="toggleLocale">
-          🌐 {{ locale === "ru" ? "RU" : "EN" }}
-        </button>
-        <div class="chip coins-chip">
-          🪙 <span class="money">{{ inv.coins }}</span>
-        </div>
-      </div>
-    </header>
+      <button class="icon-btn" aria-label="notifications"><Icon name="bell" :size="18"/></button>
+      <button class="icon-btn" aria-label="language" @click="toggleLocale">
+        <Icon name="globe" :size="18"/>
+      </button>
+    </div>
 
-    <div v-if="!tg" class="name-bar card">
-      <template v-if="!editingName">
-        <div class="name-bar__left">
-          <span class="name-bar__label">{{ t("home.yourName") }}</span>
-          <span class="name-bar__value">{{ userName }}</span>
-        </div>
-        <button class="btn btn--ghost name-bar__edit" @click="startEditName">✏️</button>
-      </template>
-      <template v-else>
+    <div class="content">
+      <!-- Name edit input (inline, dev-mode когда нет реального tg-профиля) -->
+      <div v-if="!tg && editingName" class="card" style="margin-bottom: 10px; padding: 10px; display: flex; gap: 8px;">
         <input
           v-model="nameDraft"
-          class="name-bar__input"
+          class="name-input"
           maxlength="24"
           autofocus
           @keydown.enter="saveName"
         />
-        <button class="btn btn--primary name-bar__save" @click="saveName">✓</button>
-      </template>
+        <button class="btn btn-primary" @click="saveName">✓</button>
+      </div>
+
+      <!-- Hero banner -->
+      <div class="hero">
+        <svg viewBox="0 0 80 40" class="hero__crown">
+          <path d="M5 30 L12 10 L25 22 L40 5 L55 22 L68 10 L75 30 Z" fill="#d4a84a"/>
+          <circle cx="12" cy="10" r="2" fill="#d4a84a"/>
+          <circle cx="40" cy="5" r="2" fill="#d4a84a"/>
+          <circle cx="68" cy="10" r="2" fill="#d4a84a"/>
+        </svg>
+        <div class="hero__year">Anno MMXXVI</div>
+        <div class="hero__title">{{ L.hero }}</div>
+        <div class="hero__sub">{{ L.retinue }}</div>
+        <div class="hero__cta">
+          <button
+            class="btn btn-primary hero__play"
+            @click="go('rooms')"
+          >
+            <Icon name="dice" :size="16" color="#2a1d10"/>
+            {{ L.play }}
+          </button>
+          <button
+            class="btn btn-ghost hero__create"
+            @click="go('create')"
+            aria-label="Create"
+          >
+            <Icon name="plus" :size="16" color="#f7eeda"/>
+          </button>
+          <div class="hero__coins chip">
+            <Icon name="coin" :size="14" color="var(--gold-soft)"/>
+            <span class="money">{{ inv.coins }}</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Quick actions -->
+      <div class="quick-grid">
+        <button class="home-tile" @click="go('rooms')">
+          <div class="home-tile__icon"><Icon name="users" :size="17" color="var(--primary)"/></div>
+          <div>
+            <div class="home-tile__title">{{ L.tavernT }}</div>
+            <div class="home-tile__sub">{{ L.tavernS }}</div>
+          </div>
+        </button>
+        <button class="home-tile" @click="go('create')">
+          <div class="home-tile__icon"><Icon name="scroll" :size="17" color="var(--primary)"/></div>
+          <div>
+            <div class="home-tile__title">{{ L.scribeT }}</div>
+            <div class="home-tile__sub">{{ L.scribeS }}</div>
+          </div>
+        </button>
+        <button class="home-tile" @click="go('shop')">
+          <div class="home-tile__icon"><Icon name="bag" :size="17" color="var(--primary)"/></div>
+          <div>
+            <div class="home-tile__title">{{ L.shopT }}</div>
+            <div class="home-tile__sub">{{ L.shopS }}</div>
+          </div>
+        </button>
+        <button class="home-tile" @click="go('friends')">
+          <div class="home-tile__icon"><Icon name="shield" :size="17" color="var(--primary)"/></div>
+          <div>
+            <div class="home-tile__title">{{ L.friendsT }}</div>
+            <div class="home-tile__sub">{{ L.friendsS }}</div>
+          </div>
+        </button>
+      </div>
+
+      <!-- Last match -->
+      <div class="card last-match">
+        <div class="row between" style="margin-bottom: 8px;">
+          <div class="section-label">{{ L.lastMatch }}</div>
+          <div class="last-match__delta">+ 1 240 ◈</div>
+        </div>
+        <div class="row" style="gap: 8px;">
+          <Sigil :name="userName || 'Eldmark'" :color="PLAYER_COLORS.you" :size="32"/>
+          <div style="flex: 1;">
+            <div style="font-family: var(--font-display); font-size: 15px;">
+              {{ isRu ? "Эльдмарк Вейл" : "Eldmark Vale" }}
+            </div>
+            <div style="font-size: 11px; color: var(--ink-3);">
+              {{ isRu ? "4 игрока · 28 раундов · победа" : "4 players · 28 rounds · won" }}
+            </div>
+          </div>
+          <div class="rank-badge">1st</div>
+        </div>
+      </div>
+
+      <!-- Allies in play -->
+      <div class="section-label" style="margin-bottom: 6px;">{{ L.alliesInPlay }}</div>
+      <div class="rail" style="padding-bottom: 4px;">
+        <div v-for="f in allies" :key="f.n" class="ally">
+          <div class="ally__wrap">
+            <Sigil :name="f.n" :color="f.c" :size="44"/>
+            <div
+              class="ally__dot"
+              :style="{ background: allyDotColor(f.s) }"
+            />
+          </div>
+          <div class="ally__name">{{ f.n }}</div>
+        </div>
+      </div>
+
+      <button v-if="tg" class="btn btn-ghost close-app" @click="closeApp">
+        {{ L.closeApp }}
+      </button>
     </div>
-
-    <main class="home__menu">
-      <button class="tile tile--play" @click="go('rooms')">
-        <div class="tile__icon">🎯</div>
-        <div class="tile__body">
-          <div class="tile__title">{{ t("home.play") }}</div>
-          <div class="tile__sub">{{ t("home.playHint") }}</div>
-        </div>
-        <div class="tile__arrow">→</div>
-      </button>
-
-      <button class="tile tile--create" @click="go('create')">
-        <div class="tile__icon">✨</div>
-        <div class="tile__body">
-          <div class="tile__title">{{ t("home.create") }}</div>
-          <div class="tile__sub">{{ t("home.createHint") }}</div>
-        </div>
-        <div class="tile__arrow">→</div>
-      </button>
-
-      <button class="tile tile--shop" @click="go('shop')">
-        <div class="tile__icon">🛍️</div>
-        <div class="tile__body">
-          <div class="tile__title">{{ t("home.shop") }}</div>
-          <div class="tile__sub">{{ t("home.shopHint") }}</div>
-        </div>
-        <div class="tile__arrow">→</div>
-      </button>
-
-      <button class="tile tile--friends" @click="go('friends')">
-        <div class="tile__icon">👥</div>
-        <div class="tile__body">
-          <div class="tile__title">Друзья</div>
-          <div class="tile__sub">Статистика и соигроки</div>
-        </div>
-        <div class="tile__arrow">→</div>
-      </button>
-    </main>
-
-    <footer class="home__footer">
-      <p>{{ t("home.hint") }}</p>
-      <button v-if="tg" class="btn btn--ghost close-app" @click="closeApp">
-        🚪 {{ locale === "ru" ? "Закрыть" : "Close Mini App" }}
-      </button>
-    </footer>
 
     <transition name="bonus">
       <div v-if="bonusToast" class="bonus-toast">
         <div class="bonus-toast__icon">🎁</div>
         <div>
-          <div class="bonus-toast__title">Ежедневный бонус</div>
-          <div class="bonus-toast__val">+{{ bonusAmount }} 🪙</div>
+          <div class="bonus-toast__title">{{ L.daily }}</div>
+          <div class="bonus-toast__val">+{{ bonusAmount }} ◈</div>
         </div>
       </div>
     </transition>
@@ -152,187 +235,213 @@ function saveName() {
 </template>
 
 <style scoped>
-.home {
-  min-height: 100dvh;
-  padding: 24px 18px 40px;
-  max-width: 560px;
-  margin: 0 auto;
+.app {
+  position: relative;
   display: flex;
   flex-direction: column;
+  min-height: 100dvh;
+  background: var(--bg);
 }
-.home__header {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  margin-bottom: 28px;
+
+.hero {
+  position: relative;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  background:
+    radial-gradient(ellipse at 80% 20%, rgba(184, 137, 46, 0.25) 0%, transparent 50%),
+    linear-gradient(140deg, #4a2e82 0%, #2d1a5a 100%);
+  padding: 14px 14px 12px;
+  color: #f0e4c8;
+  margin-bottom: 10px;
 }
-.home__brand {
-  display: flex;
-  gap: 12px;
-  align-items: center;
+.hero__crown {
+  position: absolute;
+  right: 10px;
+  top: 8px;
+  width: 56px;
+  opacity: 0.35;
 }
-.logo {
-  font-size: 36px;
-  filter: drop-shadow(0 4px 10px rgba(168, 85, 247, 0.5));
+.hero__year {
+  font-size: 10px;
+  letter-spacing: 0.15em;
+  color: #d4a84a;
+  text-transform: uppercase;
 }
-.home__meta {
+.hero__title {
+  font-family: var(--font-display);
+  font-size: 20px;
+  margin-top: 2px;
+  color: #f7eeda;
+}
+.hero__sub {
+  font-size: 11px;
+  color: #c9b88e;
+  margin-top: 2px;
+  line-height: 1.3;
+}
+.hero__cta {
+  margin-top: 10px;
   display: flex;
   gap: 8px;
-  flex-direction: column;
-  align-items: flex-end;
+  align-items: center;
 }
-.coins-chip {
-  font-weight: 600;
-  background: linear-gradient(135deg, rgba(251, 191, 36, 0.15), rgba(251, 191, 36, 0.05));
-  border-color: rgba(251, 191, 36, 0.3);
-}
-.home__menu {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
+.hero__play {
+  background: linear-gradient(180deg, #d4a84a 0%, #b8892e 100%);
+  color: #2a1d10;
   flex: 1;
+  padding: 10px;
 }
-.tile {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  padding: 20px;
-  border-radius: 18px;
-  text-align: left;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  backdrop-filter: blur(20px);
-  transition: transform 0.15s ease, border-color 0.2s ease, box-shadow 0.2s ease;
-  position: relative;
-  overflow: hidden;
+.hero__create {
+  background: rgba(247, 238, 218, 0.12);
+  color: #f7eeda;
+  border: 1px solid rgba(212, 168, 74, 0.4);
+  padding: 10px 14px;
 }
-.tile::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(135deg, transparent 40%, currentColor 140%);
-  opacity: 0.1;
-  pointer-events: none;
-  transition: opacity 0.25s ease;
+.hero__coins {
+  background: rgba(247, 238, 218, 0.1);
+  border-color: rgba(212, 168, 74, 0.3);
+  color: #f7eeda;
+  padding: 6px 10px;
 }
-.tile:hover {
-  transform: translateY(-2px);
-  border-color: var(--border-strong);
-  box-shadow: var(--shadow-md);
-}
-.tile:hover::before { opacity: 0.18; }
-.tile:active { transform: scale(0.98); }
-.tile--play { color: var(--neon); }
-.tile--create { color: var(--purple); }
-.tile--shop { color: var(--gold); }
-.tile--friends { color: #06b6d4; }
-.tile__icon {
-  font-size: 34px;
-  width: 56px;
-  height: 56px;
-  border-radius: 14px;
+.hero__coins .money { color: #f7eeda; }
+
+.quick-grid {
   display: grid;
-  place-items: center;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid var(--border);
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-bottom: 10px;
 }
-.tile__body { flex: 1; }
-.tile__title {
-  color: var(--text);
-  font-size: 17px;
-  font-weight: 700;
-  margin-bottom: 2px;
-}
-.tile__sub {
-  color: var(--text-dim);
-  font-size: 13px;
-}
-.tile__arrow {
-  font-size: 22px;
-  color: var(--text-mute);
-}
-.home__footer {
-  margin-top: 24px;
-  text-align: center;
-  color: var(--text-mute);
-  font-size: 12px;
-  line-height: 1.5;
+.home-tile {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 14px 12px;
+  text-align: left;
+  cursor: pointer;
+  font-family: var(--font-body);
+  color: var(--ink);
   display: flex;
   flex-direction: column;
-  align-items: center;
-  gap: 10px;
+  gap: 8px;
+  min-height: 78px;
 }
+.home-tile__icon {
+  width: 32px; height: 32px;
+  border-radius: 8px;
+  background: rgba(90, 58, 154, 0.1);
+  color: var(--primary);
+  display: flex; align-items: center; justify-content: center;
+}
+.home-tile__title {
+  font-family: var(--font-display);
+  font-size: 15px;
+  color: var(--ink);
+}
+.home-tile__sub {
+  font-size: 11px;
+  color: var(--ink-3);
+  margin-top: 1px;
+}
+
+.last-match { padding: 12px; margin-bottom: 10px; }
+.last-match__delta {
+  font-size: 11px;
+  color: var(--emerald);
+  font-weight: 600;
+}
+.section-label {
+  font-size: 10px;
+  color: var(--ink-3);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.rank-badge {
+  padding: 3px 9px;
+  border: 1px solid var(--gold);
+  border-radius: 999px;
+  color: var(--gold);
+  font-size: 10px;
+  font-family: var(--font-title);
+  letter-spacing: 0.12em;
+}
+
+.ally {
+  text-align: center;
+  width: 64px;
+  flex-shrink: 0;
+}
+.ally__wrap {
+  position: relative;
+  width: 44px; height: 44px;
+  margin: 0 auto;
+}
+.ally__dot {
+  position: absolute;
+  bottom: 0; right: 0;
+  width: 11px; height: 11px;
+  border-radius: 50%;
+  border: 2px solid var(--bg);
+}
+.ally__name {
+  font-size: 11px;
+  margin-top: 6px;
+  color: var(--ink);
+  font-family: var(--font-display);
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.name-input {
+  flex: 1;
+  padding: 8px 10px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--ink);
+  font-size: 14px;
+  font-family: var(--font-body);
+  outline: none;
+}
+.name-input:focus { border-color: var(--primary); }
+
 .close-app {
-  font-size: 13px;
-  padding: 10px 20px;
-  margin-top: 8px;
+  margin: 16px auto 0;
+  display: block;
+  font-size: 12px;
 }
+
 .bonus-toast {
   position: fixed;
-  top: 24px;
+  top: calc(12px + var(--tg-safe-area-inset-top, 0px));
   left: 50%;
   transform: translateX(-50%);
   display: flex;
   align-items: center;
   gap: 12px;
   padding: 12px 18px;
-  background: linear-gradient(135deg, rgba(251, 191, 36, 0.2), var(--surface-strong));
+  background: var(--card);
   border: 1px solid var(--gold);
   border-radius: 16px;
-  backdrop-filter: blur(20px);
+  box-shadow: 0 8px 24px rgba(42, 29, 16, 0.25);
   z-index: 90;
-  box-shadow: 0 20px 50px -15px rgba(251, 191, 36, 0.5);
 }
 .bonus-toast__icon { font-size: 28px; }
-.bonus-toast__title { font-size: 11px; text-transform: uppercase; color: var(--text-dim); letter-spacing: 0.1em; }
-.bonus-toast__val { font-weight: 800; font-size: 18px; color: var(--gold); margin-top: 2px; }
-.bonus-enter-active, .bonus-leave-active { transition: transform 0.3s cubic-bezier(0.3, 1.2, 0.4, 1), opacity 0.2s; }
-.bonus-enter-from, .bonus-leave-to { transform: translate(-50%, -30px); opacity: 0; }
-
-.name-bar {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 10px 14px;
-  margin-bottom: 14px;
-}
-.name-bar__left {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
-}
-.name-bar__label {
-  font-size: 10px;
-  color: var(--text-mute);
+.bonus-toast__title {
+  font-size: 11px;
   text-transform: uppercase;
+  color: var(--ink-3);
   letter-spacing: 0.1em;
 }
-.name-bar__value {
+.bonus-toast__val {
   font-weight: 700;
-  font-size: 15px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  font-size: 18px;
+  color: var(--gold);
+  margin-top: 2px;
+  font-family: var(--font-mono);
 }
-.name-bar__edit, .name-bar__save {
-  width: 40px;
-  height: 40px;
-  padding: 0;
-  border-radius: 10px;
-  font-size: 16px;
-}
-.name-bar__input {
-  flex: 1;
-  padding: 10px 12px;
-  background: rgba(0, 0, 0, 0.3);
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  color: var(--text);
-  font-size: 15px;
-  font-weight: 600;
-  outline: none;
-}
-.name-bar__input:focus { border-color: var(--purple); }
+.bonus-enter-active, .bonus-leave-active { transition: transform 0.3s cubic-bezier(0.3, 1.2, 0.4, 1), opacity 0.2s; }
+.bonus-enter-from, .bonus-leave-to { transform: translate(-50%, -30px); opacity: 0; }
 </style>

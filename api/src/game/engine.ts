@@ -53,6 +53,8 @@ export function createRoom(hostId: string, isPublic = true, maxPlayers = MAX_PLA
     properties: {},
     log: [],
     lastCard: null,
+    cardHistory: [],
+    auction: null,
     pendingTrade: null,
     winnerId: null,
     createdAt: Date.now(),
@@ -182,6 +184,12 @@ export function buildHouse(room: RoomState, playerId: string, tileIndex: number)
   if (owned.mortgaged) return { ok: false, error: "mortgaged" };
   if (owned.hotel) return { ok: false, error: "hotel already" };
   if (!hasMonopoly(room, tile, playerId)) return { ok: false, error: "need monopoly" };
+
+  // Равномерность (Hasbro): нельзя строить, пока на других улицах группы домов меньше.
+  const others = groupOthers(room, tile);
+  const otherMin = Math.min(...others.map(buildingLevel));
+  if (owned.houses > otherMin) return { ok: false, error: "build evenly" };
+
   if (owned.houses >= 4) {
     // строим отель
     if (p.cash < tile.houseCost) return { ok: false, error: "not enough cash" };
@@ -198,6 +206,17 @@ export function buildHouse(room: RoomState, playerId: string, tileIndex: number)
   return { ok: true };
 }
 
+function buildingLevel(o: OwnedProperty): number {
+  return o.hotel ? 5 : o.houses;
+}
+
+function groupOthers(room: RoomState, tile: StreetTile): OwnedProperty[] {
+  return BOARD
+    .filter((t): t is StreetTile => t.kind === "street" && t.group === tile.group && t.index !== tile.index)
+    .map((t) => room.properties[t.index])
+    .filter((o): o is OwnedProperty => !!o);
+}
+
 /** Продать дом/отель за половину стоимости. */
 export function sellHouse(room: RoomState, playerId: string, tileIndex: number): { ok: boolean; error?: string } {
   const p = room.players.find((pl) => pl.id === playerId);
@@ -207,6 +226,13 @@ export function sellHouse(room: RoomState, playerId: string, tileIndex: number):
   const owned = room.properties[tileIndex];
   if (!owned || owned.ownerId !== playerId) return { ok: false, error: "not your property" };
   const refund = Math.floor(tile.houseCost / 2);
+
+  // Равномерность при продаже: нельзя сносить, если на других улицах группы домов больше.
+  const others = groupOthers(room, tile);
+  const otherMax = others.length ? Math.max(...others.map(buildingLevel)) : 0;
+  const myLevel = buildingLevel(owned);
+  if (myLevel < otherMax) return { ok: false, error: "sell evenly" };
+
   if (owned.hotel) {
     owned.hotel = false;
     owned.houses = 4;
@@ -405,6 +431,16 @@ export function rollAndMove(
     room.doublesInARow = 0;
   }
 
+  // Triples (Hasbro): d1 == d2 && speedDie matches → игрок выбирает ЛЮБУЮ клетку.
+  if (isDoubles && typeof speedDie === "number" && speedDie === d1) {
+    room.phase = "triplesPick";
+    log(room, {
+      en: `${p.name} rolled TRIPLE ${d1}s — pick any tile!`,
+      ru: `${p.name} выбросил ТРИПЛЕТ ${d1} — выбери любую клетку!`,
+    });
+    return { dice, speedDie, from: p.position, to: p.position };
+  }
+
   const from = p.position;
   // Speed Die: 1/2/3 добавляются к движению
   const extra = typeof speedDie === "number" ? speedDie : 0;
@@ -440,6 +476,26 @@ export function rollAndMove(
   }
 
   return { dice, speedDie, from, to };
+}
+
+// Triples: игрок телепортируется на выбранную клетку. Бонуса за проход GO нет (Hasbro).
+export function moveToTripleTile(
+  room: RoomState,
+  tileIndex: number,
+): { from: number; to: number } | null {
+  if (room.phase !== "triplesPick") return null;
+  const p = currentPlayer(room);
+  if (!p || p.bankrupt || p.inJail) return null;
+  if (!Number.isInteger(tileIndex) || tileIndex < 0 || tileIndex >= BOARD.length) return null;
+
+  const from = p.position;
+  p.position = tileIndex;
+  log(room, {
+    en: `${p.name} warps to ${BOARD[tileIndex].name.en}`,
+    ru: `${p.name} прыгнул на ${BOARD[tileIndex].name.ru}`,
+  });
+  resolveTile(room, p);
+  return { from, to: tileIndex };
 }
 
 function advance(p: Player, from: number, steps: number, room: RoomState): number {
@@ -590,7 +646,127 @@ export function buyCurrentProperty(room: RoomState): boolean {
 }
 
 export function skipBuy(room: RoomState): void {
-  if (room.phase === "buyPrompt") room.phase = "action";
+  if (room.phase !== "buyPrompt") return;
+  const p = currentPlayer(room);
+  if (!p) { room.phase = "action"; return; }
+  const tile = BOARD[p.position];
+  if (tile.kind !== "street" && tile.kind !== "railroad" && tile.kind !== "utility") {
+    room.phase = "action";
+    return;
+  }
+  startAuction(room, tile.index);
+}
+
+/** Аукцион Hasbro: когда игрок отказался покупать клетку — она уходит с молотка. */
+export function startAuction(room: RoomState, tileIndex: number): void {
+  const tile = BOARD[tileIndex];
+  if (tile.kind !== "street" && tile.kind !== "railroad" && tile.kind !== "utility") return;
+  if (room.properties[tileIndex]) return;
+  room.auction = {
+    tileIndex,
+    highBid: 0,
+    highBidderId: null,
+    passedIds: [],
+    startedAt: Date.now(),
+  };
+  room.phase = "auction";
+  log(room, {
+    en: `Auction! ${tile.name.en} is on the block`,
+    ru: `Аукцион! ${tile.name.ru} уходит с молотка`,
+  });
+  maybeEndAuction(room);
+}
+
+export function placeBid(
+  room: RoomState,
+  playerId: string,
+  amount: number,
+): { ok: boolean; error?: string } {
+  if (room.phase !== "auction" || !room.auction) return { ok: false, error: "no auction" };
+  const p = room.players.find((pl) => pl.id === playerId);
+  if (!p || p.bankrupt) return { ok: false, error: "bankrupt" };
+  if (room.auction.passedIds.includes(playerId)) return { ok: false, error: "passed" };
+  if (!Number.isFinite(amount) || amount <= 0) return { ok: false, error: "bad amount" };
+  if (amount <= room.auction.highBid) return { ok: false, error: "bid too low" };
+  if (amount > p.cash) return { ok: false, error: "not enough cash" };
+
+  room.auction.highBid = Math.floor(amount);
+  room.auction.highBidderId = playerId;
+  log(room, {
+    en: `${p.name} bids $${room.auction.highBid}`,
+    ru: `${p.name} ставит $${room.auction.highBid}`,
+  });
+  return { ok: true };
+}
+
+export function passAuction(
+  room: RoomState,
+  playerId: string,
+): { ok: boolean; error?: string } {
+  if (room.phase !== "auction" || !room.auction) return { ok: false, error: "no auction" };
+  const p = room.players.find((pl) => pl.id === playerId);
+  if (!p) return { ok: false, error: "no player" };
+  if (room.auction.passedIds.includes(playerId)) return { ok: false, error: "already passed" };
+  if (room.auction.highBidderId === playerId) return { ok: false, error: "can't pass own bid" };
+
+  room.auction.passedIds.push(playerId);
+  log(room, { en: `${p.name} passed`, ru: `${p.name} спасовал` });
+  maybeEndAuction(room);
+  return { ok: true };
+}
+
+function auctionActiveBidders(room: RoomState): Player[] {
+  const a = room.auction;
+  if (!a) return [];
+  return room.players.filter((pl) => !pl.bankrupt && !a.passedIds.includes(pl.id));
+}
+
+function maybeEndAuction(room: RoomState): void {
+  const a = room.auction;
+  if (!a) return;
+  const active = auctionActiveBidders(room);
+
+  if (active.length === 0) {
+    // Никто не поставил, либо всех остающихся спасовали при нулевой ставке.
+    log(room, {
+      en: `Auction ended — no bids`,
+      ru: `Аукцион окончен — ставок нет`,
+    });
+    room.auction = null;
+    room.phase = "action";
+    return;
+  }
+
+  if (active.length === 1 && a.highBidderId === active[0].id) {
+    finishAuction(room);
+  }
+}
+
+function finishAuction(room: RoomState): void {
+  const a = room.auction;
+  if (!a || !a.highBidderId) {
+    room.auction = null;
+    room.phase = "action";
+    return;
+  }
+  const winner = room.players.find((pl) => pl.id === a.highBidderId);
+  const tile = BOARD[a.tileIndex];
+  if (winner && (tile.kind === "street" || tile.kind === "railroad" || tile.kind === "utility")) {
+    winner.cash -= a.highBid;
+    room.properties[a.tileIndex] = {
+      tileIndex: a.tileIndex,
+      ownerId: winner.id,
+      houses: 0,
+      hotel: false,
+      mortgaged: false,
+    };
+    log(room, {
+      en: `${winner.name} won auction: ${tile.name.en} for $${a.highBid}`,
+      ru: `${winner.name} выиграл аукцион: ${tile.name.ru} за $${a.highBid}`,
+    });
+  }
+  room.auction = null;
+  room.phase = "action";
 }
 
 export function endTurn(room: RoomState): boolean {
@@ -695,6 +871,8 @@ function drawCard(room: RoomState, p: Player, kind: "chance" | "chest"): void {
     ts: Date.now(),
   };
   room.lastCard = drawn;
+  room.cardHistory.push(drawn);
+  if (room.cardHistory.length > 30) room.cardHistory.shift();
   log(room, { en: `${p.name}: ${card.text.en}`, ru: `${p.name}: ${card.text.ru}` });
 }
 

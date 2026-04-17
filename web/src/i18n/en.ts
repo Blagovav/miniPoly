@@ -49,7 +49,7 @@ export default {
     roll: "Roll dice",
     endTurn: "End turn",
     buy: "Buy for {price}",
-    skip: "Skip",
+    skip: "To auction 🔨",
     yourTurn: "Your turn",
     turnOf: "{name}'s turn",
     inJail: "In jail",

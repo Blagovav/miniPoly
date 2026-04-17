@@ -49,7 +49,7 @@ export default {
     roll: "Бросить кости",
     endTurn: "Завершить ход",
     buy: "Купить за {price}",
-    skip: "Пропустить",
+    skip: "На аукцион 🔨",
     yourTurn: "Твой ход",
     turnOf: "Ход {name}",
     inJail: "В тюрьме",
