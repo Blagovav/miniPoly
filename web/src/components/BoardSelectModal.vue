@@ -3,7 +3,9 @@ import { computed, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import Icon from "./Icon.vue";
 import BoardPreview from "./BoardPreview.vue";
-import { BOARDS, RARITY_META, findBoard } from "../utils/boards";
+import { BOARDS, RARITY_META, findBoard, type BoardDef } from "../utils/boards";
+import { useInventoryStore } from "../stores/inventory";
+import { useTelegram } from "../composables/useTelegram";
 
 const props = defineProps<{
   open: boolean;
@@ -15,6 +17,8 @@ const props = defineProps<{
 
 const { locale } = useI18n();
 const isRu = computed(() => locale.value === "ru");
+const inv = useInventoryStore();
+const { haptic, notify, tg, userId } = useTelegram();
 
 const pick = ref(props.selectedId || "eldmark");
 watch(() => props.selectedId, (id) => { pick.value = id || "eldmark"; });
@@ -22,16 +26,30 @@ watch(() => props.open, (o) => { if (o) pick.value = props.selectedId || "eldmar
 
 const picked = computed(() => findBoard(pick.value));
 const L = computed(() => isRu.value ? {
-  title: "Выбор карты", sub: "Королевство, где развернётся игра",
+  title: "Выбор карты", sub: "Поле, на котором будет партия",
   apply: "Применить", close: "Закрыть",
-  hostOnly: "Только хозяин может выбрать карту",
+  hostOnly: "Только хост может выбрать карту",
   price: "Купить", active: "Текущая",
+  buyFail: "Не хватает монет",
+  buyOk: "Карта открыта!",
 } : {
-  title: "Choose a Map", sub: "The realm where this contest unfolds",
+  title: "Choose a Map", sub: "The board this match will play on",
   apply: "Apply", close: "Close",
-  hostOnly: "Only the host may choose the map",
+  hostOnly: "Only the host can choose the map",
   price: "Buy", active: "Active",
+  buyFail: "Not enough coins",
+  buyOk: "Map unlocked!",
 });
+
+// Board считается owned если:
+//   — он free,
+//   — либо помечен static `owned: true` (дефолтные карты),
+//   — либо куплен и лежит в inventory (`board-<id>`).
+function isOwned(b: BoardDef): boolean {
+  if (b.rarity === "free") return true;
+  if (b.owned === true) return true;
+  return inv.owned.has(`board-${b.id}`);
+}
 
 function setPick(id: string) {
   if (props.isHost !== false) pick.value = id;
@@ -40,6 +58,56 @@ function applyPick() {
   props.onSelect(pick.value);
   props.onClose();
 }
+
+// Покупка: монеты — локально, звёзды — через bot invoice.
+async function buyBoard(b: BoardDef) {
+  if (isOwned(b)) return;
+  if (b.unit === "★") {
+    if (!userId.value) { notify("error"); return; }
+    try {
+      const base = (import.meta.env.VITE_API_URL as string) || "";
+      const res = await fetch(`${base}/api/stars/invoice`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          tgUserId: userId.value,
+          itemId: `board-${b.id}`,
+          title: isRu.value ? b.ru : b.name,
+          stars: b.price,
+        }),
+      });
+      const data = await res.json();
+      if (!data.link) { notify("error"); return; }
+      const tgApp: any = tg.value as any;
+      if (tgApp?.openInvoice) {
+        tgApp.openInvoice(data.link, async (status: string) => {
+          if (status === "paid") {
+            notify("success");
+            haptic("heavy");
+            await inv.syncServerUnlocks(userId.value);
+          } else if (status !== "pending") {
+            notify("error");
+          }
+        });
+      } else {
+        window.open(data.link, "_blank");
+      }
+    } catch {
+      notify("error");
+    }
+    return;
+  }
+  // Монетная покупка
+  const ok = inv.buy(`board-${b.id}`, b.price);
+  if (ok) {
+    haptic("medium");
+    notify("success");
+  } else {
+    haptic("light");
+    notify("warning");
+  }
+}
+
 function metaOf(id: string) {
   return RARITY_META[findBoard(id).rarity];
 }
@@ -115,7 +183,7 @@ function boardDesc(id: string) {
                 class="bs-card__preview"
                 :style="{
                   borderColor: b.palette.line,
-                  filter: b.owned ? 'none' : 'saturate(0.5) brightness(0.95)',
+                  filter: isOwned(b) ? 'none' : 'saturate(0.5) brightness(0.95)',
                 }"
               >
                 <BoardPreview :board="b" :size="120"/>
@@ -126,10 +194,10 @@ function boardDesc(id: string) {
               </div>
 
               <div v-if="b.id === pick" class="bs-card__active">{{ L.active }}</div>
-              <div v-else-if="b.owned" class="bs-card__owned">
+              <div v-else-if="isOwned(b)" class="bs-card__owned">
                 <Icon name="check" :size="11" color="#fff"/>
               </div>
-              <div v-if="!b.owned" class="bs-card__price">
+              <div v-if="!isOwned(b)" class="bs-card__price">
                 <Icon :name="b.unit === '★' ? 'star' : 'coin'" :size="10" color="var(--gold)"/>
                 {{ b.price }}
               </div>
@@ -142,7 +210,7 @@ function boardDesc(id: string) {
             {{ L.close }}
           </button>
           <button
-            v-if="isHost !== false && picked.owned"
+            v-if="isHost !== false && isOwned(picked)"
             class="btn btn-primary"
             style="flex: 2; padding: 12px;"
             @click="applyPick"
@@ -154,6 +222,7 @@ function boardDesc(id: string) {
             v-else-if="isHost !== false"
             class="btn btn-primary bs-buy"
             style="flex: 2; padding: 12px;"
+            @click="buyBoard(picked)"
           >
             <Icon :name="picked.unit === '★' ? 'star' : 'coin'" :size="16" color="#2a1d10"/>
             {{ L.price }} · {{ picked.price }}{{ picked.unit === '★' ? ' ★' : ' ◈' }}

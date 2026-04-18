@@ -32,21 +32,21 @@ const toast = ref<{ text: string; kind: "ok" | "err" } | null>(null);
 const isRu = computed(() => locale.value === "ru");
 const L = computed(() => isRu.value
   ? {
-      title: "Союзники",
-      subtitle: "Книга побратимов",
+      title: "Друзья",
+      subtitle: "Твой список",
       games: "Игр",
       wins: "Побед",
       winrate: "Winrate",
-      comrades: "Соратники",
-      roomBanner: (id: string) => `Твоя комната: ${id} — зови одним тапом`,
-      noRoom: "Войди или создай комнату, чтобы позвать друзей",
-      emptyTitle: "Пока ещё не с кем",
+      comrades: "Соперники",
+      roomBanner: (id: string) => `Твоя игра: ${id} — зови одним тапом`,
+      noRoom: "Создай или войди в игру, чтобы позвать друзей",
+      emptyTitle: "Пока никого нет",
       emptySub: "Пригласи друзей по ссылке и сыграй партию!",
       gamesMeta: (n: number) => `${n} игр`,
       invite: "Позвать",
       join: "Присоединиться",
       sending: "…",
-      toastInviteNoRoom: "Сначала войди в комнату",
+      toastInviteNoRoom: "Сначала войди в игру",
       toastInviteOk: (name: string) => `Позвал ${name}`,
       toastNoChat: "Друг ещё не запускал бота",
       toastFail: (reason: string) => `Не вышло: ${reason}`,
@@ -55,21 +55,21 @@ const L = computed(() => isRu.value
       back: "Назад",
     }
   : {
-      title: "Allies",
-      subtitle: "Book of Brethren",
+      title: "Friends",
+      subtitle: "Your list",
       games: "Games",
       wins: "Wins",
       winrate: "Winrate",
-      comrades: "Comrades",
-      roomBanner: (id: string) => `Your room: ${id} — invite with one tap`,
-      noRoom: "Join or create a room to invite friends",
-      emptyTitle: "No allies yet",
+      comrades: "Opponents",
+      roomBanner: (id: string) => `Your game: ${id} — invite with one tap`,
+      noRoom: "Create or join a game to invite friends",
+      emptyTitle: "No friends yet",
       emptySub: "Invite friends via link and play a match!",
       gamesMeta: (n: number) => `${n} games`,
       invite: "Invite",
       join: "Join",
       sending: "…",
-      toastInviteNoRoom: "Join a room first",
+      toastInviteNoRoom: "Join a game first",
       toastInviteOk: (name: string) => `Invited ${name}`,
       toastNoChat: "Friend hasn't opened the bot yet",
       toastFail: (reason: string) => `Failed: ${reason}`,
@@ -203,7 +203,7 @@ onMounted(() => {
           />
           <div style="flex: 1; min-width: 0;">
             <div class="me-card__name">
-              {{ userName || (isRu ? "Лорд" : "Lord") }}
+              {{ userName || (isRu ? "Игрок" : "Player") }}
             </div>
             <div
               class="me-card__rank"

@@ -28,6 +28,7 @@ import Icon from "../components/Icon.vue";
 import LoadingScreen from "../components/LoadingScreen.vue";
 import CoronationModal from "../components/CoronationModal.vue";
 import { ORDERED_PLAYER_COLORS } from "../utils/palette";
+import { humanError } from "../utils/errors";
 import type { Player } from "../../../shared/types";
 
 const props = defineProps<{ id: string }>();
@@ -79,11 +80,17 @@ onMounted(() => {
   game.loadFriends(userId.value);
 });
 
-// Redirect to home if the server tells us the room is gone.
+// Redirect to home if the server tells us the room is gone — and wipe the
+// rejoin hint from localStorage so the "Active game" banner doesn't respawn
+// pointing at a dead room.
 watch(
   () => game.lastError,
   (err) => {
     if (err && err.includes("not found")) {
+      try {
+        localStorage.removeItem("activeRoomId");
+        localStorage.removeItem("activeRoomTs");
+      } catch {}
       setTimeout(() => router.replace({ name: "home" }), 2000);
     }
   },
@@ -275,7 +282,7 @@ void t;
     <transition name="fade">
       <div v-if="game.lastError" class="error-strip">
         <Icon name="x" :size="14" color="#fff" />
-        <span>{{ game.lastError }}</span>
+        <span>{{ humanError(game.lastError, locale) }}</span>
       </div>
     </transition>
 
@@ -350,7 +357,7 @@ void t;
       v-else
       variant="sigil"
       :fullscreen="true"
-      :message="locale === 'ru' ? 'Герб пробуждается…' : 'The sigil awakens…'"
+      :message="locale === 'ru' ? 'Загружаем игру…' : 'Loading the game…'"
     />
 
     <!-- ── Global overlays (chat, card, auction, tile, profile, trade) ── -->

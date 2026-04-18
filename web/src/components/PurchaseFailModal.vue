@@ -33,37 +33,37 @@ const L = computed(() => {
   return isRu.value ? {
     title: r === "funds" ? "Казна пуста" : r === "sold-out" ? "Распродано" : "Сделка отклонена",
     sub: r === "funds"
-      ? "Недостаточно средств в вашей казне."
+      ? "Не хватает монет на счёте."
       : r === "sold-out"
-        ? "Этого товара больше нет у торговца."
-        : "Казначей не смог провести сделку.",
-    need: "Требуется",
-    have: "В казне",
+        ? "Товар закончился."
+        : "Не получилось провести покупку.",
+    need: "Нужно",
+    have: "Есть",
     short: "Не хватает",
     cancel: "Отмена",
-    topup: "Пополнить казну",
+    topup: "Пополнить",
     browse: "К другим товарам",
     retry: "Повторить",
     hint: r === "funds"
-      ? "Пополните казну монетами или звёздами ярмарки."
-      : "Вернитесь позже — или попробуйте другой товар.",
+      ? "Пополни счёт монетами или купи за звёзды Telegram."
+      : "Попробуй позже — или выбери другой товар.",
   } : {
-    title: r === "funds" ? "Empty coffers" : r === "sold-out" ? "Sold out" : "Transaction declined",
+    title: r === "funds" ? "Not enough coins" : r === "sold-out" ? "Sold out" : "Transaction declined",
     sub: r === "funds"
-      ? "Your treasury lacks the necessary coin."
+      ? "Your balance is too low."
       : r === "sold-out"
-        ? "The merchant has none left to sell."
-        : "The royal accountant could not complete this transaction.",
+        ? "This item is no longer available."
+        : "We couldn't complete the purchase.",
     need: "Needed",
     have: "You have",
     short: "Short by",
     cancel: "Cancel",
-    topup: "Top up coffers",
-    browse: "Browse other wares",
+    topup: "Top up",
+    browse: "Browse other items",
     retry: "Try again",
     hint: r === "funds"
-      ? "Top up with bazaar coin or royal stars."
-      : "Come back later — or try another ware.",
+      ? "Top up with coins or buy with Telegram Stars."
+      : "Come back later — or try another item.",
   };
 });
 </script>

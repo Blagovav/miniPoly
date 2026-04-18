@@ -37,7 +37,7 @@ export const SHOP_ITEMS: ShopItem[] = [
   // ========== Themes (темы доски) ==========
   { id: "theme-classic", kind: "theme", name: { en: "Midnight",     ru: "Полночь" },       price: 0,    icon: "🌙" },
   { id: "theme-emerald", kind: "theme", name: { en: "Emerald",      ru: "Изумруд" },       price: 300,  icon: "💚" },
-  { id: "theme-gold",    kind: "theme", name: { en: "Royal Gold",   ru: "Королев. золото"}, price: 800, icon: "💛" },
+  { id: "theme-gold",    kind: "theme", name: { en: "Gold",          ru: "Золото" },        price: 800, icon: "💛" },
   { id: "theme-neon",    kind: "theme", name: { en: "Neon City",    ru: "Неон-сити" },     price: 1200, icon: "🌆" },
   { id: "theme-rose",    kind: "theme", name: { en: "Rose Quartz",  ru: "Розовый кварц" }, price: 600,  icon: "💗" },
   { id: "theme-ocean",   kind: "theme", name: { en: "Ocean Deep",   ru: "Глубокий океан" },price: 700,  icon: "🌊" },

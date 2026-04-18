@@ -18,41 +18,41 @@ const isRu = computed(() => locale.value === "ru");
 const L = computed(() => isRu.value
   ? {
       title: "MINI · POLY",
-      sub: "Королевство торговли",
-      hero: `Добро пожаловать, ${userName.value || "лорд"}`,
-      retinue: "Ваша свита ждёт приказаний.",
+      sub: "Классическая настолка",
+      hero: `Привет, ${userName.value || "Игрок"}`,
+      retinue: "Фишки готовы к броску.",
       play: "Играть",
-      tavernT: "Таверна", tavernS: "Найти игру",
-      scribeT: "Писарь",  scribeS: "Новая комната",
-      shopT: "Ярмарка",   shopS: "Товары и гербы",
-      friendsT: "Друзья", friendsS: "Свиток союзников",
+      tavernT: "Игры",    tavernS: "Найти партию",
+      scribeT: "Создать", scribeS: "Новая игра",
+      shopT: "Магазин",   shopS: "Фишки и бусты",
+      friendsT: "Друзья", friendsS: "Список друзей",
       lastMatch: "Последняя игра",
-      alliesInPlay: "Союзники в игре",
+      alliesInPlay: "Друзья в игре",
       closeApp: "Закрыть",
       daily: "Ежедневный бонус",
       yourName: "Твоё имя",
       rejoinEyebrow: "Активная партия",
-      rejoinMsg: "Ты не попрощался с партией — вернуться в комнату?",
+      rejoinMsg: "Ты не вышел из партии — вернуться к игре?",
       rejoinBtn: "Вернуться",
       rejoinForget: "Забыть",
     }
   : {
       title: "MINI · POLY",
-      sub: "The Realm of Commerce",
-      hero: `Welcome, ${userName.value || "my lord"}`,
-      retinue: "Your retinue awaits your command.",
+      sub: "The classic board game",
+      hero: `Hi, ${userName.value || "Player"}`,
+      retinue: "Your tokens are ready to roll.",
       play: "Play",
-      tavernT: "The Tavern", tavernS: "Find a game",
-      scribeT: "Scribe",     scribeS: "New room",
-      shopT: "Bazaar",       shopS: "Tokens & crests",
-      friendsT: "Friends",   friendsS: "Scroll of allies",
+      tavernT: "Games",   tavernS: "Find a match",
+      scribeT: "Create",  scribeS: "New game",
+      shopT: "Shop",      shopS: "Tokens & boosts",
+      friendsT: "Friends", friendsS: "Friends list",
       lastMatch: "Recent match",
-      alliesInPlay: "Allies in play",
+      alliesInPlay: "Friends in play",
       closeApp: "Close",
       daily: "Daily bonus",
       yourName: "Your name",
       rejoinEyebrow: "Active match",
-      rejoinMsg: "You never said farewell — return to the hall?",
+      rejoinMsg: "You didn't leave the match — want to return?",
       rejoinBtn: "Return",
       rejoinForget: "Forget",
     });
@@ -248,10 +248,10 @@ const avatarInitial = computed(() => (userName.value?.[0] ?? "L").toUpperCase())
           <div class="last-match__delta">+ 1 240 ◈</div>
         </div>
         <div class="row" style="gap: 8px;">
-          <Sigil :name="userName || 'Eldmark'" :color="PLAYER_COLORS.you" :size="32"/>
+          <Sigil :name="userName || 'Classic'" :color="PLAYER_COLORS.you" :size="32"/>
           <div style="flex: 1;">
             <div style="font-family: var(--font-display); font-size: 15px;">
-              {{ isRu ? "Эльдмарк Вейл" : "Eldmark Vale" }}
+              {{ isRu ? "Классика" : "Classic" }}
             </div>
             <div style="font-size: 11px; color: var(--ink-3);">
               {{ isRu ? "4 игрока · 28 раундов · победа" : "4 players · 28 rounds · won" }}
@@ -309,7 +309,8 @@ const avatarInitial = computed(() => (userName.value?.[0] ?? "L").toUpperCase())
   gap: 12px;
   padding: 10px 12px;
   margin-bottom: 10px;
-  background: linear-gradient(180deg, rgba(184, 137, 46, 0.12) 0%, rgba(184, 137, 46, 0.05) 100%);
+  /* Более насыщенный фон — иначе жёлтый текст терялся на полупрозрачной заливке. */
+  background: linear-gradient(180deg, rgba(184, 137, 46, 0.18) 0%, rgba(184, 137, 46, 0.08) 100%);
   border: 1px solid var(--gold);
   border-radius: var(--r-md);
   box-shadow: 0 2px 8px rgba(184, 137, 46, 0.18), inset 0 1px 0 rgba(255, 255, 255, 0.35);
@@ -328,16 +329,19 @@ const avatarInitial = computed(() => (userName.value?.[0] ?? "L").toUpperCase())
   font-family: var(--font-title);
   font-size: 10px;
   letter-spacing: 0.18em;
-  color: var(--gold);
+  /* Было var(--gold) — плохо читалось на золотом фоне.
+     Ставим тёмный охровый для достаточного контраста. */
+  color: #6a4a1c;
   text-transform: uppercase;
-  font-weight: 600;
+  font-weight: 700;
 }
 .rejoin-card__msg {
   font-family: var(--font-display);
   font-size: 13px;
   color: var(--ink);
   margin-top: 2px;
-  font-style: italic;
+  /* italic + тонкий шрифт превращались в блёклый текст — убираем курсив, усиливаем вес. */
+  font-weight: 500;
 }
 .rejoin-card__actions {
   display: flex;

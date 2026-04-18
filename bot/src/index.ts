@@ -2,9 +2,14 @@ import { Bot, InlineKeyboard } from "grammy";
 import Fastify from "fastify";
 
 const BOT_TOKEN = process.env.BOT_TOKEN ?? "";
+const BOT_USERNAME = process.env.BOT_USERNAME ?? "poly_mini_bot";
 const WEBAPP_URL = process.env.WEBAPP_URL ?? "http://localhost:5174";
 const API_URL = process.env.API_URL ?? "http://api:3000";
 const PORT = Number(process.env.PORT ?? 3001);
+// Картинка-превью для shareMessage карточки (thumbnail_url). Должна быть
+// публично доступна и не превышать 1 МБ. Если нет — пропускаем thumbnail,
+// карточка будет без картинки.
+const OG_IMAGE_URL = process.env.OG_IMAGE_URL ?? "";
 
 if (!BOT_TOKEN) {
   console.warn("[bot] BOT_TOKEN is empty — bot will not start Telegram polling. API notify endpoint still available.");
@@ -147,6 +152,66 @@ app.post<{ Body: { tgUserId: number; roomId: string; fromName: string } }>(
       const reason = err?.description || err?.message || "send failed";
       console.error("[bot] invite send failed:", reason);
       return reply.code(200).send({ ok: false, reason });
+    }
+  },
+);
+
+// Подготовить «prepared inline message» для tg.shareMessage на фронте.
+// Возвращает id, который клиент передаёт в Telegram WebApp — юзер выбирает
+// чат из нативного пикера, сообщение приходит адресату карточкой с кнопкой.
+// Метод savePreparedInlineMessage появился в Bot API 7.12 (ноябрь 2024).
+// Grammy 1.30+ его поддерживает через bot.api.savePreparedInlineMessage.
+app.post<{ Body: { tgUserId: number; roomId: string; fromName: string } }>(
+  "/invite/prepare",
+  async (req, reply) => {
+    if (!bot) return reply.code(503).send({ ok: false, reason: "no bot" });
+    const { tgUserId, roomId, fromName } = req.body ?? ({} as any);
+    if (!tgUserId || !roomId) {
+      return reply.code(400).send({ ok: false, reason: "bad request" });
+    }
+
+    // Deep-link обязан быть https (web_app-кнопки в inline-сообщениях запрещены Telegram).
+    const deepLink = `https://t.me/${BOT_USERNAME}?startapp=room_${encodeURIComponent(roomId)}`;
+    const safeName = String(fromName || "Игрок").replace(/[<>&"]/g, "").slice(0, 40);
+    const safeRoom = String(roomId).replace(/[<>&"]/g, "").slice(0, 40);
+
+    // Inline-article с карточкой (title/desc/thumb) + кнопкой «Играть».
+    const result: any = {
+      type: "article",
+      id: `inv_${safeRoom}_${Date.now()}`,
+      title: "🎲 Minipoly",
+      description: `${safeName} зовёт тебя в партию · Игра ${safeRoom}`,
+      input_message_content: {
+        message_text:
+          `🎲 <b>${safeName}</b> зовёт тебя в партию Minipoly!\n\n` +
+          `Игра <b>${safeRoom}</b> — жми «Играть» и присоединяйся.`,
+        parse_mode: "HTML",
+      },
+      reply_markup: {
+        inline_keyboard: [[{ text: `🎲 Играть · ${safeRoom}`, url: deepLink }]],
+      },
+    };
+    if (OG_IMAGE_URL) {
+      result.thumbnail_url = OG_IMAGE_URL;
+      result.thumbnail_width = 512;
+      result.thumbnail_height = 512;
+    }
+
+    try {
+      // Используем raw для максимальной совместимости со старыми версиями grammy.
+      const prepared = await (bot.api.raw as any).savePreparedInlineMessage({
+        user_id: tgUserId,
+        result,
+        allow_user_chats: true,
+        allow_bot_chats: false,
+        allow_group_chats: true,
+        allow_channel_chats: false,
+      });
+      return { ok: true, id: prepared.id, expirationDate: prepared.expiration_date };
+    } catch (err: any) {
+      const reason = err?.description || err?.message || "prepare failed";
+      console.error("[bot] invite prepare failed:", reason);
+      return reply.code(500).send({ ok: false, reason });
     }
   },
 );

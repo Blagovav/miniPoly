@@ -47,7 +47,7 @@ function fmt(n: number): string {
       }"/>
 
       <div class="cor-eyebrow">
-        {{ isRu ? "Возведение на престол" : "Coronation" }}
+        {{ isRu ? "Победа" : "Winner" }}
       </div>
       <div class="cor-title">{{ winnerName }}</div>
 
@@ -67,14 +67,14 @@ function fmt(n: number): string {
 
       <div class="cor-sub">
         {{ isRu
-          ? "Королевство пало к вашим ногам. Слава и золото ваши."
-          : "The realm bows at your feet. Glory and gold are yours." }}
+          ? "Ты выиграл партию! Весь капитал твой."
+          : "You won the match! The pot is yours." }}
       </div>
 
       <div class="cor-stats">
         <div class="cor-stats__item">
           <div class="cor-stats__val">◈ {{ fmt(treasury ?? 0) }}</div>
-          <div class="cor-stats__lbl">{{ isRu ? "Сокровища" : "Treasury" }}</div>
+          <div class="cor-stats__lbl">{{ isRu ? "Капитал" : "Cash" }}</div>
         </div>
         <div class="cor-stats__sep"/>
         <div class="cor-stats__item">

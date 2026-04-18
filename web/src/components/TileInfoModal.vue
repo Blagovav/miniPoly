@@ -70,7 +70,7 @@ const rentRows = computed<RentRow[]>(() => {
       { label: loc.value === "ru" ? "2 дома"  : "2 houses",   value: `◈ ${s.rent[2]}` },
       { label: loc.value === "ru" ? "3 дома"  : "3 houses",   value: `◈ ${s.rent[3]}` },
       { label: loc.value === "ru" ? "4 дома"  : "4 houses",   value: `◈ ${s.rent[4]}` },
-      { label: loc.value === "ru" ? "Замок"   : "Castle",     value: `◈ ${s.rent[5]}` },
+      { label: loc.value === "ru" ? "Отель"   : "Hotel",      value: `◈ ${s.rent[5]}` },
     ];
   }
   if (t.kind === "railroad") {
@@ -343,7 +343,7 @@ const isRu = computed(() => loc.value === "ru");
             <div class="stat-box__val">◈ {{ (tile as StreetTile).houseCost }}</div>
           </div>
           <div class="stat-box">
-            <div class="stat-box__label">{{ isRu ? "Замок" : "Castle" }}</div>
+            <div class="stat-box__label">{{ isRu ? "Отель" : "Hotel" }}</div>
             <div class="stat-box__val">◈ {{ (tile as StreetTile).houseCost }}</div>
           </div>
           <div class="stat-box">
@@ -374,7 +374,7 @@ const isRu = computed(() => loc.value === "ru");
           </div>
           <div v-if="owned && (owned.houses || owned.hotel)" class="owner__buildings">
             <span v-if="owned.hotel" class="owner__castle">
-              ♖ {{ isRu ? "Замок" : "Castle" }}
+              ♖ {{ isRu ? "Отель" : "Hotel" }}
             </span>
             <span v-else-if="owned.houses > 0" class="owner__houses">
               <span v-for="n in owned.houses" :key="n">⌂</span>
@@ -410,7 +410,7 @@ const isRu = computed(() => loc.value === "ru");
             <Icon :name="owned?.houses === 4 ? 'castle' : 'home'" :size="16" color="#fff" />
             <span class="build-btn__text">
               {{ owned?.houses === 4
-                ? (isRu ? "Возвести замок" : "Raise a castle")
+                ? (isRu ? "Построить отель" : "Build a hotel")
                 : (isRu ? "Построить дом" : "Build a house") }}
             </span>
             <span class="build-btn__cost">◈ {{ buildCost }}</span>

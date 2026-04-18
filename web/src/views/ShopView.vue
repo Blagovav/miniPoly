@@ -33,8 +33,8 @@ const failOpen = computed(() => !!failData.value);
 const isRu = computed(() => locale.value === "ru");
 const L = computed(() => isRu.value
   ? {
-      title: "Ярмарка",
-      sub: "Товары и гербы",
+      title: "Магазин",
+      sub: "Фишки и бусты",
       buy: "Купить",
       equipped: "В игре",
       equip: "Надеть",
@@ -51,8 +51,8 @@ const L = computed(() => isRu.value
       mapBuy: "Купить",
     }
   : {
-      title: "The Bazaar",
-      sub: "Tokens & crests",
+      title: "Shop",
+      sub: "Tokens & boosts",
       buy: "Buy",
       equipped: "Owned",
       equip: "Equip",
@@ -144,10 +144,72 @@ function boardRarityLabel(b: BoardDef): string {
 function boardRarityColor(b: BoardDef): string {
   return RARITY_META[b.rarity].color;
 }
+function isBoardOwned(b: BoardDef): boolean {
+  if (b.rarity === "free") return true;
+  if (b.owned === true) return true;
+  return inv.owned.has(`board-${b.id}`);
+}
 function boardCtaBg(b: BoardDef): string {
-  if (b.owned) return "var(--bg-deep)";
+  if (isBoardOwned(b)) return "var(--bg-deep)";
   if (b.rarity === "legendary" || b.rarity === "epic") return "var(--gold)";
   return "var(--primary)";
+}
+
+async function buyBoard(b: BoardDef) {
+  if (isBoardOwned(b)) return;
+  // Stars — через invoice
+  if (b.unit === "★") {
+    if (!userId.value) { notify("error"); return; }
+    try {
+      const base = (import.meta.env.VITE_API_URL as string) || "";
+      const res = await fetch(`${base}/api/stars/invoice`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          tgUserId: userId.value,
+          itemId: `board-${b.id}`,
+          title: isRu.value ? b.ru : b.name,
+          stars: b.price,
+        }),
+      });
+      const data = await res.json();
+      if (!data.link) { notify("error"); return; }
+      const tgApp: any = tg.value as any;
+      if (tgApp?.openInvoice) {
+        tgApp.openInvoice(data.link, async (status: string) => {
+          if (status === "paid") {
+            notify("success");
+            haptic("heavy");
+            await inv.syncServerUnlocks(userId.value);
+          } else if (status !== "pending") {
+            notify("error");
+          }
+        });
+      } else {
+        window.open(data.link, "_blank");
+      }
+    } catch {
+      notify("error");
+    }
+    return;
+  }
+  // Монетная покупка
+  if (inv.coins < b.price) {
+    notify("error");
+    failData.value = {
+      name: b.name, ru: b.ru,
+      price: b.price, unit: "◈",
+      balance: inv.coins, reason: "funds",
+    };
+    return;
+  }
+  const ok = inv.buy(`board-${b.id}`, b.price);
+  if (ok) {
+    haptic("medium");
+    notify("success");
+  } else {
+    notify("error");
+  }
 }
 
 function goBack() {
@@ -344,9 +406,9 @@ function discStyle(item: ShopItem) {
           v-for="b in BOARDS"
           :key="b.id"
           class="shop-card map-card"
-          :class="{ legendary: b.rarity === 'legendary', owned: b.owned }"
+          :class="{ legendary: b.rarity === 'legendary', owned: isBoardOwned(b) }"
         >
-          <div v-if="b.owned" class="badge badge--owned">
+          <div v-if="isBoardOwned(b)" class="badge badge--owned">
             <Icon name="check" :size="10" color="#fff"/>
             <span>{{ L.mapOwned.toUpperCase() }}</span>
           </div>
@@ -368,15 +430,16 @@ function discStyle(item: ShopItem) {
               class="price"
               :class="{ 'price--epic': b.rarity === 'legendary' || b.rarity === 'epic' }"
             >
-              <template v-if="b.owned">—</template>
+              <template v-if="isBoardOwned(b)">—</template>
               <template v-else>{{ b.unit === '★' ? '★ ' + b.price : '◈ ' + b.price }}</template>
             </div>
             <button
               class="btn cta"
-              :disabled="b.owned"
-              :style="{ background: boardCtaBg(b), color: b.owned ? 'var(--ink-3)' : '#fff' }"
+              :disabled="isBoardOwned(b)"
+              :style="{ background: boardCtaBg(b), color: isBoardOwned(b) ? 'var(--ink-3)' : '#fff' }"
+              @click="buyBoard(b)"
             >
-              <span>{{ b.owned ? L.mapOwned : L.mapBuy }}</span>
+              <span>{{ isBoardOwned(b) ? L.mapOwned : L.mapBuy }}</span>
             </button>
           </div>
         </div>
@@ -535,6 +598,15 @@ function discStyle(item: ShopItem) {
   border: 2px solid var(--gold);
   margin-bottom: 10px;
   line-height: 0;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: 100%;
+  aspect-ratio: 1 / 1;
+}
+.map-card__preview :deep(svg) {
+  width: 100%;
+  height: 100%;
 }
 
 /* Tabs (5 narrow) */

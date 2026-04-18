@@ -80,6 +80,31 @@ app.post<{ Body: { tgUserId: number; roomId: string; fromName: string } }>(
   },
 );
 
+// Подготовить «prepared inline message» для tg.shareMessage на фронте —
+// клиент вызывает этот endpoint, получает id, и передаёт в Telegram WebApp.
+// Пользователь выбирает чат из нативного пикера, туда улетает карточка
+// с кнопкой «Играть».
+app.post<{ Body: { tgUserId: number; roomId: string; fromName: string } }>(
+  "/api/invites/prepare",
+  async (req, reply) => {
+    const { tgUserId, roomId, fromName } = req.body ?? ({} as any);
+    if (!tgUserId || !roomId) return reply.code(400).send({ ok: false, error: "bad request" });
+    const room = getRoom(roomId);
+    if (!room) return reply.code(404).send({ ok: false, error: "room not found" });
+    try {
+      const res = await fetch(`${config.botUrl}/invite/prepare`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ tgUserId, roomId, fromName }),
+      });
+      const data = await res.json().catch(() => ({}));
+      return data;
+    } catch {
+      return reply.code(502).send({ ok: false, error: "bot unreachable" });
+    }
+  },
+);
+
 // Создать инвойс для покупки за Telegram Stars. Перенаправляет в бота.
 app.post<{ Body: { tgUserId: number; itemId: string; title: string; stars: number } }>(
   "/api/stars/invoice",

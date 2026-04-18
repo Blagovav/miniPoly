@@ -8,6 +8,7 @@ import { useI18n } from "vue-i18n";
 import type { RoomState } from "../../../shared/types";
 import { SHOP_ITEMS } from "../shop/items";
 import { useInventoryStore } from "../stores/inventory";
+import { useTelegram } from "../composables/useTelegram";
 import Icon from "./Icon.vue";
 import Sigil from "./Sigil.vue";
 import TokenArt from "./TokenArt.vue";
@@ -80,32 +81,63 @@ const myColor = computed(() => {
 });
 
 const botUsername = (import.meta.env.VITE_BOT_USERNAME as string) || "poly_mini_bot";
+const API_URL = (import.meta.env.VITE_API_URL as string) || "";
 
 /** Telegram Mini App startapp-link — opens the bot with room_<id> payload. */
 const inviteUrl = computed(
   () => `https://t.me/${botUsername}?startapp=room_${props.room.id}`,
 );
 
+const { tg: tgRef, userId, userName } = useTelegram();
 const tg = (window as any).Telegram?.WebApp;
 
 async function share() {
+  const tgApp: any = tgRef.value;
+  const fromName = userName.value || "Игрок";
+
+  // 1) Лучший UX — Telegram shareMessage (Bot API 7.8+):
+  //    показывает нативный пикер чатов, адресату приходит карточка
+  //    с превью, описанием и inline-кнопкой «Играть».
+  if (tgApp?.shareMessage && userId.value) {
+    try {
+      const res = await fetch(`${API_URL}/api/invites/prepare`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          tgUserId: userId.value,
+          roomId: props.room.id,
+          fromName,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (data?.ok && data.id) {
+        tgApp.shareMessage(data.id);
+        return;
+      }
+    } catch {
+      // тихо падаем на legacy-share
+    }
+  }
+
+  // 2) Legacy — openTelegramLink с t.me/share/url (без карточки, просто текст+ссылка).
   const text = isRu.value
-    ? `Го в Minipoly! Комната ${props.room.id}`
-    : `Join me in Minipoly! Room ${props.room.id}`;
-  // Inside Telegram — native share dialog.
+    ? `Го в Minipoly! Игра ${props.room.id}`
+    : `Join me in Minipoly! Game ${props.room.id}`;
   if (tg?.openTelegramLink) {
     const shareUrl = `https://t.me/share/url?url=${encodeURIComponent(inviteUrl.value)}&text=${encodeURIComponent(text)}`;
     tg.openTelegramLink(shareUrl);
     return;
   }
-  // Mobile browser with Web Share API.
+
+  // 3) Mobile-браузер — Web Share API.
   if (navigator.share) {
     try {
       await navigator.share({ title: "Minipoly", text, url: inviteUrl.value });
       return;
     } catch {}
   }
-  // Fallback — copy to clipboard.
+
+  // 4) Последний шанс — скопировать ссылку в буфер.
   try {
     await navigator.clipboard.writeText(inviteUrl.value);
     copied.value = true;
@@ -116,34 +148,34 @@ async function share() {
 // Bilingual labels, mirroring the JSX LobbyScreen strings.
 const L = computed(() => isRu.value
   ? {
-      roomCode: "Код комнаты",
+      roomCode: "Код игры",
       copyLink: "Скопировать ссылку",
       copied: "Скопировано!",
       players: "Игроки",
-      yourToken: "Ваша фишка",
+      yourToken: "Твоя фишка",
       ready: "Готов",
       notReady: "Не готов",
       choosing: "Выбирает…",
-      emptySeat: "Пустая скамья",
+      emptySeat: "Свободное место",
       start: "Начать игру",
       minPlayers: "Нужно минимум 2 готовых игрока",
-      destroy: "Закрыть комнату",
+      destroy: "Закрыть игру",
       offline: "offline",
       takenBy: (name: string) => `Занята: ${name}`,
     }
   : {
-      roomCode: "Room code",
+      roomCode: "Game code",
       copyLink: "Copy link",
       copied: "Copied!",
-      players: "At the table",
+      players: "Players",
       yourToken: "Your token",
       ready: "Ready",
       notReady: "Not ready",
       choosing: "Choosing…",
       emptySeat: "Empty seat",
-      start: "Begin the game",
+      start: "Start game",
       minPlayers: "Need at least 2 ready players",
-      destroy: "Destroy room",
+      destroy: "Close game",
       offline: "offline",
       takenBy: (name: string) => `Taken: ${name}`,
     });

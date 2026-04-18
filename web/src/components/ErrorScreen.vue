@@ -18,18 +18,18 @@ const L = computed(() => {
   const k = props.kind;
   return isRu.value ? {
     title: "Что-то пошло не так",
-    sub: k === "offline" ? "Связь с королевством потеряна." : "Писарь уронил перо в чернильницу.",
+    sub: k === "offline" ? "Нет соединения с интернетом." : "Сервер не отвечает.",
     code: k === "offline" ? "CONNECTION LOST" : "ERROR #" + (k === "server" ? "503" : "418"),
     retry: "Попробовать снова",
-    home: "В Тронный зал",
-    hint: "Если ошибка повторяется — сообщите герольду.",
+    home: "На главную",
+    hint: "Если ошибка повторяется — напиши в поддержку.",
   } : {
-    title: "Something went awry",
-    sub: k === "offline" ? "The realm has lost its tether." : "The scribe has dropped his quill.",
+    title: "Something went wrong",
+    sub: k === "offline" ? "No internet connection." : "Server is not responding.",
     code: k === "offline" ? "CONNECTION LOST" : "ERROR #" + (k === "server" ? "503" : "418"),
     retry: "Try again",
-    home: "Return to Throne Hall",
-    hint: "If this persists — summon the herald.",
+    home: "Back to home",
+    hint: "If this keeps happening — contact support.",
   };
 });
 </script>

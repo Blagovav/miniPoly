@@ -33,17 +33,17 @@ const item = computed<PurchaseData>(() => props.data ?? {
 });
 
 const L = computed(() => isRu.value ? {
-  title: "Сделка заключена!",
-  sub: "Ваше приобретение добавлено в казну.",
+  title: "Покупка прошла!",
+  sub: "Товар добавлен в инвентарь.",
   ok: "Отлично",
-  equip: "Экипировать",
+  equip: "Надеть",
   spent: "Потрачено",
   balance: "Остаток",
   kindLabels: { token: "Фишка", map: "Карта", banner: "Знамя", dice: "Кости", theme: "Цвет" } as Record<string, string>,
 } : {
   title: "Purchase complete",
-  sub: "Your acquisition has joined the treasury.",
-  ok: "Splendid",
+  sub: "Item added to your inventory.",
+  ok: "Nice",
   equip: "Equip",
   spent: "Spent",
   balance: "Balance",

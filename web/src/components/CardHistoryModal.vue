@@ -15,23 +15,23 @@ const filter = ref<Filter>("all");
 const isRu = computed(() => locale.value === "ru");
 const L = computed(() => isRu.value
   ? {
-      title: "Свиток указов",
+      title: "История карточек",
       tabAll: "Все",
       tabMine: "Мои",
       emptyMine: "Ты ещё не тянул карт",
       emptyAll: "Никто ещё не тянул карт",
-      deckChance: "Указ",
-      deckChest: "Сундук",
+      deckChance: "Шанс",
+      deckChest: "Казна",
       ago: "назад",
       close: "Закрыть",
     }
   : {
-      title: "Scroll of decrees",
+      title: "Card history",
       tabAll: "All",
       tabMine: "Mine",
       emptyMine: "You haven't drawn any cards yet",
-      emptyAll: "No decrees have been drawn yet",
-      deckChance: "Decree",
+      emptyAll: "No cards have been drawn yet",
+      deckChance: "Chance",
       deckChest: "Chest",
       ago: "ago",
       close: "Close",

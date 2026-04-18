@@ -96,7 +96,9 @@ function disarm(ev: MouseEvent) {
 <style scoped>
 .vb-wrap {
   position: fixed;
-  bottom: 16px;
+  /* Отодвигаем от нижнего края с учётом safe-area (notch / home bar)
+     и Telegram bottom bar (v8+). iOS/Android не обрезает кнопку. */
+  bottom: calc(16px + var(--tg-safe-area-inset-bottom, 0px) + var(--tg-content-safe-area-inset-bottom, 0px));
   right: 80px;
   z-index: 80;
 }

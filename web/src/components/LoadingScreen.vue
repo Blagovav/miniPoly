@@ -34,15 +34,15 @@ const msg = computed(() => {
   if (props.message) return props.message;
   const isRu = locale.value === "ru";
   const map = isRu ? {
-    sigil: "Герб пробуждается…",
-    dice: "Жребий брошен…",
-    scroll: "Разворачиваем свитки…",
-    coins: "Пересчитываем казну…",
+    sigil: "Загружаем игру…",
+    dice: "Бросаем кубики…",
+    scroll: "Готовим доску…",
+    coins: "Считаем монеты…",
   } : {
-    sigil: "The sigil awakens…",
-    dice: "The die is cast…",
-    scroll: "Unfurling the scrolls…",
-    coins: "Counting the coffers…",
+    sigil: "Loading the game…",
+    dice: "Rolling the dice…",
+    scroll: "Preparing the board…",
+    coins: "Counting the cash…",
   };
   return map[props.variant];
 });

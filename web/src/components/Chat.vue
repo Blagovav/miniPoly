@@ -151,7 +151,9 @@ watch(
 <style scoped>
 .chat {
   position: fixed;
-  bottom: 16px;
+  /* Отодвигаем от нижнего края с учётом safe-area (notch / home bar)
+     и Telegram bottom bar (v8+). iOS/Android не обрезает кнопку. */
+  bottom: calc(16px + var(--tg-safe-area-inset-bottom, 0px) + var(--tg-content-safe-area-inset-bottom, 0px));
   right: 16px;
   z-index: 80;
 }
@@ -196,7 +198,9 @@ watch(
 .chat__panel {
   position: fixed;
   right: 16px;
-  bottom: 80px;
+  /* 80px = 16 (margin от края) + 52 (высота кнопки) + 12 (зазор до панели).
+     Добавляем safe-area, чтобы панель не залезала под Telegram bottom bar. */
+  bottom: calc(80px + var(--tg-safe-area-inset-bottom, 0px) + var(--tg-content-safe-area-inset-bottom, 0px));
   width: min(340px, calc(100vw - 32px));
   height: min(440px, calc(100vh - 180px));
   display: flex;

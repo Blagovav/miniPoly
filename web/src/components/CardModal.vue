@@ -52,8 +52,8 @@ function close() {
 
         <div class="decree__eyebrow">
           {{ current.deck === "chance"
-            ? (locale === "ru" ? "Указ" : "Royal Decree")
-            : (locale === "ru" ? "Сундук казны" : "Town Chest") }}
+            ? (locale === "ru" ? "Шанс" : "Chance")
+            : (locale === "ru" ? "Общественная казна" : "Community Chest") }}
         </div>
 
         <!-- Seal -->
@@ -69,13 +69,13 @@ function close() {
           <span class="decree__keep-key">🗝</span>
           <span>
             {{ locale === "ru"
-              ? "Сохранена в инвентаре. Используй её, когда попадёшь в темницу."
+              ? "Сохранена в инвентаре. Используй, когда попадёшь в тюрьму."
               : "Saved to your inventory. Use it next time you're jailed." }}
           </span>
         </div>
 
         <button class="btn btn-primary decree__close" @click="close">
-          {{ locale === "ru" ? "Принять волю" : "As the crown wills" }}
+          {{ locale === "ru" ? "Понятно" : "Got it" }}
         </button>
       </div>
     </div>

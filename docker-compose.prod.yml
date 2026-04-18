@@ -64,9 +64,13 @@ services:
     environment:
       NODE_ENV: production
       BOT_TOKEN: ${BOT_TOKEN}
+      BOT_USERNAME: ${BOT_USERNAME:-poly_mini_bot}
       WEBAPP_URL: ${WEBAPP_URL:-https://tapcade.online}
       API_URL: http://api:3000
       PORT: 3001
+      # Картинка-превью для shareMessage. Оставь пустым, если нет файла —
+      # карточка будет без thumbnail.
+      OG_IMAGE_URL: ${OG_IMAGE_URL:-}
     depends_on:
       - api
 

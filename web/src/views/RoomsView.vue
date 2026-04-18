@@ -22,23 +22,23 @@ const API_URL = (import.meta.env.VITE_API_URL as string) || "";
 const isRu = computed(() => locale.value === "ru");
 const L = computed(() => isRu.value
   ? {
-      title: "Таверна",
-      subtitle: (n: number) => `Открытые столы · ${n}`,
+      title: "Игры",
+      subtitle: (n: number) => `Открытых партий · ${n}`,
       codePlaceholder: "Введите код…",
       create: "Создать",
       filters: ["Все", "Публичные", "Друзья", "Ставка"],
-      empty: "Пока нет открытых столов. Создай первый!",
-      host: "Хозяин",
+      empty: "Пока нет открытых партий. Создай первую!",
+      host: "Хост",
       stake: "ставка",
       refresh: "Обновить",
     }
   : {
-      title: "The Tavern",
-      subtitle: (n: number) => `Open tables · ${n}`,
+      title: "Games",
+      subtitle: (n: number) => `Open matches · ${n}`,
       codePlaceholder: "Enter code…",
       create: "Create",
       filters: ["All", "Public", "Friends", "Stakes"],
-      empty: "No open tables yet. Be the first!",
+      empty: "No open matches yet. Be the first!",
       host: "Host",
       stake: "stake",
       refresh: "Refresh",

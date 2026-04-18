@@ -17,8 +17,8 @@ const { initData, userName, haptic } = useTelegram();
 const isPublic = ref(true);
 const maxPlayers = ref(4);
 const loading = ref(false);
-// Realm name — display-only for now (server doesn't support room names yet).
-const realmName = ref("Dunholm Keep");
+// Room name — display-only for now (server doesn't support room names yet).
+const realmName = ref("Моя игра");
 // Selected board (display-only for now — server doesn't pick boards yet).
 const boardId = ref<string>("eldmark");
 const boardModalOpen = ref(false);
@@ -64,14 +64,14 @@ onUnmounted(off);
 const isRu = computed(() => locale.value === "ru");
 const L = computed(() => isRu.value
   ? {
-      title: "Новая комната",
-      sub: "Палата писаря",
+      title: "Новая игра",
+      sub: "Настрой партию",
       nameLabel: "Название",
       access: "Доступ",
       public: "Публичная",
       private: "Приватная",
       players: "Игроков",
-      playersHint: "От 2 до 6 лордов",
+      playersHint: "От 2 до 6 игроков",
       rules: "Правила",
       ruleCash: "Стартовый капитал",
       ruleAuctions: "Аукционы",
@@ -80,18 +80,18 @@ const L = computed(() => isRu.value
       rulePaceVal: "Обычная",
       ruleEntry: "Ставка",
       mapLabel: "Карта",
-      create: "Созвать совет",
+      create: "Создать игру",
       back: "Назад",
     }
   : {
-      title: "New Room",
-      sub: "Scribe’s Chamber",
-      nameLabel: "Realm name",
+      title: "New Game",
+      sub: "Set up the match",
+      nameLabel: "Room name",
       access: "Access",
       public: "Public",
       private: "Private",
       players: "Players",
-      playersHint: "From 2 to 6 lords",
+      playersHint: "From 2 to 6 players",
       rules: "Rules",
       ruleCash: "Starting cash",
       ruleAuctions: "Auctions",
@@ -100,7 +100,7 @@ const L = computed(() => isRu.value
       rulePaceVal: "Normal",
       ruleEntry: "Entry",
       mapLabel: "Map",
-      create: "Open the Hall",
+      create: "Create game",
       back: "Back",
     });
 

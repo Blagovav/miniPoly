@@ -26,11 +26,11 @@ onMounted(() => {
 const activeScreen = computed(() => route.name?.toString() ?? "home");
 
 const navItems = computed(() => [
-  { id: "home",    label: locale.value === "ru" ? "Тронный зал" : "Home",    icon: "home" as const,   route: "home" },
-  { id: "rooms",   label: locale.value === "ru" ? "Таверна"     : "Tavern",  icon: "users" as const,  route: "rooms" },
-  { id: "shop",    label: locale.value === "ru" ? "Ярмарка"     : "Bazaar",  icon: "bag" as const,    route: "shop" },
-  { id: "friends", label: locale.value === "ru" ? "Союзники"    : "Friends", icon: "shield" as const, route: "friends" },
-  { id: "create",  label: locale.value === "ru" ? "Создать"     : "Create",  icon: "plus" as const,   route: "create" },
+  { id: "home",    label: locale.value === "ru" ? "Главная"  : "Home",    icon: "home" as const,   route: "home" },
+  { id: "rooms",   label: locale.value === "ru" ? "Игры"     : "Games",   icon: "users" as const,  route: "rooms" },
+  { id: "shop",    label: locale.value === "ru" ? "Магазин"  : "Shop",    icon: "bag" as const,    route: "shop" },
+  { id: "friends", label: locale.value === "ru" ? "Друзья"   : "Friends", icon: "shield" as const, route: "friends" },
+  { id: "create",  label: locale.value === "ru" ? "Создать"  : "Create",  icon: "plus" as const,   route: "create" },
 ]);
 
 function go(routeName: string) {

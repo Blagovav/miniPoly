@@ -141,7 +141,7 @@ const L = computed(() => isRu.value
               </template>
               <template v-else>
                 <span class="muted-eyebrow">
-                  {{ isRu ? "Лорд за столом" : "Lord at the table" }}
+                  {{ isRu ? "Игрок за столом" : "Player at the table" }}
                 </span>
               </template>
             </div>
