@@ -258,7 +258,7 @@ function goBack() {
   position: relative;
   display: flex;
   flex-direction: column;
-  min-height: 100dvh;
+  min-height: 0;
   background: var(--bg);
 }
 
