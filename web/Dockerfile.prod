@@ -3,6 +3,16 @@ FROM node:22-alpine AS build
 ARG VITE_BOT_USERNAME=poly_mini_bot
 ENV VITE_BOT_USERNAME=$VITE_BOT_USERNAME
 
+# TURN server config — baked into the web bundle at build time so the WebRTC
+# client knows where to relay media. See deploy notes: these creds end up
+# visible in JS, so pair with server-side rate limits.
+ARG VITE_TURN_URL=
+ARG VITE_TURN_USER=
+ARG VITE_TURN_PASS=
+ENV VITE_TURN_URL=$VITE_TURN_URL
+ENV VITE_TURN_USER=$VITE_TURN_USER
+ENV VITE_TURN_PASS=$VITE_TURN_PASS
+
 WORKDIR /app/web
 
 COPY web/package.json ./

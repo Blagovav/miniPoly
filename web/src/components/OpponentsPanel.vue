@@ -11,11 +11,14 @@ const game = useGameStore();
 const props = defineProps<{
   room: RoomState;
   myPlayerId: string | null;
+  speakingIds?: string[];
 }>();
 
 const emit = defineEmits<{
   (e: "openProfile", player: Player): void;
 }>();
+
+const speakingSet = computed(() => new Set(props.speakingIds ?? []));
 
 const currentId = computed(() => props.room.players[props.room.currentTurn]?.id ?? null);
 
@@ -45,14 +48,18 @@ function colorForIndex(idx: number): string {
         'opp--offline': !p.connected,
         'opp--current': p.id === currentId,
         'opp--me': p.id === myPlayerId,
+        'opp--speaking': speakingSet.has(p.id),
       }"
       @click="emit('openProfile', p)"
     >
-      <Sigil
-        :name="p.name"
-        :color="colorForIndex(idx)"
-        :size="26"
-      />
+      <div class="opp__sigil-wrap">
+        <Sigil
+          :name="p.name"
+          :color="colorForIndex(idx)"
+          :size="26"
+        />
+        <span v-if="speakingSet.has(p.id)" class="opp__mic-ring" />
+      </div>
       <div class="opp__body">
         <div class="nm opp__name">
           <Icon
@@ -193,5 +200,26 @@ function colorForIndex(idx: number): string {
 @keyframes dot-pulse {
   0%, 100% { opacity: 0.7; transform: scale(1); }
   50% { opacity: 1; transform: scale(1.4); }
+}
+
+/* Speaking indicator — gold ring around the sigil that pulses while active. */
+.opp__sigil-wrap {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  flex-shrink: 0;
+}
+.opp__mic-ring {
+  position: absolute;
+  inset: -3px;
+  border-radius: 50%;
+  border: 2px solid var(--gold);
+  box-shadow: 0 0 10px rgba(184, 137, 46, 0.55);
+  animation: opp-mic-pulse 1s ease-in-out infinite;
+  pointer-events: none;
+}
+@keyframes opp-mic-pulse {
+  0%, 100% { opacity: 0.55; transform: scale(1); }
+  50%      { opacity: 1;    transform: scale(1.08); }
 }
 </style>

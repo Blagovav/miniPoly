@@ -73,5 +73,15 @@ export default {
     placeholder: "Message…",
     send: "Send",
   },
+  voice: {
+    tapToJoin: "Tap to enable mic",
+    holdToTalk: "Hold to talk",
+    talking: "Talking…",
+    connecting: "Connecting…",
+    leave: "Turn off mic",
+    errPermission: "Mic access denied",
+    errNoDevice: "No microphone found",
+    errFailed: "Couldn't enable mic",
+  },
   actions: { ok: "OK", cancel: "Cancel", back: "Back" },
 };

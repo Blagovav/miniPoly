@@ -45,6 +45,10 @@ interface Conn {
 
 const connections = new Map<WebSocket, Conn>();
 
+// Voice-chat participants per room (playerId set). A player is in this set from
+// the moment the client sends voiceJoin until voiceLeave (or disconnect).
+const voiceRooms = new Map<string, Set<string>>();
+
 function broadcast(roomId: string, msg: ServerMessage): void {
   for (const [ws, conn] of connections) {
     if (conn.roomId === roomId) {
@@ -55,6 +59,27 @@ function broadcast(roomId: string, msg: ServerMessage): void {
       }
     }
   }
+}
+
+function sendToPlayer(roomId: string, playerId: string, msg: ServerMessage): void {
+  for (const [ws, conn] of connections) {
+    if (conn.roomId === roomId && conn.playerId === playerId) {
+      try {
+        ws.send(JSON.stringify(msg));
+      } catch {
+        /* noop */
+      }
+      return;
+    }
+  }
+}
+
+function leaveVoice(roomId: string, playerId: string): void {
+  const set = voiceRooms.get(roomId);
+  if (!set || !set.has(playerId)) return;
+  set.delete(playerId);
+  if (set.size === 0) voiceRooms.delete(roomId);
+  broadcast(roomId, { type: "voicePeerLeft", peerId: playerId });
 }
 
 function sendState(roomId: string): void {
@@ -88,6 +113,7 @@ export async function registerWebSocket(app: FastifyInstance): Promise<void> {
       if (c && c.roomId && c.playerId) {
         const roomId = c.roomId;
         const playerId = c.playerId;
+        leaveVoice(roomId, playerId);
         const room = getRoom(roomId);
         if (room) {
           const p = room.players.find((pl) => pl.id === playerId);
@@ -164,9 +190,51 @@ function handleMessage(conn: Conn, ws: WebSocket, msg: ClientMessage): void {
       return handlePayJail(conn);
     case "useJailCard":
       return handleUseJailCard(conn);
+    case "voiceJoin":
+      return handleVoiceJoin(conn);
+    case "voiceLeave":
+      return handleVoiceLeave(conn);
+    case "voiceSignal":
+      return handleVoiceSignal(conn, msg.toId, msg.payload);
     default:
       conn.send({ type: "error", message: "unknown message" });
   }
+}
+
+function handleVoiceJoin(conn: Conn): void {
+  if (!conn.roomId || !conn.playerId) return;
+  let set = voiceRooms.get(conn.roomId);
+  if (!set) {
+    set = new Set();
+    voiceRooms.set(conn.roomId, set);
+  }
+  if (set.has(conn.playerId)) return;
+  // Existing peers BEFORE we add ourselves — that's what the joiner sees.
+  const existing = Array.from(set);
+  set.add(conn.playerId);
+  conn.send({ type: "voicePeers", peerIds: existing });
+  // Notify everyone else (not the joiner) that a new peer is here.
+  for (const [ws, c] of connections) {
+    if (c.roomId === conn.roomId && c.playerId && c.playerId !== conn.playerId && set.has(c.playerId)) {
+      try {
+        ws.send(JSON.stringify({ type: "voicePeerJoined", peerId: conn.playerId }));
+      } catch {
+        /* noop */
+      }
+    }
+  }
+}
+
+function handleVoiceLeave(conn: Conn): void {
+  if (!conn.roomId || !conn.playerId) return;
+  leaveVoice(conn.roomId, conn.playerId);
+}
+
+function handleVoiceSignal(conn: Conn, toId: string, payload: import("../../../shared/types").VoiceSignalPayload): void {
+  if (!conn.roomId || !conn.playerId) return;
+  const set = voiceRooms.get(conn.roomId);
+  if (!set || !set.has(conn.playerId) || !set.has(toId)) return;
+  sendToPlayer(conn.roomId, toId, { type: "voiceSignal", fromId: conn.playerId, payload });
 }
 
 function authenticate(initData: string, name: string) {
@@ -405,6 +473,7 @@ function handleSelectToken(conn: Conn, tokenId: string): void {
 function handleLeave(conn: Conn): void {
   const ctx = getRoomAndPlayer(conn);
   if (!ctx || !ctx.p) return;
+  leaveVoice(ctx.room.id, ctx.p.id);
   if (ctx.room.phase === "lobby") {
     removePlayer(ctx.room, ctx.p.id);
   } else if (ctx.room.phase !== "ended") {
@@ -423,6 +492,7 @@ function handleDestroyRoom(conn: Conn): void {
     return;
   }
   const roomId = ctx.room.id;
+  voiceRooms.delete(roomId);
   // шлём всем финальное состояние и удаляем комнату
   for (const [ws, c] of connections) {
     if (c.roomId === roomId) {

@@ -73,5 +73,15 @@ export default {
     placeholder: "Сообщение…",
     send: "Отправить",
   },
+  voice: {
+    tapToJoin: "Тап — включить микрофон",
+    holdToTalk: "Зажми — говори",
+    talking: "Говоришь…",
+    connecting: "Подключение…",
+    leave: "Выключить микрофон",
+    errPermission: "Нет доступа к микрофону",
+    errNoDevice: "Микрофон не найден",
+    errFailed: "Не удалось включить микрофон",
+  },
   actions: { ok: "ОК", cancel: "Отмена", back: "Назад" },
 };

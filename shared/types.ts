@@ -219,7 +219,16 @@ export type ClientMessage =
   | { type: "unmortgage"; tileIndex: number }
   | { type: "pickTripleTile"; tileIndex: number }
   | { type: "placeBid"; amount: number }
-  | { type: "passAuction" };
+  | { type: "passAuction" }
+  | { type: "voiceJoin" }
+  | { type: "voiceLeave" }
+  | { type: "voiceSignal"; toId: string; payload: VoiceSignalPayload };
+
+// Payload for WebRTC signaling relayed via WS between two peers in the same room.
+export type VoiceSignalPayload =
+  | { kind: "offer"; sdp: string }
+  | { kind: "answer"; sdp: string }
+  | { kind: "ice"; candidate: RTCIceCandidateInit };
 
 // ---------- Server → Client messages ----------
 export type ServerMessage =
@@ -234,4 +243,8 @@ export type ServerMessage =
       from: number;
       to: number;
     }
-  | { type: "chat"; from: string; fromId: string; text: string; ts: number };
+  | { type: "chat"; from: string; fromId: string; text: string; ts: number }
+  | { type: "voicePeers"; peerIds: string[] }
+  | { type: "voicePeerJoined"; peerId: string }
+  | { type: "voicePeerLeft"; peerId: string }
+  | { type: "voiceSignal"; fromId: string; payload: VoiceSignalPayload };

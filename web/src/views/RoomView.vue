@@ -15,6 +15,8 @@ import Board from "../components/Board.vue";
 import Lobby from "../components/Lobby.vue";
 import GameHud from "../components/GameHud.vue";
 import Chat from "../components/Chat.vue";
+import VoiceButton from "../components/VoiceButton.vue";
+import { useVoice } from "../composables/useVoice";
 import CardModal from "../components/CardModal.vue";
 import CardHistoryModal from "../components/CardHistoryModal.vue";
 import AuctionModal from "../components/AuctionModal.vue";
@@ -35,6 +37,8 @@ const route = useRoute();
 const { initData, userName, haptic, notify } = useTelegram();
 const game = useGameStore();
 const ws = useWs();
+// Voice chat (WebRTC mesh over WS signalling). Mic acquired only after first tap.
+const voice = useVoice(ws, () => game.myPlayerId);
 
 import { useInventoryStore } from "../stores/inventory";
 const inv = useInventoryStore();
@@ -308,7 +312,12 @@ void t;
         </div>
       </transition>
 
-      <OpponentsPanel :room="game.room" :my-player-id="game.myPlayerId" @open-profile="openProfile" />
+      <OpponentsPanel
+        :room="game.room"
+        :my-player-id="game.myPlayerId"
+        :speaking-ids="voice.speakingIds.value"
+        @open-profile="openProfile"
+      />
       <Board :room="game.room" />
       <GameHud
         :room="game.room"
@@ -346,6 +355,7 @@ void t;
 
     <!-- ── Global overlays (chat, card, auction, tile, profile, trade) ── -->
     <Chat v-if="game.room" :on-send="sendChat" />
+    <VoiceButton v-if="game.room && !isLobby && !isEnded" :voice="voice" />
     <CardModal v-if="game.room" />
     <CardHistoryModal v-if="game.room" :open="cardHistoryOpen" :on-close="closeCardHistory" />
     <AuctionModal v-if="game.room" :on-bid="placeBid" :on-pass="passAuction" />

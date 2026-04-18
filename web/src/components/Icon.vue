@@ -4,7 +4,7 @@ export type IconName =
   | "coin" | "castle" | "shield" | "trophy" | "users" | "bag" | "user"
   | "home" | "scroll" | "globe" | "search" | "send" | "crown" | "key"
   | "lock" | "unlock" | "star" | "chat" | "horse" | "tavern" | "swords"
-  | "banner" | "chalice" | "helm";
+  | "banner" | "chalice" | "helm" | "mic" | "micOff";
 </script>
 
 <script setup lang="ts">
@@ -153,6 +153,17 @@ defineProps<{
     <template v-else-if="name === 'helm'">
       <path d="M5 12a7 7 0 0114 0v6H5z" :stroke="color ?? 'currentColor'" :stroke-width="strokeWidth ?? 1.8" fill="none" stroke-linejoin="round"/>
       <path d="M5 15h14M9 11v3M15 11v3" :stroke="color ?? 'currentColor'" :stroke-width="strokeWidth ?? 1.8" fill="none" stroke-linecap="round"/>
+    </template>
+    <!-- mic -->
+    <template v-else-if="name === 'mic'">
+      <rect x="9" y="3" width="6" height="11" rx="3" :stroke="color ?? 'currentColor'" :stroke-width="strokeWidth ?? 1.8" fill="none"/>
+      <path d="M5 11a7 7 0 0014 0M12 18v3M8 21h8" :stroke="color ?? 'currentColor'" :stroke-width="strokeWidth ?? 1.8" fill="none" stroke-linecap="round"/>
+    </template>
+    <!-- micOff -->
+    <template v-else-if="name === 'micOff'">
+      <rect x="9" y="3" width="6" height="11" rx="3" :stroke="color ?? 'currentColor'" :stroke-width="strokeWidth ?? 1.8" fill="none"/>
+      <path d="M5 11a7 7 0 0014 0M12 18v3M8 21h8" :stroke="color ?? 'currentColor'" :stroke-width="strokeWidth ?? 1.8" fill="none" stroke-linecap="round"/>
+      <line x1="3" y1="3" x2="21" y2="21" :stroke="color ?? 'currentColor'" stroke-width="2.2" stroke-linecap="round"/>
     </template>
   </svg>
 </template>
