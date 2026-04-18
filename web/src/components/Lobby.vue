@@ -441,8 +441,10 @@ const L = computed(() => isRu.value
 }
 
 /* ── Token rail ── */
+/* padding on both axes: overflow-x: auto on .rail implicitly clips -y too,
+   and the selected token's 2px box-shadow ring would otherwise lose its top. */
 .tokens-rail {
-  padding-bottom: 4px;
+  padding: 4px 2px;
   flex-shrink: 0;
 }
 .token-btn {
