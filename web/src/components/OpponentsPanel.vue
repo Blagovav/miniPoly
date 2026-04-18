@@ -92,6 +92,10 @@ function colorForIndex(idx: number): string {
 .opponents {
   padding: 10px 14px 4px;
   scroll-snap-type: x mandatory;
+  /* .room is a flex column with overflow-y: hidden — without this the panel
+     shrinks to zero when the board + HUD exceed viewport height, and the
+     board then paints over the pills. */
+  flex-shrink: 0;
 }
 
 .opp {
