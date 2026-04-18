@@ -203,14 +203,25 @@ body {
     text-transform: uppercase;
   }
 
-  /* Views fill the main pane next to the sidebar — no mobile 820px cap. */
+  /* Views occupy the main pane next to the sidebar but cap their inner
+     content column at ~960px so cards/hero don't stretch to 1200px+
+     on wide monitors (feels empty, not premium). The outer .app/.room
+     still fills the pane for background; the .content column centers. */
   .app,
   .room {
     max-width: none;
     margin: 0;
   }
-  .app .content,
-  .room > .content {
+  .app > .content,
+  .app > .topbar,
+  .room > .content,
+  .room > .topbar {
+    max-width: 960px;
+    margin-left: auto;
+    margin-right: auto;
+    width: 100%;
+  }
+  .app > .content {
     padding: 8px 28px 28px;
   }
 }
