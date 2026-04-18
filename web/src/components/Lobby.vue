@@ -298,12 +298,17 @@ const L = computed(() => isRu.value
   display: flex;
   flex-direction: column;
   gap: 8px;
-  padding: 8px 14px calc(12px + var(--tg-safe-area-inset-bottom, 0px));
+  padding: 8px 14px 12px;
   flex: 1;
   min-height: 0;
   overflow-y: auto;
   overflow-x: clip;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
 }
+/* Flex children of .lobby must not shrink — otherwise the tokens rail gets
+   crushed when total content exceeds the viewport. */
+.lobby > * { flex-shrink: 0; }
 
 .lobby-map {
   margin-bottom: 2px;
@@ -438,6 +443,7 @@ const L = computed(() => isRu.value
 /* ── Token rail ── */
 .tokens-rail {
   padding-bottom: 4px;
+  flex-shrink: 0;
 }
 .token-btn {
   width: 54px;
@@ -496,7 +502,8 @@ const L = computed(() => isRu.value
   display: flex;
   flex-direction: column;
   gap: 6px;
-  padding-top: 2px;
+  padding-top: 4px;
+  padding-bottom: calc(4px + var(--tg-safe-area-inset-bottom, 0px));
 }
 .lobby-actions .btn {
   width: 100%;

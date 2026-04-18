@@ -59,9 +59,27 @@ const L = computed(() => isRu.value
 
 const bonusAmount = ref(0);
 const bonusToast = ref(false);
-// Rejoin banner — shows when a roomId was saved in localStorage during a previous
-// session. Lets the user return to (or forget) an accidentally-closed game.
+// Rejoin banner — surfaces if a roomId was saved in localStorage within the
+// last REJOIN_TTL_MS. After 5 min the room has almost certainly been cleaned
+// up on the server, so the banner would just lead to a dead-end.
+const REJOIN_TTL_MS = 5 * 60 * 1000;
 const activeRoomId = ref<string | null>(null);
+
+function loadActiveRoom() {
+  try {
+    const id = localStorage.getItem("activeRoomId");
+    const tsRaw = localStorage.getItem("activeRoomTs");
+    const ts = tsRaw ? Number(tsRaw) : 0;
+    if (!id || !ts || Date.now() - ts > REJOIN_TTL_MS) {
+      localStorage.removeItem("activeRoomId");
+      localStorage.removeItem("activeRoomTs");
+      activeRoomId.value = null;
+      return;
+    }
+    activeRoomId.value = id;
+  } catch {}
+}
+
 onMounted(() => {
   const got = inv.claimDailyBonus();
   if (got > 0) {
@@ -70,7 +88,7 @@ onMounted(() => {
     notify("success");
     setTimeout(() => (bonusToast.value = false), 3500);
   }
-  try { activeRoomId.value = localStorage.getItem("activeRoomId"); } catch {}
+  loadActiveRoom();
 });
 
 function rejoinRoom() {
@@ -80,7 +98,10 @@ function rejoinRoom() {
 }
 function forgetRoom() {
   haptic("light");
-  try { localStorage.removeItem("activeRoomId"); } catch {}
+  try {
+    localStorage.removeItem("activeRoomId");
+    localStorage.removeItem("activeRoomTs");
+  } catch {}
   activeRoomId.value = null;
 }
 
@@ -92,16 +113,10 @@ function saveName() { setUserName(nameDraft.value); editingName.value = false; }
 function go(name: string) { haptic("light"); router.push({ name }); }
 function toggleLocale() { setLocale(isRu.value ? "en" : "ru"); }
 
-// Демо-данные для «Последняя игра» и «Союзники в игре» — временно, пока
-// серверные endpoints для last-match/online-friends не поднимем.
+// Список TG-друзей в игре. Пока сервер не отдаёт friends.status, держим
+// пустым — показывать заглушку с фейковыми именами хуже, чем скрыть секцию.
 // TODO: заменить на реальные данные (GET /api/users/:id/last-match, и friends.status).
-const allies = computed(() => [
-  { n: "Elara",  c: PLAYER_COLORS.elara,  s: "Playing" },
-  { n: "Magnus", c: PLAYER_COLORS.magnus, s: "Online" },
-  { n: "Finn",   c: PLAYER_COLORS.finn,   s: "Lobby" },
-  { n: "Oren",   c: PLAYER_COLORS.oren,   s: "Idle" },
-  { n: "Lady",   c: PLAYER_COLORS.lady,   s: "Online" },
-]);
+const allies = computed<{ n: string; c: string; s: string }[]>(() => []);
 
 function allyDotColor(status: string): string {
   if (status === "Playing") return "var(--emerald)";
@@ -246,20 +261,24 @@ const avatarInitial = computed(() => (userName.value?.[0] ?? "L").toUpperCase())
         </div>
       </div>
 
-      <!-- Allies in play -->
-      <div class="section-label" style="margin-bottom: 6px; text-align: center;">{{ L.alliesInPlay }}</div>
-      <div class="rail allies-rail" style="padding-bottom: 4px; justify-content: center;">
-        <div v-for="f in allies" :key="f.n" class="ally">
-          <div class="ally__wrap">
-            <Sigil :name="f.n" :color="f.c" :size="44"/>
-            <div
-              class="ally__dot"
-              :style="{ background: allyDotColor(f.s) }"
-            />
+      <!-- Allies in play — hidden until the server provides real friends.
+           Previously showed hardcoded demo data (Elara/Magnus/Finn/…) which
+           confused users into thinking those were their real TG friends. -->
+      <template v-if="allies.length > 0">
+        <div class="section-label" style="margin-bottom: 6px; text-align: center;">{{ L.alliesInPlay }}</div>
+        <div class="rail allies-rail" style="padding-bottom: 4px; justify-content: center;">
+          <div v-for="f in allies" :key="f.n" class="ally">
+            <div class="ally__wrap">
+              <Sigil :name="f.n" :color="f.c" :size="44"/>
+              <div
+                class="ally__dot"
+                :style="{ background: allyDotColor(f.s) }"
+              />
+            </div>
+            <div class="ally__name">{{ f.n }}</div>
           </div>
-          <div class="ally__name">{{ f.n }}</div>
         </div>
-      </div>
+      </template>
     </div>
 
     <transition name="bonus">

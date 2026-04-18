@@ -40,7 +40,8 @@ import { useInventoryStore } from "../stores/inventory";
 const inv = useInventoryStore();
 
 // Subscribe to server messages. Applies state, triggers haptics, auto-sends
-// the equipped token id the first time we're accepted into the room.
+// the equipped token id the first time we're accepted into the room, and
+// refreshes the rejoin TS so the banner only disappears after real inactivity.
 let equippedApplied = false;
 const off = ws.onMessage((m) => {
   game.applyMessage(m);
@@ -51,6 +52,7 @@ const off = ws.onMessage((m) => {
     const tokenId = inv.equippedToken;
     if (tokenId) ws.send({ type: "selectToken", tokenId });
   }
+  try { localStorage.setItem("activeRoomTs", String(Date.now())); } catch {}
 });
 onUnmounted(() => {
   off();
@@ -65,7 +67,10 @@ onMounted(() => {
     tgInitData: initData.value,
     name: userName.value || "Player",
   });
-  try { localStorage.setItem("activeRoomId", props.id); } catch {}
+  try {
+    localStorage.setItem("activeRoomId", props.id);
+    localStorage.setItem("activeRoomTs", String(Date.now()));
+  } catch {}
   const { userId } = useTelegram();
   game.loadFriends(userId.value);
 });
@@ -148,7 +153,10 @@ function leaveRoom() {
   }
   haptic("medium");
   ws.send({ type: "leave" });
-  try { localStorage.removeItem("activeRoomId"); } catch {}
+  try {
+    localStorage.removeItem("activeRoomId");
+    localStorage.removeItem("activeRoomTs");
+  } catch {}
   setTimeout(() => router.replace({ name: "home" }), 100);
 }
 
