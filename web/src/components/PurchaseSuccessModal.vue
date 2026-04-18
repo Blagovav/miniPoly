@@ -143,7 +143,7 @@ const itemDisplayName = computed(() => isRu.value && item.value.ru ? item.value.
 .ps-backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(26, 15, 5, 0.55);
+  background: rgba(26, 15, 5, 0.5);
   backdrop-filter: blur(2px);
   -webkit-backdrop-filter: blur(2px);
   z-index: 700;

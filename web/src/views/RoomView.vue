@@ -328,12 +328,12 @@ void t;
       />
     </template>
 
-    <!-- ── Initial load spinner (parchment scroll) ── -->
+    <!-- ── Initial load spinner (sigil, matches mockup) ── -->
     <LoadingScreen
       v-else
-      variant="scroll"
-      :fullscreen="false"
-      :message="locale === 'ru' ? 'Открываем ворота…' : 'Opening the gates…'"
+      variant="sigil"
+      :fullscreen="true"
+      :message="locale === 'ru' ? 'Герб пробуждается…' : 'The sigil awakens…'"
     />
 
     <!-- ── Global overlays (chat, card, auction, tile, profile, trade) ── -->
@@ -357,12 +357,18 @@ void t;
 
 <style scoped>
 .room {
+  width: 100%;
   max-width: 820px;
   margin: 0 auto;
-  min-height: 100dvh;
-  padding: 0 0 16px;
+  flex: 1;
+  min-height: 0;
+  padding: 0 0 calc(8px + var(--tg-safe-area-inset-bottom, 0px));
   position: relative;
   background: var(--bg);
+  display: flex;
+  flex-direction: column;
+  overflow-x: clip;
+  overflow-y: hidden;
 }
 
 /* Topbar title styling override — room-specific compact look. */

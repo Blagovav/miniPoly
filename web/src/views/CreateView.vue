@@ -23,6 +23,33 @@ const realmName = ref("Dunholm Keep");
 const boardId = ref<string>("eldmark");
 const boardModalOpen = ref(false);
 
+// Rules — tap-to-cycle presets. Currently UI-only; server doesn't accept these yet.
+const CASH_PRESETS = [1000, 1500, 2000, 2500, 3000];
+const ENTRY_PRESETS = [0, 50, 100, 250, 500, 1000];
+const startingCash = ref(1500);
+const auctionsOn = ref(true);
+const paceIdx = ref(1);
+const entryFee = ref(100);
+
+function cycle<T>(arr: readonly T[], current: T): T {
+  const i = arr.indexOf(current as any);
+  return arr[(i + 1) % arr.length];
+}
+function cycleCash() { haptic("light"); startingCash.value = cycle(CASH_PRESETS, startingCash.value); }
+function toggleAuctions() { haptic("light"); auctionsOn.value = !auctionsOn.value; }
+function cyclePace() { haptic("light"); paceIdx.value = (paceIdx.value + 1) % 3; }
+function cycleEntry() { haptic("light"); entryFee.value = cycle(ENTRY_PRESETS, entryFee.value); }
+
+const paceLabel = computed(() => {
+  const idx = paceIdx.value;
+  if (isRu.value) return ["Медленная", "Обычная", "Быстрая"][idx];
+  return ["Slow", "Normal", "Fast"][idx];
+});
+const auctionsLabel = computed(() => isRu.value
+  ? (auctionsOn.value ? "Вкл" : "Выкл")
+  : (auctionsOn.value ? "On" : "Off"));
+const fmtCash = (n: number) => n.toLocaleString("ru-RU").replace(/,/g, " ");
+
 const ws = useWs();
 const game = useGameStore();
 
@@ -182,26 +209,26 @@ function goBack() {
         </div>
       </div>
 
-      <!-- Rules (display-only summary) -->
+      <!-- Rules (tap to cycle) -->
       <div class="field">
         <label class="field__label">{{ L.rules }}</label>
         <div class="card rules-card">
-          <div class="rule-row">
+          <button type="button" class="rule-row" @click="cycleCash">
             <span>{{ L.ruleCash }}</span>
-            <span class="rule-val">◈ 1 500</span>
-          </div>
-          <div class="rule-row">
+            <span class="rule-val">◈ {{ fmtCash(startingCash) }}<span class="rule-caret">›</span></span>
+          </button>
+          <button type="button" class="rule-row" @click="toggleAuctions">
             <span>{{ L.ruleAuctions }}</span>
-            <span class="rule-val">{{ L.ruleAuctionsVal }}</span>
-          </div>
-          <div class="rule-row">
+            <span class="rule-val">{{ auctionsLabel }}<span class="rule-caret">›</span></span>
+          </button>
+          <button type="button" class="rule-row" @click="cyclePace">
             <span>{{ L.rulePace }}</span>
-            <span class="rule-val">{{ L.rulePaceVal }}</span>
-          </div>
-          <div class="rule-row last">
+            <span class="rule-val">{{ paceLabel }}<span class="rule-caret">›</span></span>
+          </button>
+          <button type="button" class="rule-row last" @click="cycleEntry">
             <span>{{ L.ruleEntry }}</span>
-            <span class="rule-val">◈ 100</span>
-          </div>
+            <span class="rule-val">◈ {{ fmtCash(entryFee) }}<span class="rule-caret">›</span></span>
+          </button>
         </div>
       </div>
 
@@ -329,21 +356,42 @@ function goBack() {
 .rules-card {
   margin-top: 6px;
   padding: 0;
+  overflow: hidden;
 }
 .rule-row {
+  width: 100%;
   padding: 12px 14px;
+  border: none;
   border-bottom: 1px solid var(--divider);
+  background: transparent;
   display: flex;
+  align-items: center;
   justify-content: space-between;
   font-size: 13px;
   color: var(--ink);
+  font-family: inherit;
+  cursor: pointer;
+  transition: background 120ms;
+  text-align: left;
 }
+.rule-row:hover { background: rgba(90, 58, 154, 0.04); }
+.rule-row:active { background: rgba(90, 58, 154, 0.08); }
 .rule-row.last {
   border-bottom: none;
 }
 .rule-val {
   color: var(--ink-2);
   font-weight: 500;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.rule-caret {
+  color: var(--ink-4);
+  font-size: 18px;
+  line-height: 1;
+  font-family: var(--font-display);
+  transform: translateY(-1px);
 }
 
 .create-btn {

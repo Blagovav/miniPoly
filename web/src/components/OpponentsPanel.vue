@@ -19,11 +19,10 @@ const emit = defineEmits<{
 
 const currentId = computed(() => props.room.players[props.room.currentTurn]?.id ?? null);
 
-// Все КРОМЕ меня (чтобы не дублировать свою карточку — она уже в HUD).
+// Все игроки, включая меня — чтобы можно было кликнуть по себе
+// и увидеть свои владения на карте.
 const opponents = computed(() =>
-  props.room.players
-    .map((p, idx) => ({ player: p, idx }))
-    .filter(({ player }) => player.id !== props.myPlayerId),
+  props.room.players.map((p, idx) => ({ player: p, idx })),
 );
 
 function propCount(p: Player): number {
@@ -45,6 +44,7 @@ function colorForIndex(idx: number): string {
         'opp--bankrupt': p.bankrupt,
         'opp--offline': !p.connected,
         'opp--current': p.id === currentId,
+        'opp--me': p.id === myPlayerId,
       }"
       @click="emit('openProfile', p)"
     >
@@ -103,6 +103,26 @@ function colorForIndex(idx: number): string {
 .opp--current {
   border-color: var(--primary);
   box-shadow: 0 0 0 1.5px var(--primary);
+}
+
+.opp--me {
+  background: linear-gradient(180deg, rgba(184, 137, 46, 0.08), var(--card));
+  border-color: var(--gold);
+}
+.opp--me::before {
+  content: '✦';
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  font-size: 9px;
+  color: var(--gold);
+  letter-spacing: 0.05em;
+  opacity: 0.95;
+  pointer-events: none;
+}
+.opp--me.opp--current {
+  box-shadow: 0 0 0 1.5px var(--gold);
+  border-color: var(--gold);
 }
 
 .opp--offline { opacity: 0.55; }

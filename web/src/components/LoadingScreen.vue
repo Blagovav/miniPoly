@@ -184,15 +184,12 @@ const msg = computed(() => {
   pointer-events: none;
 }
 .loading-overlay {
-  position: absolute;
-  inset: 0;
-  background: rgba(247, 238, 218, 0.88);
-  backdrop-filter: blur(6px);
-  -webkit-backdrop-filter: blur(6px);
+  flex: 1;
+  min-height: 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 90;
+  background: transparent;
   animation: ls-fade-in 200ms ease-out;
 }
 .loading-inline .loading-inner { padding: 20px; }

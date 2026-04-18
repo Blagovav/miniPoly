@@ -31,6 +31,10 @@ const L = computed(() => isRu.value
       closeApp: "Закрыть",
       daily: "Ежедневный бонус",
       yourName: "Твоё имя",
+      rejoinEyebrow: "Активная партия",
+      rejoinMsg: "Ты не попрощался с партией — вернуться в комнату?",
+      rejoinBtn: "Вернуться",
+      rejoinForget: "Забыть",
     }
   : {
       title: "MINI · POLY",
@@ -47,10 +51,17 @@ const L = computed(() => isRu.value
       closeApp: "Close",
       daily: "Daily bonus",
       yourName: "Your name",
+      rejoinEyebrow: "Active match",
+      rejoinMsg: "You never said farewell — return to the hall?",
+      rejoinBtn: "Return",
+      rejoinForget: "Forget",
     });
 
 const bonusAmount = ref(0);
 const bonusToast = ref(false);
+// Rejoin banner — shows when a roomId was saved in localStorage during a previous
+// session. Lets the user return to (or forget) an accidentally-closed game.
+const activeRoomId = ref<string | null>(null);
 onMounted(() => {
   const got = inv.claimDailyBonus();
   if (got > 0) {
@@ -59,7 +70,19 @@ onMounted(() => {
     notify("success");
     setTimeout(() => (bonusToast.value = false), 3500);
   }
+  try { activeRoomId.value = localStorage.getItem("activeRoomId"); } catch {}
 });
+
+function rejoinRoom() {
+  if (!activeRoomId.value) return;
+  haptic("medium");
+  router.push({ name: "room", params: { id: activeRoomId.value } });
+}
+function forgetRoom() {
+  haptic("light");
+  try { localStorage.removeItem("activeRoomId"); } catch {}
+  activeRoomId.value = null;
+}
 
 const editingName = ref(false);
 const nameDraft = ref(userName.value);
@@ -104,6 +127,28 @@ const avatarInitial = computed(() => (userName.value?.[0] ?? "L").toUpperCase())
     </div>
 
     <div class="content">
+      <!-- Rejoin card: surfaces an accidentally-closed game so the player
+           can hop back in (or dismiss it). -->
+      <transition name="rejoin-fade">
+        <div v-if="activeRoomId" class="rejoin-card">
+          <div class="rejoin-card__pulse">
+            <Icon name="dice" :size="20" color="#fff"/>
+          </div>
+          <div class="rejoin-card__body">
+            <div class="rejoin-card__eyebrow">{{ L.rejoinEyebrow }} · {{ activeRoomId }}</div>
+            <div class="rejoin-card__msg">{{ L.rejoinMsg }}</div>
+          </div>
+          <div class="rejoin-card__actions">
+            <button class="btn btn-primary rejoin-card__go" @click="rejoinRoom">
+              {{ L.rejoinBtn }}
+            </button>
+            <button class="rejoin-card__forget" @click="forgetRoom" :aria-label="L.rejoinForget">
+              <Icon name="x" :size="12" color="var(--ink-3)"/>
+            </button>
+          </div>
+        </div>
+      </transition>
+
       <!-- Name edit input (inline, dev-mode когда нет реального tg-профиля) -->
       <div v-if="!tg && editingName" class="card" style="margin-bottom: 10px; padding: 10px; display: flex; gap: 8px;">
         <input
@@ -237,6 +282,72 @@ const avatarInitial = computed(() => (userName.value?.[0] ?? "L").toUpperCase())
   min-height: 100dvh;
   background: var(--bg);
 }
+
+/* ── Rejoin card (active-match banner) ── */
+.rejoin-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  margin-bottom: 10px;
+  background: linear-gradient(180deg, rgba(184, 137, 46, 0.12) 0%, rgba(184, 137, 46, 0.05) 100%);
+  border: 1px solid var(--gold);
+  border-radius: var(--r-md);
+  box-shadow: 0 2px 8px rgba(184, 137, 46, 0.18), inset 0 1px 0 rgba(255, 255, 255, 0.35);
+}
+.rejoin-card__pulse {
+  width: 38px; height: 38px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, var(--gold-soft), var(--gold));
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+  box-shadow: inset 0 1px 2px rgba(255, 255, 255, 0.4), 0 2px 6px rgba(139, 105, 20, 0.35);
+  animation: rejoin-pulse 1.6s ease-in-out infinite;
+}
+.rejoin-card__body { flex: 1; min-width: 0; line-height: 1.25; }
+.rejoin-card__eyebrow {
+  font-family: var(--font-title);
+  font-size: 10px;
+  letter-spacing: 0.18em;
+  color: var(--gold);
+  text-transform: uppercase;
+  font-weight: 600;
+}
+.rejoin-card__msg {
+  font-family: var(--font-display);
+  font-size: 13px;
+  color: var(--ink);
+  margin-top: 2px;
+  font-style: italic;
+}
+.rejoin-card__actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+.rejoin-card__go {
+  padding: 8px 14px;
+  font-size: 13px;
+}
+.rejoin-card__forget {
+  width: 24px; height: 24px;
+  border-radius: 50%;
+  border: 1px solid var(--line);
+  background: var(--card);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 0;
+}
+.rejoin-card__forget:hover { background: var(--card-alt); }
+@keyframes rejoin-pulse {
+  0%, 100% { box-shadow: inset 0 1px 2px rgba(255,255,255,0.4), 0 2px 6px rgba(139,105,20,0.35); }
+  50%      { box-shadow: inset 0 1px 2px rgba(255,255,255,0.4), 0 2px 14px rgba(212,168,74,0.6); }
+}
+.rejoin-fade-enter-active, .rejoin-fade-leave-active { transition: opacity 220ms ease, transform 220ms ease; }
+.rejoin-fade-enter-from, .rejoin-fade-leave-to { opacity: 0; transform: translateY(-6px); }
 
 .hero {
   position: relative;

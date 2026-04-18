@@ -297,13 +297,12 @@ const L = computed(() => isRu.value
 .lobby {
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  padding: 10px 14px calc(24px + var(--tg-safe-area-inset-bottom, 0px));
-  /* Let the page scroll instead of clipping inside .content: Lobby is taller
-     than the viewport on phones with 6 seats + token rail + actions. */
-  flex: initial;
-  overflow: visible;
-  min-height: auto;
+  gap: 8px;
+  padding: 8px 14px calc(12px + var(--tg-safe-area-inset-bottom, 0px));
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: clip;
 }
 
 .lobby-map {
@@ -313,23 +312,23 @@ const L = computed(() => isRu.value
 /* ── Room-code card ── */
 .lobby-code {
   text-align: center;
-  padding: 16px 14px;
+  padding: 10px 14px;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 4px;
+  gap: 2px;
 }
 .lobby-code__label {
   font-size: 10px;
   color: var(--ink-3);
   letter-spacing: 0.15em;
   text-transform: uppercase;
-  margin-bottom: 4px;
+  margin-bottom: 2px;
 }
 .lobby-code__value {
   font-family: var(--font-display);
-  font-size: 28px;
-  letter-spacing: 0.3em;
+  font-size: 22px;
+  letter-spacing: 0.22em;
   color: var(--ink);
   line-height: 1.1;
 }
@@ -364,13 +363,13 @@ const L = computed(() => isRu.value
 .players {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
 }
 .player-row {
   background: var(--card);
   border: 1px solid var(--line);
   border-radius: 10px;
-  padding: 10px 12px;
+  padding: 8px 10px;
   gap: 10px;
 }
 .player-row--me {
@@ -441,8 +440,8 @@ const L = computed(() => isRu.value
   padding-bottom: 4px;
 }
 .token-btn {
-  width: 64px;
-  height: 64px;
+  width: 54px;
+  height: 54px;
   flex-shrink: 0;
   background: linear-gradient(145deg, var(--card-alt), var(--bg-deep));
   border: 1px solid var(--line);
@@ -472,8 +471,8 @@ const L = computed(() => isRu.value
 }
 .token-btn--taken { opacity: 0.35; cursor: not-allowed; }
 .token-medallion {
-  width: 44px;
-  height: 44px;
+  width: 38px;
+  height: 38px;
   border-radius: 50%;
   display: flex;
   align-items: center;
@@ -496,13 +495,13 @@ const L = computed(() => isRu.value
 .lobby-actions {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  padding-top: 4px;
+  gap: 6px;
+  padding-top: 2px;
 }
 .lobby-actions .btn {
   width: 100%;
-  padding: 14px;
-  font-size: 15px;
+  padding: 11px;
+  font-size: 14px;
 }
 .waiting-hint {
   text-align: center;

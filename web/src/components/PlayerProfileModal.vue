@@ -272,8 +272,9 @@ const L = computed(() => isRu.value
   border-top: 3px solid var(--primary);
   border-radius: 16px 16px 0 0;
   padding: 14px 16px calc(20px + var(--tg-safe-area-inset-bottom, 0px));
-  animation: scrollUnfurl 320ms cubic-bezier(0.34, 1.56, 0.64, 1);
+  animation: sheet-unfurl 320ms cubic-bezier(0.34, 1.56, 0.64, 1);
   transform-origin: bottom;
+  box-shadow: 0 -8px 24px rgba(42, 29, 16, 0.25);
 }
 .grab-bar {
   width: 40px;
@@ -529,10 +530,15 @@ const L = computed(() => isRu.value
 }
 
 /* ── Animations ── */
-@keyframes scrollUnfurl {
-  from { transform: scaleY(0.3) translateY(-30px); opacity: 0; }
-  to { transform: scaleY(1) translateY(0); opacity: 1; }
+@keyframes sheet-unfurl {
+  0% { transform: translateY(100%); opacity: 0; }
+  100% { transform: translateY(0); opacity: 1; }
 }
 .fade-enter-active, .fade-leave-active { transition: opacity 0.2s ease; }
 .fade-enter-from, .fade-leave-to { opacity: 0; }
+.fade-enter-active .modal-card,
+.fade-leave-active .modal-card {
+  transition: transform 0.22s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.fade-leave-to .modal-card { transform: translateY(20%); }
 </style>

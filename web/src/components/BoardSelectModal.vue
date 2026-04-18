@@ -186,6 +186,13 @@ function boardDesc(id: string) {
   border-radius: 16px 16px 0 0;
   border: 1px solid var(--line);
   overflow: hidden;
+  animation: sheet-unfurl 320ms cubic-bezier(0.34, 1.56, 0.64, 1);
+  transform-origin: bottom;
+  box-shadow: 0 -8px 24px rgba(42, 29, 16, 0.3);
+}
+@keyframes sheet-unfurl {
+  0% { transform: translateY(100%); opacity: 0; }
+  100% { transform: translateY(0); opacity: 1; }
 }
 .bs-head {
   padding: 16px 20px 12px;
@@ -342,4 +349,9 @@ function boardDesc(id: string) {
 
 .bs-fade-enter-active, .bs-fade-leave-active { transition: opacity 200ms ease; }
 .bs-fade-enter-from, .bs-fade-leave-to { opacity: 0; }
+.bs-fade-enter-active .bs-modal,
+.bs-fade-leave-active .bs-modal {
+  transition: transform 0.22s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.bs-fade-leave-to .bs-modal { transform: translateY(20%); }
 </style>
