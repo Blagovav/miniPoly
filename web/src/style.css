@@ -213,14 +213,6 @@ body {
   .room > .content {
     padding: 8px 28px 28px;
   }
-
-  /* Hero + grid feel less cramped on wide screens. */
-  .home .hero { padding: 22px 24px 20px; }
-  .home .hero__title { font-size: 26px; }
-  .home .hero__sub   { font-size: 13px; }
-  .home .quick-grid  { gap: 14px; }
-  .home .home-tile   { min-height: 100px; padding: 18px 16px; }
-  .home .home-tile__title { font-size: 16px; }
 }
 
 /* Telegram safe areas */

@@ -563,4 +563,37 @@ const avatarInitial = computed(() => (userName.value?.[0] ?? "L").toUpperCase())
 }
 .bonus-enter-active, .bonus-leave-active { transition: transform 0.3s cubic-bezier(0.3, 1.2, 0.4, 1), opacity 0.2s; }
 .bonus-enter-from, .bonus-leave-to { transform: translate(-50%, -30px); opacity: 0; }
+
+/* Desktop: wider viewport, spacious mockup layout. */
+@media (min-width: 900px) {
+  .hero {
+    padding: 24px 28px 22px;
+    margin-bottom: 16px;
+    border-radius: 14px;
+  }
+  .hero__title { font-size: 28px; margin-top: 4px; }
+  .hero__sub { font-size: 13px; margin-top: 4px; }
+  .hero__cta { margin-top: 16px; gap: 10px; }
+  .hero__play { padding: 14px; font-size: 15px; }
+  .hero__crown { width: 72px; top: 12px; right: 16px; }
+
+  .quick-grid {
+    gap: 16px;
+    margin-bottom: 16px;
+  }
+  .home-tile {
+    min-height: 130px;
+    padding: 20px 22px;
+    gap: 12px;
+    border-radius: 12px;
+  }
+  .home-tile__icon {
+    width: 44px; height: 44px;
+    border-radius: 10px;
+  }
+  .home-tile__title { font-size: 17px; }
+  .home-tile__sub { font-size: 12px; margin-top: 3px; }
+
+  .last-match { padding: 16px 18px; margin-bottom: 16px; }
+}
 </style>
