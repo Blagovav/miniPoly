@@ -238,8 +238,11 @@ void lighten;
   position: relative;
   aspect-ratio: 1/1;
   display: grid;
-  grid-template-columns: repeat(11, 1fr);
-  grid-template-rows: repeat(11, 1fr);
+  /* Perimeter tiles get 1.4fr, inner 9 columns/rows stay 1fr — matches the
+     classic Monopoly proportions where edge tiles are taller than the inner
+     emblem is wide, without having to change the grid span of .board-center. */
+  grid-template-columns: 1.4fr repeat(9, 1fr) 1.4fr;
+  grid-template-rows: 1.4fr repeat(9, 1fr) 1.4fr;
   gap: 1px;
   background: var(--ink-2);
   border-radius: 6px;
