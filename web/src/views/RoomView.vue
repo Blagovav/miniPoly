@@ -19,11 +19,13 @@ import CardModal from "../components/CardModal.vue";
 import CardHistoryModal from "../components/CardHistoryModal.vue";
 import AuctionModal from "../components/AuctionModal.vue";
 import TileInfoModal from "../components/TileInfoModal.vue";
-import Confetti from "../components/Confetti.vue";
 import OpponentsPanel from "../components/OpponentsPanel.vue";
 import PlayerProfileModal from "../components/PlayerProfileModal.vue";
 import TradeBanner from "../components/TradeBanner.vue";
 import Icon from "../components/Icon.vue";
+import LoadingScreen from "../components/LoadingScreen.vue";
+import CoronationModal from "../components/CoronationModal.vue";
+import { ORDERED_PLAYER_COLORS } from "../utils/palette";
 import type { Player } from "../../../shared/types";
 
 const props = defineProps<{ id: string }>();
@@ -305,42 +307,24 @@ void t;
         :on-open-card-history="openCardHistory"
       />
 
-      <!-- ── Winner overlay (end of game) ── -->
-      <transition name="fade">
-        <div v-if="isEnded && winner" class="overlay">
-          <Confetti />
-          <div class="winner-card">
-            <div class="winner-card__fleuron">❦</div>
-            <div class="winner-card__crown">
-              <Icon name="crown" :size="64" color="var(--gold)" />
-            </div>
-            <div class="winner-card__kicker">
-              {{ locale === 'ru' ? 'ПОБЕДИТЕЛЬ' : 'VICTOR' }}
-            </div>
-            <div class="winner-card__name">{{ winner.name }}</div>
-            <div class="winner-card__sub">
-              {{ locale === 'ru' ? 'Корона твоя' : 'The crown is yours' }}
-            </div>
-            <button
-              class="btn btn-primary winner-card__btn"
-              @click="router.replace({ name: 'home' })"
-            >
-              {{ t("actions.ok") }}
-            </button>
-          </div>
-        </div>
-      </transition>
+      <!-- ── Winner overlay (end of game) — Coronation modal ── -->
+      <CoronationModal
+        :open="isEnded && !!winner"
+        :winner-name="winner?.name || ''"
+        :winner-color="ORDERED_PLAYER_COLORS[(game.room?.players?.findIndex(p => p.id === winner?.id) ?? 0)]"
+        :treasury="winner?.cash"
+        :rank-delta="120"
+        :on-close="() => router.replace({ name: 'home' })"
+      />
     </template>
 
-    <!-- ── Initial load spinner ── -->
-    <div v-else class="loading">
-      <div class="spinner">
-        <Icon name="dice" :size="48" color="var(--primary)" />
-      </div>
-      <div class="loading-text">
-        {{ locale === 'ru' ? 'Открываем ворота…' : 'Opening the gates…' }}
-      </div>
-    </div>
+    <!-- ── Initial load spinner (parchment scroll) ── -->
+    <LoadingScreen
+      v-else
+      variant="scroll"
+      :fullscreen="false"
+      :message="locale === 'ru' ? 'Открываем ворота…' : 'Opening the gates…'"
+    />
 
     <!-- ── Global overlays (chat, card, auction, tile, profile, trade) ── -->
     <Chat v-if="game.room" :on-send="sendChat" />
@@ -414,103 +398,6 @@ void t;
   width: 4px; height: 70%;
   background: rgba(0, 0, 0, 0.2);
   border-radius: 2px;
-}
-
-/* ── Loading placeholder ── */
-.loading {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 14px;
-  min-height: 60vh;
-  padding: 40px 20px;
-}
-.spinner { animation: spin 2s linear infinite; }
-@keyframes spin { to { transform: rotate(360deg); } }
-.loading-text {
-  font-family: var(--font-display);
-  font-size: 13px;
-  color: var(--ink-3);
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-}
-
-/* ── Winner overlay ── */
-.overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(26, 15, 5, 0.55);
-  backdrop-filter: blur(3px);
-  -webkit-backdrop-filter: blur(3px);
-  display: grid;
-  place-items: center;
-  z-index: 100;
-}
-.winner-card {
-  position: relative;
-  background: var(--card-alt);
-  border: 1px solid var(--line-strong);
-  border-top: 4px solid var(--gold);
-  border-radius: var(--r-lg);
-  padding: 32px 28px 24px;
-  text-align: center;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  align-items: center;
-  max-width: 320px;
-  margin: 16px;
-  box-shadow: 0 20px 48px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.5);
-}
-.winner-card::before {
-  content: '';
-  position: absolute;
-  inset: 4px;
-  border: 1px solid var(--gold);
-  opacity: 0.35;
-  border-radius: calc(var(--r-lg) - 2px);
-  pointer-events: none;
-}
-.winner-card__fleuron {
-  font-family: var(--font-title);
-  font-size: 18px;
-  color: var(--gold);
-  letter-spacing: 0.2em;
-  margin-bottom: 4px;
-}
-.winner-card__crown {
-  filter: drop-shadow(0 4px 12px rgba(184, 137, 46, 0.45));
-  margin-bottom: 4px;
-}
-.winner-card__kicker {
-  font-family: var(--font-title);
-  font-size: 12px;
-  letter-spacing: 0.35em;
-  color: var(--gold);
-  margin-bottom: 2px;
-  text-transform: uppercase;
-}
-.winner-card__name {
-  font-family: var(--font-display);
-  font-size: 26px;
-  color: var(--ink);
-  line-height: 1.15;
-  font-weight: 400;
-  margin: 2px 0 4px;
-}
-.winner-card__sub {
-  font-family: var(--font-display);
-  font-size: 13px;
-  color: var(--ink-3);
-  font-style: italic;
-  letter-spacing: 0.03em;
-  margin-bottom: 14px;
-}
-.winner-card__btn {
-  padding: 12px 32px;
-  font-size: 14px;
-  min-width: 160px;
 }
 
 /* ── Triples banner ── */

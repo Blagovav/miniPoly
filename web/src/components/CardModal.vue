@@ -94,9 +94,9 @@ function close() {
   animation: scrollUnfurl 360ms cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 .decree--chance {
-  border: 2px solid var(--gold);
+  border: 2px solid var(--accent);
   background:
-    radial-gradient(ellipse at 50% 0%, rgba(212, 168, 74, 0.15), transparent 65%),
+    radial-gradient(ellipse at 50% 0%, rgba(139, 26, 26, 0.12), transparent 65%),
     var(--card-alt);
 }
 .decree--chest {
@@ -117,7 +117,7 @@ function close() {
 .flourish--tr { top: -1px; right: -1px; border-top-style: solid; border-right-style: solid; border-top-width: 2px; border-right-width: 2px; }
 .flourish--bl { bottom: -1px; left: -1px; border-bottom-style: solid; border-left-style: solid; border-bottom-width: 2px; border-left-width: 2px; }
 .flourish--br { bottom: -1px; right: -1px; border-bottom-style: solid; border-right-style: solid; border-bottom-width: 2px; border-right-width: 2px; }
-.decree--chance .flourish { border-color: var(--gold); }
+.decree--chance .flourish { border-color: var(--accent); }
 .decree--chest .flourish { border-color: var(--primary); }
 
 /* ── Eyebrow ── */
@@ -144,7 +144,7 @@ function close() {
   box-shadow: inset 0 2px 3px rgba(255, 255, 255, 0.3), inset 0 -2px 3px rgba(0, 0, 0, 0.3), 0 6px 14px rgba(0, 0, 0, 0.25);
 }
 .decree--chance .decree__seal {
-  background: radial-gradient(circle at 35% 30%, #d4a84a 0%, #b8892e 55%, #8b6914 100%);
+  background: radial-gradient(circle at 35% 30%, #c04040 0%, #8b1a1a 55%, #5a0e0e 100%);
 }
 .decree--chest .decree__seal {
   background: radial-gradient(circle at 35% 30%, #8a68d0 0%, #5a3a9a 55%, #3e2272 100%);
