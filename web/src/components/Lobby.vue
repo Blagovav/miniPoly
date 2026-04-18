@@ -11,6 +11,8 @@ import { useInventoryStore } from "../stores/inventory";
 import Icon from "./Icon.vue";
 import Sigil from "./Sigil.vue";
 import TokenArt from "./TokenArt.vue";
+import MapPickRow from "./MapPickRow.vue";
+import BoardSelectModal from "./BoardSelectModal.vue";
 import { ORDERED_PLAYER_COLORS, lighten, tokenArtFor } from "../utils/palette";
 
 const props = defineProps<{
@@ -26,6 +28,10 @@ const inv = useInventoryStore();
 const { t, locale } = useI18n();
 const isRu = computed(() => locale.value === "ru");
 void t;
+
+// Lobby-only board pick (display-only — server doesn't pick boards yet).
+const boardId = ref<string>("eldmark");
+const boardModalOpen = ref(false);
 
 // Available tokens = free set + anything the player owns from the shop.
 const availableTokens = computed(() => {
@@ -155,6 +161,16 @@ const L = computed(() => isRu.value
       </button>
     </div>
 
+    <!-- ── Map (host can change) ───────────────────────────── -->
+    <div class="section-label">{{ isRu ? "Карта" : "Map" }}</div>
+    <div class="lobby-map">
+      <MapPickRow
+        :board-id="boardId"
+        :editable="isHost"
+        :on-open="() => (boardModalOpen = true)"
+      />
+    </div>
+
     <!-- ── Players section ─────────────────────────────────── -->
     <div class="section-label">{{ L.players }}</div>
     <div class="players">
@@ -261,6 +277,14 @@ const L = computed(() => isRu.value
         {{ L.destroy }}
       </button>
     </div>
+
+    <BoardSelectModal
+      :open="boardModalOpen"
+      :selected-id="boardId"
+      :is-host="isHost"
+      :on-close="() => (boardModalOpen = false)"
+      :on-select="(id) => (boardId = id)"
+    />
   </div>
 </template>
 
@@ -273,8 +297,17 @@ const L = computed(() => isRu.value
 .lobby {
   display: flex;
   flex-direction: column;
-  gap: 14px;
-  padding: 14px;
+  gap: 10px;
+  padding: 10px 14px calc(24px + var(--tg-safe-area-inset-bottom, 0px));
+  /* Let the page scroll instead of clipping inside .content: Lobby is taller
+     than the viewport on phones with 6 seats + token rail + actions. */
+  flex: initial;
+  overflow: visible;
+  min-height: auto;
+}
+
+.lobby-map {
+  margin-bottom: 2px;
 }
 
 /* ── Room-code card ── */
