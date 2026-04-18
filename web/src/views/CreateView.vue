@@ -6,6 +6,8 @@ import { useTelegram } from "../composables/useTelegram";
 import { useWs } from "../composables/useWs";
 import { useGameStore } from "../stores/game";
 import Icon from "../components/Icon.vue";
+import MapPickRow from "../components/MapPickRow.vue";
+import BoardSelectModal from "../components/BoardSelectModal.vue";
 
 const { locale } = useI18n();
 const router = useRouter();
@@ -17,6 +19,9 @@ const maxPlayers = ref(4);
 const loading = ref(false);
 // Realm name — display-only for now (server doesn't support room names yet).
 const realmName = ref("Dunholm Keep");
+// Selected board (display-only for now — server doesn't pick boards yet).
+const boardId = ref<string>("eldmark");
+const boardModalOpen = ref(false);
 
 const ws = useWs();
 const game = useGameStore();
@@ -47,6 +52,7 @@ const L = computed(() => isRu.value
       rulePace: "Скорость",
       rulePaceVal: "Обычная",
       ruleEntry: "Ставка",
+      mapLabel: "Карта",
       create: "Созвать совет",
       back: "Назад",
     }
@@ -66,6 +72,7 @@ const L = computed(() => isRu.value
       rulePace: "Pace",
       rulePaceVal: "Normal",
       ruleEntry: "Entry",
+      mapLabel: "Map",
       create: "Open the Hall",
       back: "Back",
     });
@@ -163,6 +170,18 @@ function goBack() {
         </div>
       </div>
 
+      <!-- Map picker -->
+      <div class="field">
+        <label class="field__label">{{ L.mapLabel }}</label>
+        <div style="margin-top: 6px;">
+          <MapPickRow
+            :board-id="boardId"
+            :editable="true"
+            :on-open="() => (boardModalOpen = true)"
+          />
+        </div>
+      </div>
+
       <!-- Rules (display-only summary) -->
       <div class="field">
         <label class="field__label">{{ L.rules }}</label>
@@ -196,6 +215,14 @@ function goBack() {
         {{ L.create }}
       </button>
     </div>
+
+    <BoardSelectModal
+      :open="boardModalOpen"
+      :selected-id="boardId"
+      :is-host="true"
+      :on-close="() => (boardModalOpen = false)"
+      :on-select="(id) => (boardId = id)"
+    />
   </div>
 </template>
 

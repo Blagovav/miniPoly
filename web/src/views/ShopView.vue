@@ -7,6 +7,8 @@ import { useInventoryStore } from "../stores/inventory";
 import { useTelegram } from "../composables/useTelegram";
 import Icon from "../components/Icon.vue";
 import TokenArt from "../components/TokenArt.vue";
+import BoardPreview from "../components/BoardPreview.vue";
+import { BOARDS, RARITY_META, type BoardDef } from "../utils/boards";
 import { tokenArtFor, lighten, PLAYER_COLORS } from "../utils/palette";
 
 type ShopItem = (typeof SHOP_ITEMS)[number];
@@ -37,6 +39,8 @@ const L = computed(() => isRu.value
       rarityLegendary: "Легенда",
       emptyMaps: "Карты скоро",
       emptyDice: "Кости скоро",
+      mapOwned: "В игре",
+      mapBuy: "Купить",
     }
   : {
       title: "The Bazaar",
@@ -53,6 +57,8 @@ const L = computed(() => isRu.value
       rarityLegendary: "Legendary",
       emptyMaps: "Maps coming soon",
       emptyDice: "Dice coming soon",
+      mapOwned: "Owned",
+      mapBuy: "Buy",
     });
 
 const tab = ref<TabId>("tokens");
@@ -118,6 +124,22 @@ function rarityColor(r: ReturnType<typeof rarityOf>): string {
 
 function itemName(item: ShopItem): string {
   return item.name[locale.value as "en" | "ru"];
+}
+
+function boardLabel(b: BoardDef): string {
+  return isRu.value ? b.ru : b.name;
+}
+function boardRarityLabel(b: BoardDef): string {
+  const m = RARITY_META[b.rarity];
+  return isRu.value ? m.ru : m.en;
+}
+function boardRarityColor(b: BoardDef): string {
+  return RARITY_META[b.rarity].color;
+}
+function boardCtaBg(b: BoardDef): string {
+  if (b.owned) return "var(--bg-deep)";
+  if (b.rarity === "legendary" || b.rarity === "epic") return "var(--gold)";
+  return "var(--primary)";
 }
 
 function goBack() {
@@ -244,6 +266,9 @@ function discStyle(item: ShopItem) {
       <div class="coins-chip">
         <Icon name="coin" :size="14" color="var(--gold)"/>
         <span class="money">{{ inv.coins }}</span>
+        <span class="coins-chip__sep">·</span>
+        <Icon name="star" :size="13" color="var(--gold)"/>
+        <span class="money">42</span>
       </div>
     </div>
 
@@ -261,10 +286,54 @@ function discStyle(item: ShopItem) {
         </button>
       </div>
 
-      <!-- Empty state for Maps / Dice tabs (not wired to catalog yet) -->
-      <div v-if="tab === 'maps' || tab === 'dice'" class="coming-soon">
-        <Icon :name="tab === 'maps' ? 'castle' : 'dice'" :size="36" color="var(--ink-3)"/>
-        <p>{{ tab === 'maps' ? L.emptyMaps : L.emptyDice }}</p>
+      <!-- Empty state for Dice tab (not wired to catalog yet) -->
+      <div v-if="tab === 'dice'" class="coming-soon">
+        <Icon name="dice" :size="36" color="var(--ink-3)"/>
+        <p>{{ L.emptyDice }}</p>
+      </div>
+
+      <!-- Maps tab — heraldic boards with rarity, BoardPreview -->
+      <div v-else-if="tab === 'maps'" class="shop-grid">
+        <div
+          v-for="b in BOARDS"
+          :key="b.id"
+          class="shop-card map-card"
+          :class="{ legendary: b.rarity === 'legendary', owned: b.owned }"
+        >
+          <div v-if="b.owned" class="badge badge--owned">
+            <Icon name="check" :size="10" color="#fff"/>
+            <span>{{ L.mapOwned.toUpperCase() }}</span>
+          </div>
+          <div v-else-if="b.rarity === 'legendary'" class="badge badge--premium">
+            <span>★ PRO</span>
+          </div>
+
+          <div class="map-card__preview" :style="{ borderColor: b.palette.gold }">
+            <BoardPreview :board="b" :size="140"/>
+          </div>
+
+          <div class="item-name">{{ boardLabel(b) }}</div>
+          <div class="item-rarity" :style="{ color: boardRarityColor(b) }">
+            {{ boardRarityLabel(b) }}
+          </div>
+
+          <div class="row between card-foot">
+            <div
+              class="price"
+              :class="{ 'price--epic': b.rarity === 'legendary' || b.rarity === 'epic' }"
+            >
+              <template v-if="b.owned">—</template>
+              <template v-else>{{ b.unit === '★' ? '★ ' + b.price : '◈ ' + b.price }}</template>
+            </div>
+            <button
+              class="btn cta"
+              :disabled="b.owned"
+              :style="{ background: boardCtaBg(b), color: b.owned ? 'var(--ink-3)' : '#fff' }"
+            >
+              <span>{{ b.owned ? L.mapOwned : L.mapBuy }}</span>
+            </button>
+          </div>
+        </div>
       </div>
 
       <!-- Grid of item cards -->
@@ -393,6 +462,21 @@ function discStyle(item: ShopItem) {
   color: var(--ink);
   font-variant-numeric: tabular-nums;
   font-weight: 600;
+}
+.coins-chip__sep {
+  color: var(--line-strong);
+  font-size: 12px;
+}
+
+/* Maps tab card overrides */
+.map-card { padding: 10px; }
+.map-card.legendary { border-color: var(--gold); box-shadow: 0 0 12px rgba(212, 168, 74, 0.25); }
+.map-card__preview {
+  border-radius: 8px;
+  overflow: hidden;
+  border: 2px solid var(--gold);
+  margin-bottom: 10px;
+  line-height: 0;
 }
 
 /* Tabs (5 narrow) */
