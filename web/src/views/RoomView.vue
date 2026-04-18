@@ -386,7 +386,11 @@ void t;
   display: flex;
   flex-direction: column;
   overflow-x: clip;
-  overflow-y: hidden;
+  /* Let the column scroll when board + HUD exceed viewport height.
+     Telegram disables native vertical swipes in fullscreen so inner scroll
+     works without fighting the app dismiss gesture. */
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 /* Topbar title styling override — room-specific compact look. */
