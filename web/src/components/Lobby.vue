@@ -254,7 +254,7 @@ const L = computed(() => isRu.value
           :size="16"
           color="var(--emerald)"
         />
-        {{ me.ready ? L.ready : L.notReady }}
+        {{ me.ready ? L.notReady : L.ready }}
       </button>
 
       <button
