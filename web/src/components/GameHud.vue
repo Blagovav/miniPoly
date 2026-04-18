@@ -159,10 +159,15 @@ function openCurrentTile() {
       </div>
       <div v-if="me.getOutCards > 0" class="me-card__row">
         <span class="me-card__label">
-          <Icon name="key" :size="12" color="var(--ink-3)" />
-          <span>{{ locale === 'ru' ? 'Ключ от темницы' : 'Jail key' }}</span>
+          {{ locale === 'ru' ? 'Карта Выхода' : 'Get-Out card' }}
         </span>
-        <span class="me-card__val">{{ me.getOutCards }}</span>
+        <span
+          class="jail-key-chip"
+          :title="locale === 'ru' ? 'Используй в тюрьме чтобы выйти бесплатно' : 'Use it in jail to skip the $50 fine'"
+        >
+          <Icon name="key" :size="12" color="#2a1d10" />
+          <span>×&nbsp;{{ me.getOutCards }}</span>
+        </span>
       </div>
     </div>
   </div>
@@ -382,5 +387,22 @@ function openCurrentTile() {
   font-family: var(--font-display);
   font-size: 14px;
   color: var(--ink);
+}
+
+/* Get-Out-of-Jail-Free chip — gold pill so the player notices they own one. */
+.jail-key-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 9px;
+  background: linear-gradient(180deg, var(--gold-soft) 0%, var(--gold) 100%);
+  color: #2a1d10;
+  border-radius: 999px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35), 0 1px 2px rgba(0, 0, 0, 0.12);
+  cursor: help;
 }
 </style>

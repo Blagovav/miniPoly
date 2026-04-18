@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch } from "vue";
+import { computed, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { useGameStore } from "../stores/game";
 import type { DrawnCard, Locale } from "../../../shared/types";
@@ -11,6 +11,13 @@ const visible = ref(false);
 const current = ref<DrawnCard | null>(null);
 let timeout: ReturnType<typeof setTimeout> | null = null;
 
+// Get-Out-of-Jail-Free cards stay in inventory — surface that explicitly
+// so the player knows they can use it later (jail key in HUD + Pay/Card
+// buttons when they actually land in jail).
+const isJailKeyCard = computed(() =>
+  current.value?.cardId === "ch-gooj" || current.value?.cardId === "co-gooj",
+);
+
 watch(
   () => game.room?.lastCard?.ts,
   (ts) => {
@@ -18,7 +25,8 @@ watch(
     current.value = game.room.lastCard;
     visible.value = true;
     if (timeout) clearTimeout(timeout);
-    timeout = setTimeout(() => (visible.value = false), 3500);
+    // Jail-key cards get a longer dwell so the keep-message is read.
+    timeout = setTimeout(() => (visible.value = false), isJailKeyCard.value ? 5000 : 3500);
   },
 );
 
@@ -55,6 +63,15 @@ function close() {
 
         <div class="decree__text">
           {{ current.text[locale as Locale] }}
+        </div>
+
+        <div v-if="isJailKeyCard" class="decree__keep">
+          <span class="decree__keep-key">🗝</span>
+          <span>
+            {{ locale === "ru"
+              ? "Сохранена в инвентаре. Используй её, когда попадёшь в темницу."
+              : "Saved to your inventory. Use it next time you're jailed." }}
+          </span>
         </div>
 
         <button class="btn btn-primary decree__close" @click="close">
@@ -160,6 +177,24 @@ function close() {
 }
 
 /* ── Button ── */
+.decree__keep {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: rgba(212, 168, 74, 0.12);
+  border: 1px solid rgba(212, 168, 74, 0.4);
+  border-radius: 8px;
+  font-size: 11px;
+  color: var(--ink-2);
+  line-height: 1.35;
+  text-align: left;
+}
+.decree__keep-key {
+  font-size: 18px;
+  flex-shrink: 0;
+  filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.15));
+}
 .decree__close {
   width: 100%;
   margin-top: 6px;
