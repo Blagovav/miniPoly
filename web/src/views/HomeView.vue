@@ -595,5 +595,9 @@ const avatarInitial = computed(() => (userName.value?.[0] ?? "L").toUpperCase())
   .home-tile__sub { font-size: 12px; margin-top: 3px; }
 
   .last-match { padding: 16px 18px; margin-bottom: 16px; }
+
+  /* Sidebar already shows brand + nav at this breakpoint — the home-view
+     topbar (avatar + MINI·POLY title + bell/globe) becomes duplicate chrome. */
+  .home > .topbar { display: none; }
 }
 </style>
