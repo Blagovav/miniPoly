@@ -12,6 +12,7 @@ import {
   mortgageProperty,
   moveToTripleTile,
   passAuction,
+  payJailFine,
   placeBid,
   proposeTrade,
   reassignHostIfNeeded,
@@ -23,6 +24,7 @@ import {
   skipBuy,
   startGame,
   unmortgageProperty,
+  useGetOutCard,
 } from "../game/engine";
 import { deleteRoom as mgrDeleteRoom } from "../rooms/manager";
 
@@ -158,6 +160,10 @@ function handleMessage(conn: Conn, ws: WebSocket, msg: ClientMessage): void {
       return handlePlaceBid(conn, msg.amount);
     case "passAuction":
       return handlePassAuction(conn);
+    case "payJail":
+      return handlePayJail(conn);
+    case "useJailCard":
+      return handleUseJailCard(conn);
     default:
       conn.send({ type: "error", message: "unknown message" });
   }
@@ -318,6 +324,30 @@ function handlePassAuction(conn: Conn): void {
   const res = passAuction(ctx.room, ctx.p.id);
   if (!res.ok) {
     conn.send({ type: "error", message: res.error ?? "pass failed" });
+    return;
+  }
+  sendState(ctx.room.id);
+  onStateChange(ctx.room);
+}
+
+function handlePayJail(conn: Conn): void {
+  const ctx = getRoomAndPlayer(conn);
+  if (!ctx || !ctx.p) return;
+  const res = payJailFine(ctx.room, ctx.p.id);
+  if (!res.ok) {
+    conn.send({ type: "error", message: res.error ?? "can't pay jail fine" });
+    return;
+  }
+  sendState(ctx.room.id);
+  onStateChange(ctx.room);
+}
+
+function handleUseJailCard(conn: Conn): void {
+  const ctx = getRoomAndPlayer(conn);
+  if (!ctx || !ctx.p) return;
+  const res = useGetOutCard(ctx.room, ctx.p.id);
+  if (!res.ok) {
+    conn.send({ type: "error", message: res.error ?? "can't use jail card" });
     return;
   }
   sendState(ctx.room.id);

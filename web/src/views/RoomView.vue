@@ -120,6 +120,14 @@ function endTurn() {
   haptic("light");
   ws.send({ type: "endTurn" });
 }
+function payJail() {
+  haptic("medium");
+  ws.send({ type: "payJail" });
+}
+function useJailCard() {
+  haptic("light");
+  ws.send({ type: "useJailCard" });
+}
 function sendChat(text: string) {
   ws.send({ type: "chat", text });
 }
@@ -304,6 +312,8 @@ void t;
         :on-buy="buy"
         :on-skip-buy="skipBuy"
         :on-end-turn="endTurn"
+        :on-pay-jail="payJail"
+        :on-use-jail-card="useJailCard"
         :on-open-card-history="openCardHistory"
       />
 

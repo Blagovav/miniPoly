@@ -23,6 +23,8 @@ const props = defineProps<{
   onBuy: () => void;
   onSkipBuy: () => void;
   onEndTurn: () => void;
+  onPayJail?: () => void;
+  onUseJailCard?: () => void;
   onOpenCardHistory?: () => void;
 }>();
 
@@ -99,6 +101,24 @@ function openCurrentTile() {
           {{ locale === 'ru' ? 'Фишка двигается…' : 'Moving…' }}
         </div>
         <template v-else-if="isMyTurn && room.phase === 'rolling'">
+          <!-- Jail options: pay $50 OR use Get-Out card OR roll for doubles -->
+          <template v-if="me?.inJail">
+            <button
+              v-if="onPayJail && me.cash >= 50"
+              class="btn btn-emerald"
+              @click="onPayJail"
+            >
+              {{ locale === 'ru' ? 'Заплатить $50' : 'Pay $50' }}
+            </button>
+            <button
+              v-if="onUseJailCard && me.getOutCards > 0"
+              class="btn btn-ghost"
+              @click="onUseJailCard"
+            >
+              <Icon name="key" :size="14" color="var(--gold)" />
+              {{ locale === 'ru' ? 'Карта' : 'Card' }}
+            </button>
+          </template>
           <button class="btn btn-primary big" @click="onRoll">
             <Icon name="dice" :size="16" color="#fff" />
             <span>{{ t("game.roll") }}</span>

@@ -657,6 +657,39 @@ export function skipBuy(room: RoomState): void {
   startAuction(room, tile.index);
 }
 
+/**
+ * Hasbro: добровольно заплатить $50 и выйти из тюрьмы ДО броска кубиков.
+ * Должно вызываться в начале своего хода в фазе "action", когда игрок in jail.
+ */
+export function payJailFine(room: RoomState, playerId: string): { ok: boolean; error?: string } {
+  const p = room.players.find((x) => x.id === playerId);
+  if (!p) return { ok: false, error: "no player" };
+  if (!p.inJail) return { ok: false, error: "not in jail" };
+  if (room.players[room.currentTurn].id !== playerId) return { ok: false, error: "not your turn" };
+  if (room.phase !== "action") return { ok: false, error: "wrong phase" };
+  if (p.cash < JAIL_FINE) return { ok: false, error: "not enough cash" };
+  p.cash -= JAIL_FINE;
+  p.inJail = false;
+  p.jailTurns = 0;
+  log(room, { en: `${p.name} paid $${JAIL_FINE} and left jail`, ru: `${p.name} заплатил $${JAIL_FINE} и вышел из тюрьмы` });
+  return { ok: true };
+}
+
+/** Hasbro: использовать карту "Get Out of Jail Free" вместо оплаты. */
+export function useGetOutCard(room: RoomState, playerId: string): { ok: boolean; error?: string } {
+  const p = room.players.find((x) => x.id === playerId);
+  if (!p) return { ok: false, error: "no player" };
+  if (!p.inJail) return { ok: false, error: "not in jail" };
+  if (room.players[room.currentTurn].id !== playerId) return { ok: false, error: "not your turn" };
+  if (room.phase !== "action") return { ok: false, error: "wrong phase" };
+  if (p.getOutCards <= 0) return { ok: false, error: "no jail card" };
+  p.getOutCards--;
+  p.inJail = false;
+  p.jailTurns = 0;
+  log(room, { en: `${p.name} used Get Out of Jail card`, ru: `${p.name} использовал карту «Освобождение»` });
+  return { ok: true };
+}
+
 /** Аукцион Hasbro: когда игрок отказался покупать клетку — она уходит с молотка. */
 export function startAuction(room: RoomState, tileIndex: number): void {
   const tile = BOARD[tileIndex];
