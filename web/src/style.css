@@ -233,6 +233,13 @@ body {
   padding-bottom: calc(var(--tg-safe-area-inset-bottom, 0px) + var(--tg-content-safe-area-inset-bottom, 0px));
   padding-left: calc(var(--tg-safe-area-inset-left, 0px) + var(--tg-content-safe-area-inset-left, 0px));
 }
+/* Telegram Desktop reports a 60px safe-area inset even though there's no
+   notch / camera cutout — it's just the host window chrome. On wide
+   viewports we use the sidebar layout, which already accounts for its own
+   spacing, so kill the outer safe-area padding to avoid a dead strip. */
+@media (min-width: 900px) {
+  #app { padding: 0; }
+}
 
 button {
   font: inherit;

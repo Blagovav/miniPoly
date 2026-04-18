@@ -27,6 +27,9 @@ interface TgWebApp {
     offClick: (cb: () => void) => void;
     setText: (t: string) => void;
   };
+  setHeaderColor?: (color: string) => void;
+  setBackgroundColor?: (color: string) => void;
+  setBottomBarColor?: (color: string) => void;
   HapticFeedback?: {
     impactOccurred: (style: "light" | "medium" | "heavy" | "rigid" | "soft") => void;
     notificationOccurred: (type: "error" | "success" | "warning") => void;
@@ -59,6 +62,12 @@ export function useTelegram() {
     }
     try { w.ready(); } catch {}
     try { w.expand(); } catch {}
+    // Match Telegram's own header/background to our parchment bg so the
+    // desktop Mini App title bar ("× Mini Poly") blends with the content
+    // instead of sitting as a dark strip above it.
+    try { w.setHeaderColor?.("#f0e4c8"); } catch {}
+    try { w.setBackgroundColor?.("#f0e4c8"); } catch {}
+    try { w.setBottomBarColor?.("#f0e4c8"); } catch {}
     // Fullscreen (Bot API 8.0+) — прячет шапку Telegram, когда Mini App открыт из диалога.
     // Без этого приложение показывается как bottom sheet с видимым хедером Telegram.
     try {
