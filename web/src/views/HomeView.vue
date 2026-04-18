@@ -12,7 +12,7 @@ import { PLAYER_COLORS } from "../utils/palette";
 const { locale } = useI18n();
 const router = useRouter();
 const inv = useInventoryStore();
-const { haptic, notify, userName, setUserName, tg, close: closeMiniApp } = useTelegram();
+const { haptic, notify, userName, setUserName, tg } = useTelegram();
 
 const isRu = computed(() => locale.value === "ru");
 const L = computed(() => isRu.value
@@ -68,7 +68,6 @@ function saveName() { setUserName(nameDraft.value); editingName.value = false; }
 
 function go(name: string) { haptic("light"); router.push({ name }); }
 function toggleLocale() { setLocale(isRu.value ? "en" : "ru"); }
-function closeApp() { closeMiniApp(); }
 
 // Демо-данные для «Последняя игра» и «Союзники в игре» — временно, пока
 // серверные endpoints для last-match/online-friends не поднимем.
@@ -203,8 +202,8 @@ const avatarInitial = computed(() => (userName.value?.[0] ?? "L").toUpperCase())
       </div>
 
       <!-- Allies in play -->
-      <div class="section-label" style="margin-bottom: 6px;">{{ L.alliesInPlay }}</div>
-      <div class="rail" style="padding-bottom: 4px;">
+      <div class="section-label" style="margin-bottom: 6px; text-align: center;">{{ L.alliesInPlay }}</div>
+      <div class="rail allies-rail" style="padding-bottom: 4px; justify-content: center;">
         <div v-for="f in allies" :key="f.n" class="ally">
           <div class="ally__wrap">
             <Sigil :name="f.n" :color="f.c" :size="44"/>
@@ -216,10 +215,6 @@ const avatarInitial = computed(() => (userName.value?.[0] ?? "L").toUpperCase())
           <div class="ally__name">{{ f.n }}</div>
         </div>
       </div>
-
-      <button v-if="tg" class="btn btn-ghost close-app" @click="closeApp">
-        {{ L.closeApp }}
-      </button>
     </div>
 
     <transition name="bonus">
@@ -406,12 +401,6 @@ const avatarInitial = computed(() => (userName.value?.[0] ?? "L").toUpperCase())
   outline: none;
 }
 .name-input:focus { border-color: var(--primary); }
-
-.close-app {
-  margin: 16px auto 0;
-  display: block;
-  font-size: 12px;
-}
 
 .bonus-toast {
   position: fixed;
