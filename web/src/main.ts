@@ -1,6 +1,6 @@
 import { createApp } from "vue";
 import { createPinia } from "pinia";
-import { createRouter, createWebHashHistory } from "vue-router";
+import { createRouter, createWebHistory } from "vue-router";
 import App from "./App.vue";
 import { i18n } from "./i18n";
 import "./style.css";
@@ -14,7 +14,7 @@ import CreateView from "./views/CreateView.vue";
 import FriendsView from "./views/FriendsView.vue";
 
 const router = createRouter({
-  history: createWebHashHistory(),
+  history: createWebHistory(),
   routes: [
     { path: "/", component: HomeView, name: "home" },
     { path: "/rooms", component: RoomsView, name: "rooms" },
