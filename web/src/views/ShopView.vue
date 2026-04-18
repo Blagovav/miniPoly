@@ -8,6 +8,8 @@ import { useTelegram } from "../composables/useTelegram";
 import Icon from "../components/Icon.vue";
 import TokenArt from "../components/TokenArt.vue";
 import BoardPreview from "../components/BoardPreview.vue";
+import PurchaseSuccessModal, { type PurchaseData } from "../components/PurchaseSuccessModal.vue";
+import PurchaseFailModal, { type PurchaseFailData } from "../components/PurchaseFailModal.vue";
 import { BOARDS, RARITY_META, type BoardDef } from "../utils/boards";
 import { tokenArtFor, lighten, PLAYER_COLORS } from "../utils/palette";
 
@@ -21,6 +23,12 @@ const { haptic, notify, tg, userId } = useTelegram();
 
 // Подтянем купленные за Stars при входе в магазин.
 onMounted(() => inv.syncServerUnlocks(userId.value));
+
+// Purchase result modals
+const successData = ref<PurchaseData | null>(null);
+const failData = ref<PurchaseFailData | null>(null);
+const successOpen = computed(() => !!successData.value);
+const failOpen = computed(() => !!failData.value);
 
 const isRu = computed(() => locale.value === "ru");
 const L = computed(() => isRu.value
@@ -147,6 +155,18 @@ function goBack() {
   router.back();
 }
 
+function purchaseDataOf(item: ShopItem): PurchaseData {
+  return {
+    id: item.id,
+    name: item.name.en,
+    ru: item.name.ru,
+    price: item.price,
+    unit: "◈",
+    kind: item.kind === "emote" ? "banner" : (item.kind as "token" | "theme"),
+    balanceAfter: `${inv.coins} ◈`,
+  };
+}
+
 function onPrimaryAction(item: ShopItem) {
   // Owned → equip / already equipped
   if (isOwned(item.id)) {
@@ -160,12 +180,27 @@ function onPrimaryAction(item: ShopItem) {
   }
   // Not owned → buy with coins
   if (item.price > 0) {
+    if (!canAffordCoins(item)) {
+      failData.value = {
+        name: item.name.en, ru: item.name.ru,
+        price: item.price, unit: "◈",
+        balance: inv.coins, reason: "funds",
+      };
+      notify("error");
+      return;
+    }
     const ok = inv.buy(item.id, item.price);
     if (ok) {
       haptic("medium");
       notify("success");
+      successData.value = purchaseDataOf(item);
     } else {
       notify("error");
+      failData.value = {
+        name: item.name.en, ru: item.name.ru,
+        price: item.price, unit: "◈",
+        balance: inv.coins, reason: "generic",
+      };
     }
     return;
   }
@@ -174,7 +209,18 @@ function onPrimaryAction(item: ShopItem) {
   if (ok) {
     haptic("light");
     notify("success");
+    successData.value = purchaseDataOf(item);
   }
+}
+
+function equipFromSuccess() {
+  const d = successData.value;
+  if (!d) return;
+  if (d.id && (d.kind === "token" || d.kind === "theme")) {
+    inv.equip(d.id, d.kind);
+    haptic("light");
+  }
+  successData.value = null;
 }
 
 async function buyWithStars(item: ShopItem) {
@@ -411,7 +457,7 @@ function discStyle(item: ShopItem) {
                 'btn-emerald': isOwned(item.id) && !isEquipped(item.id, item.kind as any) && (item.kind === 'token' || item.kind === 'theme'),
                 'btn-ghost': isEquipped(item.id, item.kind as any) || (isOwned(item.id) && item.kind === 'emote'),
               }"
-              :disabled="isEquipped(item.id, item.kind as any) || (isOwned(item.id) && item.kind === 'emote') || (!isOwned(item.id) && !canAffordCoins(item))"
+              :disabled="isEquipped(item.id, item.kind as any) || (isOwned(item.id) && item.kind === 'emote')"
               @click="onPrimaryAction(item)"
             >
               <Icon v-if="isEquipped(item.id, item.kind as any)" name="check" :size="12" color="currentColor"/>
@@ -431,6 +477,18 @@ function discStyle(item: ShopItem) {
         </div>
       </div>
     </div>
+
+    <PurchaseSuccessModal
+      :open="successOpen"
+      :data="successData"
+      :on-close="() => (successData = null)"
+      :on-equip="successData?.kind === 'token' || successData?.kind === 'theme' ? equipFromSuccess : undefined"
+    />
+    <PurchaseFailModal
+      :open="failOpen"
+      :data="failData"
+      :on-close="() => (failData = null)"
+    />
   </div>
 </template>
 
