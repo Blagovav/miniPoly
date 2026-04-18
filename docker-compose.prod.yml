@@ -96,7 +96,7 @@ services:
       --realm=${TURN_REALM:-tapcade.online}
       --fingerprint --lt-cred-mech
       --user=${TURN_USER:-minipoly}:${TURN_PASSWORD}
-      --no-cli --no-tls --no-dtls --no-multicast-peers --no-loopback-peers
+      --no-cli --no-tls --no-dtls --no-multicast-peers
 
 volumes:
   pg_data:
