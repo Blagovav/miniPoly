@@ -15,7 +15,6 @@ const props = defineProps<{
   onProposeTrade?: (tileIndex: number, cash: number) => void;
   onMortgage?: (tileIndex: number) => void;
   onUnmortgage?: (tileIndex: number) => void;
-  onPickTripleTile?: (tileIndex: number) => void;
 }>();
 
 const { locale } = useI18n();
@@ -261,20 +260,6 @@ function unmortgage() {
   if (tile.value) props.onUnmortgage?.(tile.value.index);
 }
 
-const canPickTriple = computed(() => {
-  return game.room?.phase === "triplesPick"
-    && !!game.me
-    && !!game.currentPlayer
-    && game.me.id === game.currentPlayer.id
-    && !!tile.value;
-});
-function pickTriple() {
-  if (tile.value) {
-    props.onPickTripleTile?.(tile.value.index);
-    game.selectTile(null);
-  }
-}
-
 const isRu = computed(() => loc.value === "ru");
 </script>
 
@@ -389,19 +374,8 @@ const isRu = computed(() => loc.value === "ru");
           {{ isRu ? "Свободно — земля без владельца" : "Unclaimed land" }}
         </div>
 
-        <!-- Triples: jump to tile -->
-        <div v-if="canPickTriple" class="actions">
-          <button class="btn btn-primary triples-btn" @click="pickTriple">
-            <Icon name="dice" :size="16" color="#fff" />
-            {{ isRu ? "Переместиться сюда" : "Leap to this square" }}
-          </button>
-          <p class="hint">
-            {{ isRu ? "Телепорт без бонуса за проход СТАРТ" : "No pass-GO bonus" }}
-          </p>
-        </div>
-
         <!-- Build / sell actions -->
-        <div v-if="isMineStreet" class="actions">
+        <div v-if="isMineStreet && game.isMyTurn" class="actions">
           <button
             class="btn btn-primary build-btn"
             :disabled="!canBuild"
@@ -443,8 +417,8 @@ const isRu = computed(() => loc.value === "ru");
           </p>
         </div>
 
-        <!-- Mortgage / unmortgage (owner only) -->
-        <div v-if="isMineProperty && (canMortgage || canUnmortgage)" class="actions">
+        <!-- Mortgage / unmortgage (owner only, during own turn) -->
+        <div v-if="isMineProperty && game.isMyTurn && (canMortgage || canUnmortgage)" class="actions">
           <button
             v-if="canMortgage"
             class="btn btn-wax"
@@ -466,7 +440,7 @@ const isRu = computed(() => loc.value === "ru");
         </div>
 
         <!-- Propose trade to the current owner -->
-        <div v-if="canPropose" class="actions">
+        <div v-if="canPropose && game.isMyTurn" class="actions">
           <div v-if="!proposeOpen">
             <button class="btn btn-primary propose-btn" @click="openPropose">
               <Icon name="trade" :size="16" color="#fff" />
@@ -798,16 +772,6 @@ const isRu = computed(() => loc.value === "ru");
 .sell-btn .build-btn__cost {
   color: var(--gold);
 }
-.triples-btn {
-  background: linear-gradient(180deg, var(--gold-soft) 0%, var(--gold) 100%);
-  color: #2a1d10;
-  animation: triples-breath 1.4s ease-in-out infinite;
-  border: 1px solid rgba(90, 58, 24, 0.25);
-  box-shadow: 0 4px 12px rgba(184, 137, 46, 0.35);
-  justify-content: center;
-  gap: 8px;
-}
-.triples-btn :deep(svg) { color: #2a1d10; }
 .propose-btn {
   justify-content: center;
   gap: 8px;
@@ -884,10 +848,6 @@ const isRu = computed(() => loc.value === "ru");
 @keyframes sheet-unfurl {
   0% { transform: translateY(100%); opacity: 0; }
   100% { transform: translateY(0); opacity: 1; }
-}
-@keyframes triples-breath {
-  0%, 100% { transform: scale(1); }
-  50% { transform: scale(1.015); }
 }
 .fade-enter-active, .fade-leave-active { transition: opacity 0.2s ease; }
 .fade-enter-from, .fade-leave-to { opacity: 0; }

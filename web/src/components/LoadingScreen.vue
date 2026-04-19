@@ -4,10 +4,16 @@ import { useI18n } from "vue-i18n";
 
 type Variant = "sigil" | "dice" | "scroll" | "coins";
 
+// Each step advances through pending → active → done as the boot sequence
+// progresses. Shown as a checklist under the main spinner so players can see
+// what's actually happening (not just a frozen-looking splash).
+export type BootStep = { label: string; status: "pending" | "active" | "done" };
+
 const props = withDefaults(defineProps<{
   variant?: Variant;
   message?: string;
   fullscreen?: boolean;
+  steps?: BootStep[];
 }>(), { variant: "sigil", fullscreen: true });
 
 const { locale } = useI18n();
@@ -152,9 +158,23 @@ const msg = computed(() => {
       <div class="loading-text">
         <div class="loading-title">Mini · Poly</div>
         <div class="loading-sub">{{ msg }}</div>
-        <div class="loading-dots" aria-hidden>
+        <div v-if="!steps?.length" class="loading-dots" aria-hidden>
           <span/><span/><span/>
         </div>
+        <ul v-else class="loading-steps">
+          <li
+            v-for="(s, i) in steps"
+            :key="i"
+            :class="['loading-step', `loading-step--${s.status}`]"
+          >
+            <span class="loading-step__mark" aria-hidden>
+              <template v-if="s.status === 'done'">✓</template>
+              <template v-else-if="s.status === 'active'">◌</template>
+              <template v-else>·</template>
+            </span>
+            <span class="loading-step__label">{{ s.label }}</span>
+          </li>
+        </ul>
       </div>
     </div>
     <div v-if="fullscreen" class="loading-foot">Anno MMXXVI · Guild of Mapmakers</div>
@@ -248,6 +268,63 @@ const msg = computed(() => {
 @keyframes ls-dot {
   0%, 60%, 100% { opacity: 0.2; transform: translateY(0); }
   30% { opacity: 1; transform: translateY(-4px); }
+}
+.loading-steps {
+  list-style: none;
+  margin: 14px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  text-align: left;
+  min-width: 220px;
+}
+.loading-step {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-family: var(--font-display);
+  font-size: 13px;
+  color: var(--ink-3);
+  transition: color 0.2s ease, opacity 0.2s ease;
+  opacity: 0.5;
+}
+.loading-step--active {
+  color: var(--ink);
+  opacity: 1;
+}
+.loading-step--done {
+  color: var(--ink-2);
+  opacity: 1;
+}
+.loading-step__mark {
+  width: 18px;
+  height: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  font-size: 11px;
+  font-family: var(--font-mono);
+  font-weight: 600;
+  flex-shrink: 0;
+  background: rgba(107, 76, 196, 0.08);
+  color: var(--ink-4);
+  border: 1px solid rgba(107, 76, 196, 0.12);
+}
+.loading-step--active .loading-step__mark {
+  background: rgba(107, 76, 196, 0.18);
+  color: var(--primary);
+  border-color: rgba(107, 76, 196, 0.5);
+  animation: ls-step-spin 1s linear infinite;
+}
+.loading-step--done .loading-step__mark {
+  background: var(--emerald, #2d7a4f);
+  color: #fff;
+  border-color: var(--emerald, #2d7a4f);
+}
+@keyframes ls-step-spin {
+  to { transform: rotate(360deg); }
 }
 .loading-foot {
   position: absolute;

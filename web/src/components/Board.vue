@@ -98,8 +98,11 @@ interface PlacedPlayer {
 
 function positionOffset(idx: number, total: number): { dx: number; dy: number } {
   if (total === 1) return { dx: 0, dy: 0 };
+  // 2 tokens — side-by-side horizontally (vertical stack squished them).
+  if (total === 2) return { dx: idx === 0 ? -12 : 12, dy: 0 };
+  // 3+ tokens — fan around the tile centre with a wider radius.
   const angle = (idx / total) * Math.PI * 2 - Math.PI / 2;
-  const r = 10;
+  const r = 14;
   return { dx: Math.cos(angle) * r, dy: Math.sin(angle) * r };
 }
 

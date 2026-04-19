@@ -9,7 +9,6 @@ import type {
   Player,
   PropertyTile,
   RoomState,
-  SpeedDieFace,
   StreetTile,
   Tile,
 } from "../../../shared/types";
@@ -18,17 +17,6 @@ const RAILROAD_RENTS = [25, 50, 100, 200];
 
 export function rollDie(): number {
   return 1 + Math.floor(Math.random() * 6);
-}
-
-/** Speed Die faces: 1, 2, 3, Bus, Mr. Monopoly, Mr. Monopoly */
-export function rollSpeedDie(): SpeedDieFace {
-  const faces: SpeedDieFace[] = [1, 2, 3, "bus", "monopoly", "monopoly"];
-  return faces[Math.floor(Math.random() * faces.length)];
-}
-
-/** Сколько собственностей у игрока — Speed Die включается с 3+. */
-function ownedCount(room: RoomState, playerId: string): number {
-  return Object.values(room.properties).filter((p) => p.ownerId === playerId).length;
 }
 
 export function log(room: RoomState, text: I18nText): void {
@@ -48,7 +36,6 @@ export function createRoom(hostId: string, isPublic = true, maxPlayers = MAX_PLA
     currentTurn: 0,
     phase: "lobby",
     dice: null,
-    speedDie: null,
     doublesInARow: 0,
     properties: {},
     log: [],
@@ -102,11 +89,12 @@ export function addPlayer(
 
 export function startGame(room: RoomState): boolean {
   if (room.phase !== "lobby") return false;
-  const active = room.players.filter((p) => p.connected);
+  // Bots count as active seats even though they're not connected via WS.
+  const active = room.players.filter((p) => p.connected || p.isBot);
   if (active.length < MIN_PLAYERS) return false;
   if (!active.every((p) => p.ready)) return false;
 
-  // drop players who never connected/ready
+  // drop players who never connected/ready (bots survive — they're `ready`).
   room.players = active;
   room.phase = "rolling";
   room.currentTurn = 0;
@@ -115,15 +103,61 @@ export function startGame(room: RoomState): boolean {
   return true;
 }
 
-/** Передать хоста следующему подключённому игроку. */
+/** Передать хоста следующему подключённому игроку. Боты хостить не могут. */
 export function reassignHostIfNeeded(room: RoomState): void {
   const host = room.players.find((p) => p.id === room.hostId);
-  if (host && host.connected) return;
-  const next = room.players.find((p) => p.connected);
+  if (host && host.connected && !host.isBot) return;
+  const next = room.players.find((p) => p.connected && !p.isBot);
   if (next) {
     room.hostId = next.id;
     log(room, { en: `${next.name} is now host`, ru: `${next.name} теперь хост` });
   }
+}
+
+const BOT_NAMES = [
+  "Alfred", "Bianca", "Cato", "Diana", "Edgar", "Fiona",
+  "Godric", "Helena", "Ivor", "Juno", "Kenric", "Lyra",
+];
+
+/**
+ * Добавить бота-игрока в лобби. Бот: `isBot: true`, `connected: false`,
+ * `ready: true`, уникальный отрицательный tgUserId, имя "Bot <Имя>" без
+ * коллизий внутри комнаты. Игровая логика ходит за него через turn-timer.
+ */
+export function addBot(room: RoomState): Player | null {
+  if (room.phase !== "lobby") return null;
+  if (room.players.length >= (room.maxPlayers ?? MAX_PLAYERS)) return null;
+
+  const usedNames = new Set(room.players.map((p) => p.name));
+  const freeName = BOT_NAMES.find((n) => !usedNames.has(`Bot ${n}`));
+  const name = freeName ? `Bot ${freeName}` : `Bot ${nanoid(4)}`;
+
+  // Negative IDs never collide with real Telegram user IDs (which are positive).
+  const tgUserId = -(Date.now() + Math.floor(Math.random() * 1000));
+
+  const defaultTokens = ["token-car", "token-dog", "token-hat", "token-cat", "token-crown", "token-ufo"];
+  const usedTokens = new Set(room.players.map((p) => p.token));
+  const token = defaultTokens.find((t) => !usedTokens.has(t)) ?? "token-car";
+
+  const bot: Player = {
+    id: nanoid(10),
+    tgUserId,
+    name,
+    color: PLAYER_COLORS[room.players.length],
+    token,
+    position: 0,
+    cash: STARTING_CASH,
+    inJail: false,
+    jailTurns: 0,
+    getOutCards: 0,
+    bankrupt: false,
+    ready: true,
+    connected: false,
+    isBot: true,
+  };
+  room.players.push(bot);
+  log(room, { en: `${name} joined the game`, ru: `${name} присоединился` });
+  return bot;
 }
 
 /** Убрать игрока (добровольно или при дисконнекте на этапе лобби). */
@@ -373,7 +407,6 @@ export function rollAndMove(
   room: RoomState,
 ): {
   dice: [number, number];
-  speedDie: SpeedDieFace | null;
   from: number;
   to: number;
 } | null {
@@ -386,12 +419,7 @@ export function rollAndMove(
   const sum = d1 + d2;
   const isDoubles = d1 === d2;
 
-  // Speed Die активируется после 3+ собственностей
-  const useSpeedDie = ownedCount(room, p.id) >= 3;
-  const speedDie: SpeedDieFace | null = useSpeedDie ? rollSpeedDie() : null;
-
   room.dice = dice;
-  room.speedDie = speedDie;
 
   // Jail handling
   if (p.inJail) {
@@ -410,12 +438,12 @@ export function rollAndMove(
         } else {
           bankruptPlayer(room, p);
           nextTurn(room);
-          return { dice, speedDie, from: p.position, to: p.position };
+          return { dice, from: p.position, to: p.position };
         }
       } else {
         room.phase = "action";
         log(room, { en: `${p.name} stays in jail`, ru: `${p.name} остаётся в тюрьме` });
-        return { dice, speedDie, from: p.position, to: p.position };
+        return { dice, from: p.position, to: p.position };
       }
     }
   }
@@ -425,77 +453,21 @@ export function rollAndMove(
     if (room.doublesInARow >= 3) {
       sendToJail(room, p);
       room.phase = "action";
-      return { dice, speedDie, from: p.position, to: p.position };
+      return { dice, from: p.position, to: p.position };
     }
   } else {
     room.doublesInARow = 0;
   }
 
-  // Triples (Hasbro): d1 == d2 && speedDie matches → игрок выбирает ЛЮБУЮ клетку.
-  if (isDoubles && typeof speedDie === "number" && speedDie === d1) {
-    room.phase = "triplesPick";
-    log(room, {
-      en: `${p.name} rolled TRIPLE ${d1}s — pick any tile!`,
-      ru: `${p.name} выбросил ТРИПЛЕТ ${d1} — выбери любую клетку!`,
-    });
-    return { dice, speedDie, from: p.position, to: p.position };
-  }
-
   const from = p.position;
-  // Speed Die: 1/2/3 добавляются к движению
-  const extra = typeof speedDie === "number" ? speedDie : 0;
-  let to = advance(p, from, sum + extra, room);
-
-  // Bus: можно остановиться на ближайшей Chance/Community Chest между from и to
-  if (speedDie === "bus") {
-    const stopIdx = nearestCardTile(from, to);
-    if (stopIdx !== null) {
-      to = stopIdx;
-      p.position = stopIdx;
-      log(room, { en: `${p.name} caught the Bus`, ru: `${p.name} поймал автобус` });
-    }
-  }
+  const to = advance(p, from, sum, room);
 
   p.position = to;
   room.phase = "moving";
 
   resolveTile(room, p);
 
-  // Mr. Monopoly: после базового хода — до ближайшей свободной собственности
-  if (speedDie === "monopoly" && !p.bankrupt && !p.inJail) {
-    const nextUnowned = nearestUnownedProperty(room, to);
-    if (nextUnowned !== null) {
-      if (nextUnowned < to) {
-        p.cash += GO_SALARY;
-        log(room, { en: `${p.name} passed GO (+$${GO_SALARY})`, ru: `${p.name} прошёл СТАРТ (+$${GO_SALARY})` });
-      }
-      p.position = nextUnowned;
-      log(room, { en: `Mr. Monopoly sends ${p.name} to ${BOARD[nextUnowned].name.en}`, ru: `Мистер Монополия отправил ${p.name} на ${BOARD[nextUnowned].name.ru}` });
-      resolveTile(room, p);
-    }
-  }
-
-  return { dice, speedDie, from, to };
-}
-
-// Triples: игрок телепортируется на выбранную клетку. Бонуса за проход GO нет (Hasbro).
-export function moveToTripleTile(
-  room: RoomState,
-  tileIndex: number,
-): { from: number; to: number } | null {
-  if (room.phase !== "triplesPick") return null;
-  const p = currentPlayer(room);
-  if (!p || p.bankrupt || p.inJail) return null;
-  if (!Number.isInteger(tileIndex) || tileIndex < 0 || tileIndex >= BOARD.length) return null;
-
-  const from = p.position;
-  p.position = tileIndex;
-  log(room, {
-    en: `${p.name} warps to ${BOARD[tileIndex].name.en}`,
-    ru: `${p.name} прыгнул на ${BOARD[tileIndex].name.ru}`,
-  });
-  resolveTile(room, p);
-  return { from, to: tileIndex };
+  return { dice, from, to };
 }
 
 function advance(p: Player, from: number, steps: number, room: RoomState): number {
@@ -505,30 +477,6 @@ function advance(p: Player, from: number, steps: number, room: RoomState): numbe
     log(room, { en: `${p.name} passed GO (+$${GO_SALARY})`, ru: `${p.name} прошёл СТАРТ (+$${GO_SALARY})` });
   }
   return to;
-}
-
-function nearestCardTile(from: number, to: number): number | null {
-  const cardIndices = new Set(
-    BOARD.filter((t) => t.kind === "chance" || t.kind === "chest").map((t) => t.index),
-  );
-  const len = BOARD.length;
-  const steps = to >= from ? to - from : len - from + to;
-  for (let i = 1; i <= steps; i++) {
-    const idx = (from + i) % len;
-    if (cardIndices.has(idx)) return idx;
-  }
-  return null;
-}
-
-function nearestUnownedProperty(room: RoomState, from: number): number | null {
-  for (let i = 1; i <= BOARD.length; i++) {
-    const idx = (from + i) % BOARD.length;
-    const tile = BOARD[idx];
-    if (tile.kind === "street" || tile.kind === "railroad" || tile.kind === "utility") {
-      if (!room.properties[idx]) return idx;
-    }
-  }
-  return null;
 }
 
 function resolveTile(room: RoomState, p: Player): void {

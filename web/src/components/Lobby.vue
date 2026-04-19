@@ -23,6 +23,8 @@ const props = defineProps<{
   onStart: () => void;
   onSelectToken: (tokenId: string) => void;
   onDestroyRoom: () => void;
+  onAddBot?: () => void;
+  onRemoveBot?: (playerId: string) => void;
 }>();
 
 const inv = useInventoryStore();
@@ -56,11 +58,20 @@ const copied = ref(false);
 
 const me = computed(() => props.room.players.find((p) => p.id === props.myPlayerId));
 const isHost = computed(() => !!me.value && props.room.hostId === me.value.id);
-// Only count connected — offline players shouldn't block Start.
-const activePlayers = computed(() => props.room.players.filter((p) => p.connected));
+// Only count connected — offline players shouldn't block Start. Bots count
+// as connected for Start purposes even though their WS is absent.
+const activePlayers = computed(() =>
+  props.room.players.filter((p) => p.connected || p.isBot),
+);
 const readyActive = computed(() => activePlayers.value.filter((p) => p.ready));
 const canStart = computed(() =>
   activePlayers.value.length >= 2 && readyActive.value.length === activePlayers.value.length,
+);
+const canAddBot = computed(
+  () =>
+    isHost.value
+    && !!props.onAddBot
+    && props.room.players.length < props.room.maxPlayers,
 );
 
 // Deterministic colour per player from ORDERED_PLAYER_COLORS.
@@ -161,6 +172,9 @@ const L = computed(() => isRu.value
       minPlayers: "Нужно минимум 2 готовых игрока",
       destroy: "Закрыть игру",
       offline: "offline",
+      bot: "Бот",
+      addBot: "Добавить бота",
+      kickBot: "Убрать бота",
       takenBy: (name: string) => `Занята: ${name}`,
     }
   : {
@@ -177,6 +191,9 @@ const L = computed(() => isRu.value
       minPlayers: "Need at least 2 ready players",
       destroy: "Close game",
       offline: "offline",
+      bot: "Bot",
+      addBot: "Add a bot",
+      kickBot: "Remove bot",
       takenBy: (name: string) => `Taken: ${name}`,
     });
 </script>
@@ -210,20 +227,32 @@ const L = computed(() => isRu.value
         v-for="(p, idx) in room.players"
         :key="p.id"
         class="row player-row"
-        :class="{ 'player-row--me': p.id === myPlayerId }"
+        :class="{
+          'player-row--me': p.id === myPlayerId,
+          'player-row--bot': p.isBot,
+        }"
       >
         <Sigil :name="p.name" :color="colorForIndex(idx)" :size="36" />
         <div class="player-row__body">
           <div class="row gap-6 player-row__head">
             <span class="player-row__name">{{ p.name }}</span>
             <Icon v-if="room.hostId === p.id" name="crown" :size="14" color="var(--gold)" />
-            <span v-if="!p.connected" class="offline-chip">{{ L.offline }}</span>
+            <span v-if="p.isBot" class="bot-chip">{{ L.bot }}</span>
+            <span v-else-if="!p.connected" class="offline-chip">{{ L.offline }}</span>
           </div>
           <div class="player-row__status">
             {{ p.ready ? L.ready : L.choosing }}
           </div>
         </div>
-        <div class="ready-dot" :class="{ 'ready-dot--on': p.ready }">
+        <button
+          v-if="p.isBot && isHost && onRemoveBot"
+          class="kick-btn"
+          :title="L.kickBot"
+          @click="onRemoveBot(p.id)"
+        >
+          <Icon name="x" :size="14" color="var(--accent)" />
+        </button>
+        <div v-else class="ready-dot" :class="{ 'ready-dot--on': p.ready }">
           <Icon
             :name="p.ready ? 'check' : 'x'"
             :size="16"
@@ -232,15 +261,21 @@ const L = computed(() => isRu.value
         </div>
       </div>
 
-      <!-- Empty-seat placeholder rows (dashed border) -->
-      <div
-        v-for="i in emptySeats"
-        :key="'empty-' + i"
-        class="row seat-empty"
-      >
-        <Icon name="plus" :size="18" color="var(--ink-4)" />
-        {{ L.emptySeat }}
-      </div>
+      <!-- Empty-seat placeholder rows: host can fill with a bot, others see a dashed slot. -->
+      <template v-for="i in emptySeats" :key="'empty-' + i">
+        <button
+          v-if="i === 1 && canAddBot"
+          class="row seat-empty seat-empty--addable"
+          @click="onAddBot"
+        >
+          <Icon name="plus" :size="18" color="var(--primary)" />
+          <span>{{ L.addBot }}</span>
+        </button>
+        <div v-else class="row seat-empty">
+          <Icon name="plus" :size="18" color="var(--ink-4)" />
+          {{ L.emptySeat }}
+        </div>
+      </template>
     </div>
 
     <!-- ── Token picker (medallion buttons) ──────────────── -->
@@ -444,6 +479,37 @@ const L = computed(() => isRu.value
   color: var(--accent);
   letter-spacing: 0.05em;
 }
+.bot-chip {
+  font-size: 10px;
+  padding: 1px 6px;
+  border: 1px solid rgba(90, 58, 154, 0.35);
+  border-radius: 999px;
+  color: var(--primary);
+  background: rgba(90, 58, 154, 0.08);
+  letter-spacing: 0.05em;
+  font-family: var(--font-mono);
+  text-transform: uppercase;
+}
+.player-row--bot {
+  border-style: dashed;
+  border-color: rgba(90, 58, 154, 0.4);
+}
+
+.kick-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: transparent;
+  border: 1px solid rgba(139, 26, 26, 0.3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  flex-shrink: 0;
+  padding: 0;
+  transition: background 120ms;
+}
+.kick-btn:hover { background: rgba(139, 26, 26, 0.08); }
 
 .ready-dot {
   width: 28px;
@@ -471,6 +537,18 @@ const L = computed(() => isRu.value
   font-size: 13px;
   gap: 10px;
 }
+.seat-empty--addable {
+  color: var(--primary);
+  border-color: var(--primary);
+  font-style: normal;
+  cursor: pointer;
+  font-family: var(--font-display);
+  font-weight: 500;
+  transition: background 120ms;
+  width: 100%;
+  text-align: left;
+}
+.seat-empty--addable:hover { background: rgba(90, 58, 154, 0.06); }
 
 /* ── Token rail ── */
 /* padding on both axes: overflow-x: auto on .rail implicitly clips -y too,

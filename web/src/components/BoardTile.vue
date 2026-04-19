@@ -106,6 +106,10 @@ const priceLabel = computed(() => {
       :style="{ background: bandColor }"
     />
 
+    <!-- Owner stripe: mirrors the group band on the OUTER edge of the tile,
+         a touch thinner so the two lines read as a pair without competing. -->
+    <div v-if="owned" class="owner-band" />
+
     <!-- Tile body: icon (optional), name, price. Oriented per side so that
          text on side rows reads sideways like a real Monopoly board. -->
     <div class="body">
@@ -150,16 +154,40 @@ const priceLabel = computed(() => {
   background: linear-gradient(145deg, var(--card), var(--bg-deep));
 }
 
-/* Ownership — subtle coloured glow matching owner's medieval hue. */
-.board-tile.is-owned {
-  box-shadow:
-    inset 0 0 0 1px color-mix(in srgb, var(--owner-hue, var(--primary)) 45%, transparent),
-    inset 0 0 14px color-mix(in srgb, var(--owner-hue, var(--primary)) 18%, transparent);
+/* Ownership stripe — thin line on the OUTER edge, coloured with the
+   owner's hue. Mirrors the group-colour band on the inner edge. */
+.owner-band {
+  position: absolute;
+  background: var(--owner-hue, var(--primary));
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.2);
+  z-index: 0;
 }
-.board-tile.is-owned.is-friend {
+/* Bottom row: owner stripe on the bottom (outer) edge. */
+.board-tile.side-bottom .owner-band {
+  bottom: 0; left: 0; right: 0;
+  height: 10%;
+}
+/* Top row: owner stripe on the top (outer) edge. */
+.board-tile.side-top .owner-band {
+  top: 0; left: 0; right: 0;
+  height: 10%;
+}
+/* Left column: owner stripe on the left (outer) edge. */
+.board-tile.side-left .owner-band {
+  top: 0; left: 0; bottom: 0;
+  width: 10%;
+}
+/* Right column: owner stripe on the right (outer) edge. */
+.board-tile.side-right .owner-band {
+  top: 0; right: 0; bottom: 0;
+  width: 10%;
+}
+/* Friend (Telegram co-player): gold halo around the stripe so it's
+   still easy to spot without overriding the owner's hue. */
+.board-tile.is-owned.is-friend .owner-band {
   box-shadow:
-    inset 0 0 0 1px var(--gold-soft, #d4a84a),
-    inset 0 0 14px color-mix(in srgb, var(--gold) 25%, transparent);
+    inset 0 0 0 1px rgba(0, 0, 0, 0.2),
+    0 0 0 1.5px var(--gold-soft, #d4a84a);
 }
 
 /* ─── Group-colour strip. Always rides the INNER edge of the tile ─── */

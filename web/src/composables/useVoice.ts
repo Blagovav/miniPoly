@@ -312,6 +312,10 @@ export function useVoice(ws: WsClient, getMyPlayerId: () => string | null): Voic
     if (!isActive.value || isTransmitting.value) return;
     ensureLocalTracksMuted(false);
     isTransmitting.value = true;
+    const myId = getMyPlayerId();
+    if (myId && !speakingIds.value.includes(myId)) {
+      speakingIds.value = [...speakingIds.value, myId];
+    }
     // Nudge remote <audio> playback in case iOS suspended it before any gesture.
     for (const state of peers.values()) state.audioEl.play().catch(() => {});
   }
@@ -320,6 +324,10 @@ export function useVoice(ws: WsClient, getMyPlayerId: () => string | null): Voic
     if (!isTransmitting.value) return;
     ensureLocalTracksMuted(true);
     isTransmitting.value = false;
+    const myId = getMyPlayerId();
+    if (myId && speakingIds.value.includes(myId)) {
+      speakingIds.value = speakingIds.value.filter((id) => id !== myId);
+    }
   }
 
   onBeforeUnmount(() => {

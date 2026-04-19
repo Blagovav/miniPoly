@@ -102,6 +102,10 @@ export interface Player {
   bankrupt: boolean;
   ready: boolean;
   connected: boolean;
+  // Host-added AI player. Plays every turn via the server's auto-act
+  // logic with a shorter timer than humans. Always ready, never connected
+  // (no WS), cannot host. `tgUserId` is synthetic (negative).
+  isBot?: boolean;
 }
 
 export interface OwnedProperty {
@@ -118,7 +122,6 @@ export type GamePhase =
   | "moving"
   | "action"
   | "buyPrompt"
-  | "triplesPick"
   | "auction"
   | "ended";
 
@@ -127,8 +130,6 @@ export interface GameLogEntry {
   ts: number;
   text: I18nText;
 }
-
-export type SpeedDieFace = 1 | 2 | 3 | "bus" | "monopoly";
 
 export interface DrawnCard {
   by: string; // playerId
@@ -164,7 +165,6 @@ export interface RoomState {
   currentTurn: number;
   phase: GamePhase;
   dice: [number, number] | null;
-  speedDie: SpeedDieFace | null;
   doublesInARow: number;
   properties: Record<number, OwnedProperty>;
   log: GameLogEntry[];
@@ -217,9 +217,10 @@ export type ClientMessage =
   | { type: "respondTrade"; accept: boolean }
   | { type: "mortgage"; tileIndex: number }
   | { type: "unmortgage"; tileIndex: number }
-  | { type: "pickTripleTile"; tileIndex: number }
   | { type: "placeBid"; amount: number }
   | { type: "passAuction" }
+  | { type: "addBot" }
+  | { type: "removeBot"; playerId: string }
   | { type: "voiceJoin" }
   | { type: "voiceLeave" }
   | { type: "voiceSignal"; toId: string; payload: VoiceSignalPayload };
@@ -239,7 +240,6 @@ export type ServerMessage =
       type: "diceRolled";
       by: string;
       dice: [number, number];
-      speedDie: SpeedDieFace | null;
       from: number;
       to: number;
     }

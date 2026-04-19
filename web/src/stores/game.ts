@@ -1,6 +1,6 @@
 import { defineStore } from "pinia";
 import { computed, ref } from "vue";
-import type { RoomState, ServerMessage, SpeedDieFace } from "../../../shared/types";
+import type { RoomState, ServerMessage } from "../../../shared/types";
 
 export interface ChatMessage {
   id: string;
@@ -16,7 +16,6 @@ export const useGameStore = defineStore("game", () => {
   const lastError = ref<string | null>(null);
   const rolling = ref(false);
   const lastDice = ref<[number, number] | null>(null);
-  const lastSpeedDie = ref<SpeedDieFace | null>(null);
   const chat = ref<ChatMessage[]>([]);
   const unreadChat = ref(0);
   // Пошаговая анимация: пока идёт, отрисовка берёт значение отсюда, а не из player.position.
@@ -94,7 +93,6 @@ export const useGameStore = defineStore("game", () => {
       case "diceRolled":
         rolling.value = true;
         lastDice.value = m.dice;
-        lastSpeedDie.value = m.speedDie;
         setTimeout(() => (rolling.value = false), 900);
         animateMove(m.by, m.from, m.to);
         break;
@@ -130,7 +128,6 @@ export const useGameStore = defineStore("game", () => {
     lastError,
     rolling,
     lastDice,
-    lastSpeedDie,
     chat,
     unreadChat,
     animatedPositions,

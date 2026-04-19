@@ -11,33 +11,31 @@ const { haptic } = useTelegram();
 
 const label = computed(() => {
   if (props.voice.isConnecting.value) return t("voice.connecting");
-  if (!props.voice.isActive.value) return t("voice.tapToJoin");
   if (props.voice.isTransmitting.value) return t("voice.talking");
-  return t("voice.holdToTalk");
+  if (!props.voice.isActive.value) return t("voice.tapToJoin");
+  return t("voice.tapToTalk");
 });
 
-function onPointerDown(ev: PointerEvent) {
-  // Don't interfere with the inline × disarm handle.
+async function onClick(ev: MouseEvent) {
   if ((ev.target as HTMLElement).closest(".vb__disarm")) return;
-  ev.preventDefault();
-  (ev.currentTarget as HTMLElement).setPointerCapture?.(ev.pointerId);
+  if (props.voice.isConnecting.value) return;
+
   if (!props.voice.isActive.value) {
-    // First press: ask for mic + join voice. User needs to release and press
-    // again to actually transmit — that's expected behaviour (permission grant
-    // mid-press is unreliable on iOS Telegram WebView).
-    if (props.voice.isConnecting.value) return;
     haptic("medium");
-    void props.voice.toggle();
+    await props.voice.toggle();
+    if (props.voice.isActive.value) {
+      haptic("heavy");
+      props.voice.press();
+    }
     return;
   }
-  haptic("heavy");
-  props.voice.press();
-}
 
-function onPointerUp() {
   if (props.voice.isTransmitting.value) {
     haptic("light");
     props.voice.release();
+  } else {
+    haptic("heavy");
+    props.voice.press();
   }
 }
 
@@ -71,10 +69,7 @@ function disarm(ev: MouseEvent) {
       }"
       :aria-label="label"
       :aria-pressed="voice.isTransmitting.value"
-      @pointerdown="onPointerDown"
-      @pointerup="onPointerUp"
-      @pointercancel="onPointerUp"
-      @pointerleave="onPointerUp"
+      @click="onClick"
       @contextmenu.prevent
     >
       <span v-if="voice.isActive.value" class="vb__disarm" @click="disarm" :aria-label="t('voice.leave')">

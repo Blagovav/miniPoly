@@ -1,26 +1,120 @@
 <script setup lang="ts">
-import { computed, onMounted } from "vue";
+import { computed, onMounted, ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { useI18n } from "vue-i18n";
 import { useTelegram } from "./composables/useTelegram";
 import { useTheme } from "./composables/useTheme";
+import { useGameStore } from "./stores/game";
 import Icon from "./components/Icon.vue";
+import LoadingScreen, { type BootStep } from "./components/LoadingScreen.vue";
+import TourOverlay from "./components/TourOverlay.vue";
+
+const TOUR_KEY = "tourV1";
 
 const router = useRouter();
 const route = useRoute();
 const { locale } = useI18n();
-const { init } = useTelegram();
+const { init, userId, fetchProfile } = useTelegram();
 useTheme();
+const game = useGameStore();
 
-onMounted(() => {
+// Boot sequence: show the loading screen on cold start until Telegram is
+// initialized and the user's profile + friends list are prefetched, so the
+// first interactive frame is never a stale/empty UI. Minimum display time
+// keeps the splash from flashing sub-perceptibly when the API is hot.
+const booting = ref(true);
+const bootSteps = ref<BootStep[]>([]);
+const MIN_BOOT_MS = 700;
+
+// First-time tour. Fires after boot completes on the very first session;
+// dismissing (or finishing) writes to localStorage so it never re-appears
+// on its own. Users can re-open via the welcome hero's "?" pill.
+const showTour = ref(false);
+function openTour() { showTour.value = true; }
+function closeTour() {
+  showTour.value = false;
+  try { localStorage.setItem(TOUR_KEY, "1"); } catch {}
+}
+
+function initBootSteps() {
+  const isRu = locale.value === "ru";
+  bootSteps.value = [
+    { label: isRu ? "Открываем замок" : "Opening the castle", status: "pending" },
+    { label: isRu ? "Читаем грамоту" : "Reading the deed", status: "pending" },
+    { label: isRu ? "Зовём союзников" : "Rallying allies", status: "pending" },
+    { label: isRu ? "Готовим кости" : "Readying the dice", status: "pending" },
+  ];
+}
+
+function setStep(i: number, status: BootStep["status"]) {
+  const next = bootSteps.value.slice();
+  if (next[i]) next[i] = { ...next[i], status };
+  bootSteps.value = next;
+}
+
+async function runBoot() {
+  initBootSteps();
+  const startedAt = Date.now();
+
+  // 1. Telegram init — synchronous but we still show the step so it's not
+  //    a mystery flash if it fails.
+  setStep(0, "active");
   init();
+  setStep(0, "done");
 
+  // 2. Profile — real HTTP; Promise.allSettled so a 404/offline doesn't stall boot.
+  setStep(1, "active");
+  const profileJob = userId.value ? fetchProfile(userId.value) : Promise.resolve(null);
+
+  // 3. Friends — also real HTTP.
+  setStep(2, "pending");
+
+  await Promise.allSettled([profileJob]);
+  setStep(1, "done");
+
+  setStep(2, "active");
+  await Promise.allSettled([game.loadFriends(userId.value)]);
+  setStep(2, "done");
+
+  // 4. Minimum splash duration + a small "ready" beat for the checkmark to read.
+  setStep(3, "active");
+  const elapsed = Date.now() - startedAt;
+  if (elapsed < MIN_BOOT_MS) {
+    await new Promise((r) => setTimeout(r, MIN_BOOT_MS - elapsed));
+  }
+  setStep(3, "done");
+  await new Promise((r) => setTimeout(r, 250));
+
+  booting.value = false;
+
+  // Deep-link room routing after the UI is ready.
   const url = new URL(window.location.href);
   const room = url.searchParams.get("room");
   const startapp = url.searchParams.get("startapp") || url.searchParams.get("tgWebAppStartParam");
   const fromStartapp = startapp?.startsWith("room_") ? startapp.slice(5) : null;
   const target = room ?? fromStartapp;
-  if (target) router.replace({ name: "room", params: { id: target } });
+  if (target) {
+    router.replace({ name: "room", params: { id: target } });
+    return; // skip tour when deep-linking into a match
+  }
+
+  // First-session tour — only runs if we haven't already dismissed it.
+  try {
+    if (!localStorage.getItem(TOUR_KEY)) {
+      showTour.value = true;
+    }
+  } catch { /* localStorage disabled — skip */ }
+}
+
+// Expose globally so HomeView / any screen can re-open the tour via
+// window.dispatchEvent(new CustomEvent('open-tour')). Keeps App free of
+// child prop-drilling for a tiny feature.
+if (typeof window !== "undefined") {
+  window.addEventListener("open-tour", openTour);
+}
+
+onMounted(() => {
+  void runBoot();
 });
 
 const activeScreen = computed(() => route.name?.toString() ?? "home");
@@ -39,7 +133,13 @@ function go(routeName: string) {
 </script>
 
 <template>
-  <div class="app-root">
+  <LoadingScreen
+    v-if="booting"
+    variant="sigil"
+    :steps="bootSteps"
+    :message="locale === 'ru' ? 'Поднимаем знамёна…' : 'Raising the banners…'"
+  />
+  <div v-else class="app-root">
     <!-- Desktop sidebar: shown only on wide screens (>= 900px via CSS) -->
     <aside class="desktop-sidebar">
       <div class="desktop-sidebar__brand">MINI · POLY</div>
@@ -65,6 +165,7 @@ function go(routeName: string) {
       </router-view>
     </main>
   </div>
+  <TourOverlay :open="showTour" @close="closeTour" />
 </template>
 
 <style>

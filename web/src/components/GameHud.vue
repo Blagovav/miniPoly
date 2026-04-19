@@ -3,15 +3,19 @@
 // HUD covers: turn banner (mirrors GameScreen's PlayerPill-active state),
 // current-tile card, dice-pair + phase-aware primary action, and the
 // me-card stats. All handlers come in as props from RoomView — we keep
-// every phase button (rolling / buyPrompt / action / triplesPick) the
-// game engine emits.
-import { computed } from "vue";
+// every phase button (rolling / buyPrompt / action) the game engine emits.
+import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import type { RoomState, Player } from "../../../shared/types";
 import { BOARD } from "../../../shared/board";
 import { useGameStore } from "../stores/game";
 import Dice from "./Dice.vue";
 import Icon from "./Icon.vue";
+
+// Matches api/src/config.ts turnTimeoutSec default. If the current player
+// is offline, the server auto-advances after this many seconds; we mirror
+// the countdown so everyone sees the game won't freeze.
+const TURN_TIMEOUT_SEC = 180;
 
 const props = defineProps<{
   room: RoomState;
@@ -52,6 +56,29 @@ const myPropertyCount = computed(() => {
 function openCurrentTile() {
   if (currentTile.value) game.selectTile(currentTile.value.index);
 }
+
+// AFK countdown: track locally when currentTurn changes so we can show
+// "auto-play in Ns" on every client when the active player is offline.
+const now = ref(Date.now());
+const turnStartedAt = ref(Date.now());
+let tickHandle: ReturnType<typeof setInterval> | null = null;
+watch(
+  () => props.room.currentTurn,
+  () => { turnStartedAt.value = Date.now(); },
+);
+onMounted(() => {
+  tickHandle = setInterval(() => { now.value = Date.now(); }, 1000);
+});
+onBeforeUnmount(() => {
+  if (tickHandle) clearInterval(tickHandle);
+});
+const afkRemainingSec = computed(() => {
+  const elapsed = (now.value - turnStartedAt.value) / 1000;
+  return Math.max(0, Math.ceil(TURN_TIMEOUT_SEC - elapsed));
+});
+const showAfkChip = computed(() =>
+  !!props.current && !props.current.connected && afkRemainingSec.value > 0,
+);
 </script>
 
 <template>
@@ -66,6 +93,14 @@ function openCurrentTile() {
       <div v-if="current?.inJail" class="chip jail-chip">
         <Icon name="lock" :size="12" color="var(--accent)" />
         <span>{{ t("game.inJail") }}</span>
+      </div>
+      <div v-if="showAfkChip" class="chip afk-chip">
+        <span class="afk-chip__dot" />
+        <span>{{
+          locale === 'ru'
+            ? `Авто-ход через ${afkRemainingSec}с`
+            : `Auto-play in ${afkRemainingSec}s`
+        }}</span>
       </div>
       <button
         v-if="onOpenCardHistory && (room.cardHistory?.length ?? 0) > 0"
@@ -94,7 +129,7 @@ function openCurrentTile() {
     <!-- ── Action bar (dice + phase-aware primary action) ── -->
     <div class="action-bar">
       <div class="dice-pair">
-        <Dice :dice="room.dice" :speed-die="room.speedDie" :rolling="rolling" />
+        <Dice :dice="room.dice" :rolling="rolling" />
       </div>
       <div class="action-slot">
         <div v-if="animating" class="hint-card hint-card--active">
@@ -138,9 +173,6 @@ function openCurrentTile() {
             <span>{{ t("game.endTurn") }}</span>
           </button>
         </template>
-        <div v-else-if="isMyTurn && room.phase === 'triplesPick'" class="hint-card hint-card--active">
-          {{ locale === 'ru' ? 'Тапни клетку — телепорт туда' : 'Tap a tile to teleport' }}
-        </div>
         <div v-else class="hint-card">
           {{ t("game.closeMinimize") }}
         </div>
@@ -226,6 +258,29 @@ function openCurrentTile() {
   background: rgba(139, 26, 26, 0.08);
   color: var(--accent);
   border-color: rgba(139, 26, 26, 0.3);
+}
+.afk-chip {
+  background: rgba(212, 137, 46, 0.12);
+  color: #8b6914;
+  border-color: rgba(212, 137, 46, 0.4);
+  font-variant-numeric: tabular-nums;
+  animation: afk-breath 1.2s ease-in-out infinite;
+}
+.afk-chip__dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 6px var(--accent);
+  animation: afk-pulse 1.2s ease-in-out infinite;
+}
+@keyframes afk-breath {
+  0%, 100% { filter: brightness(1); }
+  50%      { filter: brightness(1.1); }
+}
+@keyframes afk-pulse {
+  0%, 100% { opacity: 0.7; transform: scale(1); }
+  50%      { opacity: 1;   transform: scale(1.25); }
 }
 .history-btn {
   position: relative;

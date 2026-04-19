@@ -181,6 +181,15 @@ function destroyRoom() {
   setTimeout(() => router.replace({ name: "home" }), 100);
 }
 
+function addBot() {
+  haptic("medium");
+  ws.send({ type: "addBot" });
+}
+function removeBot(playerId: string) {
+  haptic("light");
+  ws.send({ type: "removeBot", playerId });
+}
+
 function buildHouse(tileIndex: number) {
   haptic("medium");
   ws.send({ type: "buildHouse", tileIndex });
@@ -216,10 +225,6 @@ function unmortgage(tileIndex: number) {
   haptic("medium");
   ws.send({ type: "unmortgage", tileIndex });
 }
-function pickTripleTile(tileIndex: number) {
-  haptic("heavy");
-  ws.send({ type: "pickTripleTile", tileIndex });
-}
 function placeBid(amount: number) {
   haptic("medium");
   ws.send({ type: "placeBid", amount });
@@ -228,13 +233,6 @@ function passAuction() {
   haptic("light");
   ws.send({ type: "passAuction" });
 }
-
-// Triples pick UI state (the banner + BoardTile click semantics).
-const isTriplesPick = computed(() => game.room?.phase === "triplesPick" && game.isMyTurn);
-const triplesValue = computed(() => {
-  const d = game.room?.dice;
-  return d && d[0] === d[1] ? d[0] : null;
-});
 
 // Card history modal open state.
 const cardHistoryOpen = ref(false);
@@ -295,30 +293,12 @@ void t;
       :on-start="start"
       :on-select-token="selectToken"
       :on-destroy-room="destroyRoom"
+      :on-add-bot="addBot"
+      :on-remove-bot="removeBot"
     />
 
     <!-- ── In-game / ended phases ── -->
     <template v-else-if="game.room">
-      <!-- Triples banner: appears only when it's my turn and phase is triplesPick -->
-      <transition name="triples">
-        <div v-if="isTriplesPick" class="triples-banner">
-          <div class="triples-banner__seal">
-            <Icon name="dice" :size="20" color="#fff" />
-          </div>
-          <div class="triples-banner__body">
-            <div class="triples-banner__title">
-              {{ locale === 'ru' ? 'ДУБЛЬ!' : 'TRIPLES!' }}
-              <span v-if="triplesValue" class="triples-banner__val">
-                {{ locale === 'ru' ? 'три' : 'three' }} {{ triplesValue }}
-              </span>
-            </div>
-            <div class="triples-banner__sub">
-              {{ locale === 'ru' ? 'Тапни любую клетку — прыгнешь туда' : 'Tap any tile to jump there' }}
-            </div>
-          </div>
-        </div>
-      </transition>
-
       <OpponentsPanel
         :room="game.room"
         :my-player-id="game.myPlayerId"
@@ -373,7 +353,6 @@ void t;
       :on-propose-trade="proposeTrade"
       :on-mortgage="mortgage"
       :on-unmortgage="unmortgage"
-      :on-pick-triple-tile="pickTripleTile"
     />
     <PlayerProfileModal :player="profilePlayer" :on-close="closeProfile" />
     <TradeBanner v-if="game.room" :on-respond="respondTrade" />
@@ -445,78 +424,7 @@ void t;
   border-radius: 2px;
 }
 
-/* ── Triples banner ── */
-.triples-banner {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 10px 14px;
-  margin: 0 14px 8px;
-  border-radius: var(--r-md);
-  background: linear-gradient(180deg, var(--card-alt), var(--card));
-  border: 1px solid var(--gold);
-  box-shadow:
-    0 0 0 1px rgba(184, 137, 46, 0.35),
-    0 2px 8px rgba(184, 137, 46, 0.25),
-    inset 0 1px 0 rgba(255, 255, 255, 0.5);
-  animation: triples-pulse 1.4s ease-in-out infinite;
-  position: relative;
-  z-index: 4;
-}
-.triples-banner__seal {
-  width: 36px; height: 36px;
-  border-radius: 50%;
-  background: radial-gradient(circle at 35% 30%, var(--gold-soft), var(--gold));
-  display: flex; align-items: center; justify-content: center;
-  box-shadow: inset 0 1px 2px rgba(255, 255, 255, 0.3), 0 1px 3px rgba(139, 105, 20, 0.4);
-  flex-shrink: 0;
-  animation: triples-wiggle 0.9s ease-in-out infinite;
-}
-.triples-banner__body { flex: 1; line-height: 1.2; }
-.triples-banner__title {
-  font-family: var(--font-display);
-  font-weight: 500;
-  font-size: 15px;
-  letter-spacing: 0.08em;
-  color: var(--ink);
-  text-transform: uppercase;
-}
-.triples-banner__val {
-  color: var(--gold);
-  font-weight: 600;
-  margin-left: 4px;
-  font-family: var(--font-mono);
-  text-transform: none;
-  letter-spacing: 0.02em;
-}
-.triples-banner__sub {
-  font-size: 12px;
-  color: var(--ink-3);
-  margin-top: 2px;
-  font-family: var(--font-body);
-}
-@keyframes triples-pulse {
-  0%, 100% {
-    box-shadow:
-      0 0 0 1px rgba(184, 137, 46, 0.35),
-      0 2px 8px rgba(184, 137, 46, 0.25),
-      inset 0 1px 0 rgba(255, 255, 255, 0.5);
-  }
-  50% {
-    box-shadow:
-      0 0 0 1px rgba(184, 137, 46, 0.6),
-      0 2px 18px rgba(184, 137, 46, 0.5),
-      inset 0 1px 0 rgba(255, 255, 255, 0.5);
-  }
-}
-@keyframes triples-wiggle {
-  0%, 100% { transform: rotate(-5deg) scale(1); }
-  50% { transform: rotate(5deg) scale(1.06); }
-}
-
 /* ── Transitions ── */
-.triples-enter-active, .triples-leave-active { transition: opacity 0.3s, transform 0.3s; }
-.triples-enter-from, .triples-leave-to { opacity: 0; transform: translateY(-10px); }
 .fade-enter-active, .fade-leave-active { transition: opacity 0.3s ease; }
 .fade-enter-from, .fade-leave-to { opacity: 0; }
 </style>

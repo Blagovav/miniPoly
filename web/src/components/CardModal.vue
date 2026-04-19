@@ -18,6 +18,14 @@ const isJailKeyCard = computed(() =>
   current.value?.cardId === "ch-gooj" || current.value?.cardId === "co-gooj",
 );
 
+// Only the drawer gets the interactive "Got it" close button — everyone
+// else sees the card face-up (auto-closes) so two hands don't race on it.
+const drawerId = computed(() => current.value?.by ?? null);
+const drawer = computed(() =>
+  drawerId.value ? game.room?.players.find((p) => p.id === drawerId.value) ?? null : null,
+);
+const isMyCard = computed(() => !!drawerId.value && drawerId.value === game.myPlayerId);
+
 watch(
   () => game.room?.lastCard?.ts,
   (ts) => {
@@ -38,7 +46,7 @@ function close() {
 
 <template>
   <transition name="card-pop">
-    <div v-if="visible && current" class="modal-scrim" @click="close">
+    <div v-if="visible && current" class="modal-scrim" @click="isMyCard ? close() : undefined">
       <div
         class="decree"
         :class="current.deck === 'chance' ? 'decree--chance' : 'decree--chest'"
@@ -54,6 +62,9 @@ function close() {
           {{ current.deck === "chance"
             ? (locale === "ru" ? "Шанс" : "Chance")
             : (locale === "ru" ? "Общественная казна" : "Community Chest") }}
+          <span v-if="drawer && !isMyCard" class="decree__drawer">
+            {{ locale === "ru" ? `— тянет ${drawer.name}` : `— drawn by ${drawer.name}` }}
+          </span>
         </div>
 
         <!-- Seal -->
@@ -74,9 +85,16 @@ function close() {
           </span>
         </div>
 
-        <button class="btn btn-primary decree__close" @click="close">
+        <button
+          v-if="isMyCard"
+          class="btn btn-primary decree__close"
+          @click="close"
+        >
           {{ locale === "ru" ? "Понятно" : "Got it" }}
         </button>
+        <div v-else class="decree__waiting">
+          {{ locale === "ru" ? "Закроется автоматически…" : "Closes automatically…" }}
+        </div>
       </div>
     </div>
   </transition>
@@ -200,6 +218,21 @@ function close() {
   margin-top: 6px;
   padding: 12px;
   font-size: 14px;
+}
+.decree__drawer {
+  color: var(--ink-3);
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  margin-left: 6px;
+  text-transform: none;
+}
+.decree__waiting {
+  font-size: 11px;
+  color: var(--ink-3);
+  font-family: var(--font-body);
+  font-style: italic;
+  margin-top: 6px;
+  opacity: 0.8;
 }
 
 /* ── Animations ── */

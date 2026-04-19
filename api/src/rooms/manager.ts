@@ -4,9 +4,15 @@ import { notifyTurn } from "../telegram";
 import {
   currentPlayer,
   endTurn as engineEndTurn,
+  passAuction,
+  payJailFine,
+  resolveTrade,
   rollAndMove,
   skipBuy,
 } from "../game/engine";
+
+// Bots move fast so 2+1 or 2+2 human-vs-bot games stay snappy.
+const BOT_TURN_DELAY_MS = 2500;
 
 const rooms = new Map<string, RoomState>();
 const turnTimers = new Map<string, NodeJS.Timeout>();
@@ -42,15 +48,23 @@ export function onStateChange(room: RoomState): void {
     return;
   }
 
+  // Trade targeted at a bot: auto-decline so the game doesn't stall.
+  if (room.pendingTrade) {
+    const target = room.players.find((pl) => pl.id === room.pendingTrade!.toId);
+    if (target?.isBot) {
+      resolveTrade(room, target.id, false);
+    }
+  }
+
   const p = currentPlayer(room);
   if (!p) return;
 
   const prev = notifiedTurns.get(room.id);
   if (prev !== p.id) {
     notifiedTurns.set(room.id, p.id);
-    // Пушим только если игрок не в сети (свернул/закрыл приложение).
-    // Если у него открытый WS — он видит экран, бот в личку не пишет.
-    if (!p.connected) {
+    // Push notification only for real humans who are offline. Bots have
+    // synthetic tgUserIds; the telegram notifier would 400 on those.
+    if (!p.connected && !p.isBot) {
       notifyTurn(p.tgUserId, room.id, p.name);
     }
     resetTurnTimer(room);
@@ -59,13 +73,23 @@ export function onStateChange(room: RoomState): void {
 
 function resetTurnTimer(room: RoomState): void {
   clearTurnTimer(room.id);
+  const current = currentPlayer(room);
+  // Bots act almost immediately; disconnected humans get the full 180s grace.
+  const delay = current?.isBot ? BOT_TURN_DELAY_MS : config.turnTimeoutSec * 1000;
   const timer = setTimeout(async () => {
     const fresh = getRoom(room.id);
     if (!fresh) return;
     const p = currentPlayer(fresh);
     if (!p) return;
 
-    const aiMode = !p.connected;
+    // Bots always auto-act; humans only when offline.
+    const aiMode = !p.connected || !!p.isBot;
+
+    // Bots pay the jail fine if they can afford it rather than sitting
+    // and eventually going bankrupt.
+    if (aiMode && p.inJail && p.cash >= 50 && p.getOutCards === 0) {
+      payJailFine(fresh, p.id);
+    }
 
     if (fresh.phase === "rolling") {
       rollAndMove(fresh);
@@ -82,6 +106,12 @@ function resetTurnTimer(room: RoomState): void {
       }
     }
 
+    // Bots always pass auctions (simplest behaviour — lets humans always win
+    // or the auction resolves with no bidders).
+    if (aiMode && fresh.auction && !fresh.auction.passedIds.includes(p.id)) {
+      passAuction(fresh, p.id);
+    }
+
     // AI: если есть монополии и деньги — строим дом на самой дешёвой улице без построек.
     if (aiMode) {
       await aiAutoBuild(fresh, p.id);
@@ -91,7 +121,7 @@ function resetTurnTimer(room: RoomState): void {
       engineEndTurn(fresh);
     }
     onStateChange(fresh);
-  }, config.turnTimeoutSec * 1000);
+  }, delay);
   turnTimers.set(room.id, timer);
 }
 
