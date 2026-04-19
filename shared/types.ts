@@ -186,6 +186,10 @@ export interface RoomState {
   auction: AuctionState | null;
   pendingTrade: TradeOffer | null;
   winnerId: string | null;
+  // Finite bank inventory (Hasbro rule). Decrement when a player builds,
+  // increment when they sell or when property is cleared on bankruptcy.
+  houseBank: number;
+  hotelBank: number;
   createdAt: number;
   startedAt: number | null;
 }

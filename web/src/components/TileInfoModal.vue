@@ -176,11 +176,20 @@ const evenSellOk = computed(() => {
   return mine >= maxOther;
 });
 
+const bankHasSupply = computed(() => {
+  const r = game.room;
+  if (!r) return true;
+  const o = owned.value;
+  if (!o) return true;
+  return o.houses >= 4 ? r.hotelBank > 0 : r.houseBank > 0;
+});
+
 const canBuild = computed(() => {
   if (!isMineStreet.value || !hasMonopoly.value) return false;
   const o = owned.value;
   if (!o || o.mortgaged) return false;
   if (o.hotel) return false;
+  if (!bankHasSupply.value) return false;
   return evenBuildOk.value;
 });
 
@@ -414,6 +423,11 @@ const isRu = computed(() => loc.value === "ru");
             {{ isRu
               ? "Сначала снеси с более застроенных улиц группы"
               : "Sell from the more-developed streets first" }}
+          </p>
+          <p v-else-if="hasMonopoly && !bankHasSupply" class="hint">
+            {{ owned?.houses === 4
+              ? (isRu ? "В банке закончились отели — дождись, пока кто-то продаст" : "No hotels left in the bank — wait for someone to sell")
+              : (isRu ? "В банке закончились дома — дождись, пока кто-то продаст" : "No houses left in the bank — wait for someone to sell") }}
           </p>
         </div>
 

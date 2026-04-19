@@ -289,6 +289,11 @@ export const JAIL_POSITION = 10;
 export const MAX_PLAYERS = 6;
 export const MIN_PLAYERS = 2;
 
+// Hasbro-spec finite bank inventory. When exhausted, players must wait for
+// others to sell buildings back before they can build more.
+export const HOUSE_BANK_SIZE = 32;
+export const HOTEL_BANK_SIZE = 12;
+
 export const PLAYER_COLORS = [
   "#ef4444", // red
   "#3b82f6", // blue

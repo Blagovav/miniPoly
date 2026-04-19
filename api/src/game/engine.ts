@@ -1,5 +1,5 @@
 import { nanoid } from "nanoid";
-import { BOARD, GO_SALARY, GROUP_SIZE, JAIL_FINE, JAIL_POSITION, MAX_PLAYERS, MIN_PLAYERS, PLAYER_COLORS, STARTING_CASH } from "../../../shared/board";
+import { BOARD, GO_SALARY, GROUP_SIZE, HOTEL_BANK_SIZE, HOUSE_BANK_SIZE, JAIL_FINE, JAIL_POSITION, MAX_PLAYERS, MIN_PLAYERS, PLAYER_COLORS, STARTING_CASH } from "../../../shared/board";
 import { CHANCE_CARDS, CHEST_CARDS, type CardDef } from "../../../shared/cards";
 import type {
   DrawnCard,
@@ -45,6 +45,8 @@ export function createRoom(hostId: string, isPublic = true, maxPlayers = MAX_PLA
     auction: null,
     pendingTrade: null,
     winnerId: null,
+    houseBank: HOUSE_BANK_SIZE,
+    hotelBank: HOTEL_BANK_SIZE,
     createdAt: Date.now(),
     startedAt: null,
   };
@@ -178,9 +180,12 @@ export function leaveActiveGame(room: RoomState, playerId: string): void {
   if (!p || p.bankrupt) return;
   p.bankrupt = true;
   p.cash = 0;
-  // освобождаем его собственность
+  // освобождаем его собственность + возвращаем постройки в банк
   for (const idx in room.properties) {
-    if (room.properties[idx].ownerId === p.id) delete room.properties[idx];
+    const prop = room.properties[idx];
+    if (prop.ownerId !== p.id) continue;
+    returnBuildingsToBank(room, prop);
+    delete room.properties[idx];
   }
   log(room, { en: `${p.name} left the game`, ru: `${p.name} вышел из игры` });
   // если ушёл текущий игрок — пропускаем ход
@@ -229,16 +234,21 @@ export function buildHouse(room: RoomState, playerId: string, tileIndex: number)
   if (owned.houses > otherMin) return { ok: false, error: "build evenly" };
 
   if (owned.houses >= 4) {
-    // строим отель
+    // Hasbro: upgrading to hotel returns the 4 houses to the bank and takes 1 hotel.
+    if (room.hotelBank <= 0) return { ok: false, error: "no hotels in bank" };
     if (p.cash < tile.houseCost) return { ok: false, error: "not enough cash" };
     p.cash -= tile.houseCost;
+    room.houseBank += 4;
+    room.hotelBank--;
     owned.houses = 0;
     owned.hotel = true;
     log(room, { en: `${p.name} built a hotel on ${tile.name.en}`, ru: `${p.name} построил отель на ${tile.name.ru}` });
     return { ok: true };
   }
+  if (room.houseBank <= 0) return { ok: false, error: "no houses in bank" };
   if (p.cash < tile.houseCost) return { ok: false, error: "not enough cash" };
   p.cash -= tile.houseCost;
+  room.houseBank--;
   owned.houses++;
   log(room, { en: `${p.name} built a house on ${tile.name.en} (${owned.houses}/4)`, ru: `${p.name} построил дом на ${tile.name.ru} (${owned.houses}/4)` });
   return { ok: true };
@@ -272,14 +282,27 @@ export function sellHouse(room: RoomState, playerId: string, tileIndex: number):
   if (myLevel < otherMax) return { ok: false, error: "sell evenly" };
 
   if (owned.hotel) {
-    owned.hotel = false;
-    owned.houses = 4;
-    p.cash += refund;
-    log(room, { en: `${p.name} sold hotel on ${tile.name.en} (+$${refund})`, ru: `${p.name} продал отель на ${tile.name.ru} (+$${refund})` });
+    // Downgrading hotel → 4 houses requires 4 houses in the bank (Hasbro rule).
+    // If none available, the player must sell the hotel straight down to 0.
+    if (room.houseBank >= 4) {
+      owned.hotel = false;
+      owned.houses = 4;
+      room.houseBank -= 4;
+      room.hotelBank++;
+      p.cash += refund;
+      log(room, { en: `${p.name} sold hotel on ${tile.name.en} (+$${refund})`, ru: `${p.name} продал отель на ${tile.name.ru} (+$${refund})` });
+    } else {
+      owned.hotel = false;
+      owned.houses = 0;
+      room.hotelBank++;
+      p.cash += refund;
+      log(room, { en: `${p.name} sold hotel on ${tile.name.en} (+$${refund}, no houses in bank)`, ru: `${p.name} продал отель на ${tile.name.ru} (+$${refund}, в банке нет домов)` });
+    }
     return { ok: true };
   }
   if (owned.houses <= 0) return { ok: false, error: "nothing to sell" };
   owned.houses--;
+  room.houseBank++;
   p.cash += refund;
   log(room, { en: `${p.name} sold a house on ${tile.name.en} (+$${refund})`, ru: `${p.name} продал дом на ${tile.name.ru} (+$${refund})` });
   return { ok: true };
@@ -839,17 +862,51 @@ function payOrBankrupt(
 function bankruptPlayer(room: RoomState, p: Player, to?: Player): void {
   p.bankrupt = true;
   p.cash = 0;
-  // transfer properties
+  // transfer properties. When returning to the bank, buildings are freed too;
+  // when handing to a creditor, Hasbro rule says the creditor must immediately
+  // sell any buildings at half price — we approximate by liquidating on transfer.
   for (const idx in room.properties) {
     const prop = room.properties[idx];
     if (prop.ownerId !== p.id) continue;
     if (to) {
+      liquidateBuildings(room, prop, to);
       prop.ownerId = to.id;
     } else {
+      returnBuildingsToBank(room, prop);
       delete room.properties[idx];
     }
   }
   log(room, { en: `${p.name} went bankrupt`, ru: `${p.name} обанкротился` });
+}
+
+function returnBuildingsToBank(room: RoomState, prop: OwnedProperty): void {
+  if (prop.hotel) {
+    room.hotelBank++;
+    prop.hotel = false;
+  }
+  if (prop.houses > 0) {
+    room.houseBank += prop.houses;
+    prop.houses = 0;
+  }
+}
+
+function liquidateBuildings(room: RoomState, prop: OwnedProperty, creditor: Player): void {
+  const tile = BOARD[prop.tileIndex];
+  if (tile.kind !== "street") return;
+  let units = 0;
+  if (prop.hotel) {
+    room.hotelBank++;
+    prop.hotel = false;
+    units += 5;
+  }
+  if (prop.houses > 0) {
+    room.houseBank += prop.houses;
+    units += prop.houses;
+    prop.houses = 0;
+  }
+  if (units > 0) {
+    creditor.cash += Math.floor((tile.houseCost * units) / 2);
+  }
 }
 
 function drawCard(room: RoomState, p: Player, kind: "chance" | "chest"): void {
