@@ -135,6 +135,10 @@ export async function registerWebSocket(app: FastifyInstance): Promise<void> {
             }, 3000);
           }
           sendState(roomId);
+          // Re-run state evaluation so the turn timer freezes immediately
+          // when the last human leaves (instead of waiting for the next
+          // turn change to notice nobody's watching).
+          onStateChange(room);
         }
       }
       connections.delete(ws);

@@ -24,6 +24,7 @@ import TileInfoModal from "../components/TileInfoModal.vue";
 import OpponentsPanel from "../components/OpponentsPanel.vue";
 import PlayerProfileModal from "../components/PlayerProfileModal.vue";
 import TradeBanner from "../components/TradeBanner.vue";
+import TxnToast from "../components/TxnToast.vue";
 import Icon from "../components/Icon.vue";
 import LoadingScreen from "../components/LoadingScreen.vue";
 import CoronationModal from "../components/CoronationModal.vue";
@@ -356,6 +357,7 @@ void t;
     />
     <PlayerProfileModal :player="profilePlayer" :on-close="closeProfile" />
     <TradeBanner v-if="game.room" :on-respond="respondTrade" />
+    <TxnToast v-if="game.room" />
   </div>
 </template>
 

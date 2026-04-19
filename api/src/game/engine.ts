@@ -11,6 +11,7 @@ import type {
   RoomState,
   StreetTile,
   Tile,
+  TxnInfo,
 } from "../../../shared/types";
 
 const RAILROAD_RENTS = [25, 50, 100, 200];
@@ -19,8 +20,8 @@ export function rollDie(): number {
   return 1 + Math.floor(Math.random() * 6);
 }
 
-export function log(room: RoomState, text: I18nText): void {
-  const entry: GameLogEntry = { id: nanoid(8), ts: Date.now(), text };
+export function log(room: RoomState, text: I18nText, txn?: TxnInfo): void {
+  const entry: GameLogEntry = { id: nanoid(8), ts: Date.now(), text, ...(txn ? { txn } : {}) };
   room.log.push(entry);
   if (room.log.length > 200) room.log.shift();
 }
@@ -528,10 +529,14 @@ function handleProperty(room: RoomState, p: Player, tile: PropertyTile): void {
   const paid = Math.min(rent, p.cash);
   p.cash -= paid;
   owner.cash += paid;
-  log(room, {
-    en: `${p.name} paid ${owner.name} $${paid} rent on ${tile.name.en}`,
-    ru: `${p.name} заплатил ${owner.name} $${paid} аренды за ${tile.name.ru}`,
-  });
+  log(
+    room,
+    {
+      en: `${p.name} paid ${owner.name} $${paid} rent on ${tile.name.en}`,
+      ru: `${p.name} заплатил ${owner.name} $${paid} аренды за ${tile.name.ru}`,
+    },
+    { kind: "rent", amount: paid, actorId: p.id, counterpartyId: owner.id, tileIndex: tile.index },
+  );
   if (p.cash < 0 || rent > paid) {
     bankruptPlayer(room, p, owner);
   }
@@ -588,10 +593,14 @@ export function buyCurrentProperty(room: RoomState): boolean {
     hotel: false,
     mortgaged: false,
   };
-  log(room, {
-    en: `${p.name} bought ${tile.name.en} for $${tile.price}`,
-    ru: `${p.name} купил ${tile.name.ru} за $${tile.price}`,
-  });
+  log(
+    room,
+    {
+      en: `${p.name} bought ${tile.name.en} for $${tile.price}`,
+      ru: `${p.name} купил ${tile.name.ru} за $${tile.price}`,
+    },
+    { kind: "buy", amount: tile.price, actorId: p.id, tileIndex: tile.index },
+  );
   room.phase = "action";
   return true;
 }

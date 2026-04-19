@@ -62,16 +62,6 @@ const tileIcon = computed(() => {
 
 const showIcon = computed(() => props.side === "corner" || props.tile.kind !== "street");
 
-/** Короткое название для corner-клеток и спец-клеток, многострочно. */
-const short = computed(() => {
-  const t = props.tile;
-  if (t.kind === "street" || t.kind === "railroad" || t.kind === "utility") return "";
-  const full = t.name[loc.value];
-  if (full.length < 16) return full;
-  // Stripped for compactness.
-  return full.split(" ").slice(0, 2).join(" ");
-});
-
 const priceLabel = computed(() => {
   if (
     props.tile.kind === "street"
@@ -110,11 +100,10 @@ const priceLabel = computed(() => {
          a touch thinner so the two lines read as a pair without competing. -->
     <div v-if="owned" class="owner-band" />
 
-    <!-- Tile body: icon (optional), name, price. Oriented per side so that
-         text on side rows reads sideways like a real Monopoly board. -->
+    <!-- Tile body: icon + price only. Text labels dropped in favour of pure
+         icons for a cleaner board; full name still shows in TileInfoModal. -->
     <div class="body">
-      <div v-if="showIcon && tileIcon" class="icon">{{ tileIcon }}</div>
-      <div v-if="short" class="name">{{ short }}</div>
+      <div v-if="showIcon && tileIcon" class="icon" :title="tile.name[loc]">{{ tileIcon }}</div>
       <div v-if="priceLabel !== null" class="price">◈ {{ priceLabel }}</div>
     </div>
 
@@ -252,31 +241,12 @@ const priceLabel = computed(() => {
 
 /* ─── Pieces ─── */
 .icon {
-  font-size: clamp(10px, 1.8vmin, 15px);
+  font-size: clamp(14px, 2.6vmin, 20px);
   line-height: 1;
   filter: drop-shadow(0 1px 1px rgba(42, 29, 16, 0.25));
 }
 .board-tile.corner .icon {
-  font-size: clamp(14px, 2.6vmin, 22px);
-}
-.name {
-  font-family: var(--font-body);
-  font-size: clamp(6.5px, 1vmin, 9px);
-  line-height: 1.05;
-  color: var(--ink);
-  font-weight: 600;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-  overflow: hidden;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-}
-.board-tile.corner .name {
-  font-family: var(--font-title);
-  font-size: clamp(7.5px, 1.2vmin, 11px);
-  letter-spacing: 0.14em;
-  color: var(--primary);
+  font-size: clamp(20px, 3.8vmin, 30px);
 }
 .price {
   font-family: var(--font-mono);

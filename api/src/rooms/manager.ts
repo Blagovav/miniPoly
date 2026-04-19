@@ -48,6 +48,17 @@ export function onStateChange(room: RoomState): void {
     return;
   }
 
+  // Nobody real is watching — freeze the turn timer and skip push
+  // notifications. The room survives in memory for reconnects; if anyone
+  // comes back we call onStateChange again and pick up where we left off.
+  // Without this, a deserted room would keep pinging "your turn" forever
+  // and bots would pointlessly cycle state.
+  const anyHumanOnline = room.players.some((p) => p.connected && !p.isBot);
+  if (!anyHumanOnline) {
+    clearTurnTimer(room.id);
+    return;
+  }
+
   // Trade targeted at a bot: auto-decline so the game doesn't stall.
   if (room.pendingTrade) {
     const target = room.players.find((pl) => pl.id === room.pendingTrade!.toId);
