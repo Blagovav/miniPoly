@@ -96,6 +96,21 @@ interface PlacedPlayer {
   isFriend: boolean;
 }
 
+/** GO tile центр — нужен для "+◈200"-взрыва при проходе круга. */
+const goTileCenter = computed(() => tileCenter(0));
+
+/** Позиция и цвет landing-шоквейва, если фишка только что приземлилась. */
+const landedTileCenter = computed(() => {
+  const lt = game.landedTile;
+  return lt ? tileCenter(lt.tileIndex) : null;
+});
+const landedTileColor = computed(() => {
+  const lt = game.landedTile;
+  if (!lt) return "#d4a84a";
+  const pl = props.room.players.find((p) => p.id === lt.playerId);
+  return pl ? playerHue(pl) : "#d4a84a";
+});
+
 function positionOffset(idx: number, total: number): { dx: number; dy: number } {
   if (total === 1) return { dx: 0, dy: 0 };
   // 2 tokens — side-by-side horizontally (vertical stack squished them).
@@ -182,6 +197,48 @@ void lighten;
         :owner-is-friend="ownerIsFriend(t.tile.index)"
         :style="{ gridRow: t.row + 1, gridColumn: t.col + 1 }"
       />
+
+      <!-- ── Juice: landing impact (shockwave + color flash on tile) ── -->
+      <div
+        v-if="landedTileCenter"
+        class="impact-layer"
+        :key="game.landedTile?.ts"
+      >
+        <div
+          class="impact-ring"
+          :style="{
+            left: `${landedTileCenter.xPct}%`,
+            top: `${landedTileCenter.yPct}%`,
+            '--impact-color': landedTileColor,
+          }"
+        />
+        <div
+          class="impact-flash"
+          :style="{
+            left: `${landedTileCenter.xPct}%`,
+            top: `${landedTileCenter.yPct}%`,
+            '--impact-color': landedTileColor,
+          }"
+        />
+      </div>
+
+      <!-- ── Juice: Pass GO burst — "+◈200" над GO-клеткой ── -->
+      <div
+        v-if="game.passedGo"
+        class="passgo-layer"
+        :key="`go-${game.passedGo.ts}`"
+      >
+        <div
+          class="passgo-halo"
+          :style="{ left: `${goTileCenter.xPct}%`, top: `${goTileCenter.yPct}%` }"
+        />
+        <div
+          class="passgo-burst"
+          :style="{ left: `${goTileCenter.xPct}%`, top: `${goTileCenter.yPct}%` }"
+        >
+          +◈200
+        </div>
+      </div>
 
       <!-- ── Tokens layer (absolute-positioned over the grid) ── -->
       <div class="tokens-layer">
@@ -353,6 +410,83 @@ void lighten;
   justify-content: center;
   color: rgba(212, 168, 74, 0.8);
   font-size: clamp(8px, 1.6vmin, 12px);
+}
+
+/* ── Juice: landing impact ── */
+.impact-layer, .passgo-layer {
+  position: absolute;
+  inset: 1px;
+  pointer-events: none;
+  z-index: 6;
+}
+.impact-ring {
+  position: absolute;
+  width: 9%;
+  height: 9%;
+  border: 2px solid var(--impact-color, #d4a84a);
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  animation: impact-ring 0.8s cubic-bezier(0.2, 0.8, 0.4, 1) forwards;
+  box-shadow: 0 0 10px var(--impact-color, #d4a84a);
+}
+.impact-flash {
+  position: absolute;
+  width: 8%;
+  height: 8%;
+  border-radius: 50%;
+  background: radial-gradient(circle, var(--impact-color, #d4a84a) 0%, transparent 70%);
+  transform: translate(-50%, -50%);
+  animation: impact-flash 0.65s ease-out forwards;
+  mix-blend-mode: screen;
+}
+@keyframes impact-ring {
+  0%   { transform: translate(-50%, -50%) scale(0.3); opacity: 1; border-width: 3px; }
+  100% { transform: translate(-50%, -50%) scale(2.4); opacity: 0; border-width: 1px; }
+}
+@keyframes impact-flash {
+  0%   { transform: translate(-50%, -50%) scale(0.2); opacity: 0; }
+  35%  { transform: translate(-50%, -50%) scale(1.1); opacity: 0.85; }
+  100% { transform: translate(-50%, -50%) scale(1.8); opacity: 0; }
+}
+
+/* ── Juice: Pass GO burst ── */
+.passgo-halo {
+  position: absolute;
+  width: 18%;
+  height: 18%;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(255, 215, 110, 0.7) 0%, transparent 70%);
+  transform: translate(-50%, -50%);
+  animation: passgo-halo 1.1s ease-out forwards;
+  mix-blend-mode: screen;
+}
+.passgo-burst {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: clamp(16px, 3.2vmin, 22px);
+  color: #fff8da;
+  text-shadow:
+    0 0 10px #ffd86e,
+    0 0 20px rgba(255, 216, 110, 0.7),
+    0 2px 4px rgba(120, 80, 10, 0.5);
+  white-space: nowrap;
+  letter-spacing: 0.03em;
+  animation: passgo-burst 1.1s cubic-bezier(0.2, 0.8, 0.3, 1) forwards;
+  pointer-events: none;
+  z-index: 9;
+}
+@keyframes passgo-halo {
+  0%   { transform: translate(-50%, -50%) scale(0.3); opacity: 0; }
+  30%  { transform: translate(-50%, -50%) scale(1.1); opacity: 1; }
+  100% { transform: translate(-50%, -50%) scale(2); opacity: 0; }
+}
+@keyframes passgo-burst {
+  0%   { transform: translate(-50%, -40%) scale(0.4); opacity: 0; }
+  20%  { transform: translate(-50%, -75%) scale(1.4); opacity: 1; }
+  80%  { transform: translate(-50%, -140%) scale(1); opacity: 1; }
+  100% { transform: translate(-50%, -190%) scale(0.85); opacity: 0; }
 }
 
 /* ── Tokens layer ── */

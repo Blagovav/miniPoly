@@ -9,6 +9,7 @@ import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { useRoute, useRouter } from "vue-router";
 import { useTelegram } from "../composables/useTelegram";
+import { useShake } from "../composables/useShake";
 import { useWs } from "../composables/useWs";
 import { useGameStore } from "../stores/game";
 import Board from "../components/Board.vue";
@@ -39,6 +40,11 @@ const route = useRoute();
 const { initData, userName, haptic, notify } = useTelegram();
 const game = useGameStore();
 const ws = useWs();
+const shake = useShake();
+// One-shot: first roll tap requests DeviceMotion permission on iOS;
+// from then on the attached listener keeps firing every time the phone
+// gets a sharp jolt and it's our turn to roll.
+let shakeAttempted = false;
 // Voice chat (WebRTC mesh over WS signalling). Mic acquired only after first tap.
 const voice = useVoice(ws, () => game.myPlayerId);
 
@@ -51,7 +57,9 @@ const inv = useInventoryStore();
 let equippedApplied = false;
 const off = ws.onMessage((m) => {
   game.applyMessage(m);
-  if (m.type === "diceRolled") haptic("medium");
+  // Dice / move haptics are fired from the game store for my own actions only
+  // (dice-land heavy, per-step light, landing medium, pass-GO heavy) — we no
+  // longer buzz the phone for every opponent's roll.
   if (m.type === "error") notify("error");
   if (m.type === "joined" && !equippedApplied) {
     equippedApplied = true;
@@ -121,9 +129,19 @@ function start() {
   haptic("medium");
   ws.send({ type: "start" });
 }
-function roll() {
+function rollIfAllowed() {
+  if (!game.isMyTurn || game.rolling) return;
+  if (game.room?.phase !== "rolling") return;
+  if (game.animatingPlayerId) return;
   haptic("heavy");
   ws.send({ type: "roll" });
+}
+function roll() {
+  rollIfAllowed();
+  if (!shakeAttempted) {
+    shakeAttempted = true;
+    shake.start(() => rollIfAllowed());
+  }
 }
 function buy() {
   haptic("medium");

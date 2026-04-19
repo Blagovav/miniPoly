@@ -79,6 +79,68 @@ const afkRemainingSec = computed(() => {
 const showAfkChip = computed(() =>
   !!props.current && !props.current.connected && afkRemainingSec.value > 0,
 );
+
+// ── Juice: wallet-hit cash animation ───────────────────────
+// Показываемый баланс отстаёт от реального на ~1с: сначала вылетает
+// красное "-100" (или зелёное "+200"), потом цифра тикает до нового значения.
+// Так игрок видит сам удар, а не телепорт из 1500 в 1400.
+interface CashFlight { id: number; amount: number; ts: number }
+const displayCash = ref<number>(props.me?.cash ?? 0);
+const cashFlights = ref<CashFlight[]>([]);
+const cashPulse = ref<"up" | "down" | null>(null);
+let flightSeq = 0;
+let cashTween: ReturnType<typeof setInterval> | null = null;
+let cashPulseTo: ReturnType<typeof setTimeout> | null = null;
+
+function pushCashFlight(delta: number) {
+  const id = ++flightSeq;
+  cashFlights.value.push({ id, amount: delta, ts: Date.now() });
+  setTimeout(() => {
+    cashFlights.value = cashFlights.value.filter((f) => f.id !== id);
+  }, 1300);
+}
+
+function tweenDisplayCash(from: number, to: number) {
+  if (cashTween) { clearInterval(cashTween); cashTween = null; }
+  const startAt = Date.now() + 260; // let the delta chip pop first
+  const duration = 700;
+  cashTween = setInterval(() => {
+    const elapsed = Date.now() - startAt;
+    if (elapsed < 0) return;
+    const t = Math.min(1, elapsed / duration);
+    const eased = 1 - Math.pow(1 - t, 3);
+    displayCash.value = Math.round(from + (to - from) * eased);
+    if (t >= 1) {
+      displayCash.value = to;
+      if (cashTween) { clearInterval(cashTween); cashTween = null; }
+    }
+  }, 40);
+}
+
+watch(
+  () => props.me?.cash,
+  (target, prev) => {
+    if (target === undefined || target === null) return;
+    if (prev === undefined || prev === null) {
+      // First snapshot / rejoin — just sync without a flight.
+      displayCash.value = target;
+      return;
+    }
+    if (target === prev) return;
+    const delta = target - prev;
+    pushCashFlight(delta);
+    tweenDisplayCash(displayCash.value, target);
+    cashPulse.value = delta > 0 ? "up" : "down";
+    if (cashPulseTo) clearTimeout(cashPulseTo);
+    cashPulseTo = setTimeout(() => { cashPulse.value = null; }, 900);
+  },
+  { immediate: true },
+);
+
+onBeforeUnmount(() => {
+  if (cashTween) clearInterval(cashTween);
+  if (cashPulseTo) clearTimeout(cashPulseTo);
+});
 </script>
 
 <template>
@@ -183,7 +245,22 @@ const showAfkChip = computed(() =>
     <div v-if="me" class="me-card card">
       <div class="me-card__row">
         <span class="me-card__label">{{ t("game.cash") }}</span>
-        <span class="me-card__cash">◈ {{ me.cash }}</span>
+        <span class="me-card__cash-wrap">
+          <span
+            :class="[
+              'me-card__cash',
+              cashPulse === 'up' && 'me-card__cash--up',
+              cashPulse === 'down' && 'me-card__cash--down',
+            ]"
+          >◈ {{ displayCash }}</span>
+          <span class="me-card__flights" aria-hidden="true">
+            <span
+              v-for="f in cashFlights"
+              :key="f.id"
+              :class="['cash-flight', f.amount < 0 ? 'cash-flight--down' : 'cash-flight--up']"
+            >{{ f.amount > 0 ? '+' : '' }}{{ f.amount }}</span>
+          </span>
+        </span>
       </div>
       <div class="me-card__row">
         <span class="me-card__label">{{ t("game.properties") }}</span>
@@ -431,13 +508,72 @@ const showAfkChip = computed(() =>
   text-transform: uppercase;
   font-weight: 500;
 }
+.me-card__cash-wrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  min-height: 1.4em;
+}
 .me-card__cash {
   font-family: var(--font-mono);
   font-weight: 600;
   color: var(--gold);
   font-size: 14px;
   font-variant-numeric: tabular-nums;
+  transition: color 0.18s, transform 0.18s;
+  display: inline-block;
 }
+.me-card__cash--up {
+  color: #1e8e3e;
+  transform: scale(1.08);
+}
+.me-card__cash--down {
+  color: #c73030;
+  transform: scale(1.08);
+}
+/* Carrier sits to the left of the balance so flights animate over it. */
+.me-card__flights {
+  position: absolute;
+  right: 100%;
+  top: 50%;
+  height: 0;
+  margin-right: 8px;
+  pointer-events: none;
+  white-space: nowrap;
+}
+.cash-flight {
+  position: absolute;
+  right: 0;
+  top: 0;
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+  text-shadow: 0 0 8px rgba(255, 255, 255, 0.7);
+  white-space: nowrap;
+  pointer-events: none;
+}
+.cash-flight--up {
+  color: #1e8e3e;
+  animation: cash-flight-up 1.2s cubic-bezier(0.2, 0.8, 0.3, 1) forwards;
+}
+.cash-flight--down {
+  color: #c73030;
+  animation: cash-flight-down 1.2s cubic-bezier(0.2, 0.8, 0.3, 1) forwards;
+}
+@keyframes cash-flight-up {
+  0%   { transform: translateY(6px) scale(0.7); opacity: 0; }
+  15%  { transform: translateY(-2px) scale(1.35); opacity: 1; }
+  55%  { transform: translateY(-12px) scale(1); opacity: 1; }
+  100% { transform: translateY(-32px) scale(0.9); opacity: 0; }
+}
+@keyframes cash-flight-down {
+  0%   { transform: translateY(-6px) scale(0.7); opacity: 0; }
+  15%  { transform: translateY(2px) scale(1.35); opacity: 1; }
+  55%  { transform: translateY(12px) scale(1); opacity: 1; }
+  100% { transform: translateY(32px) scale(0.85); opacity: 0; }
+}
+
 .me-card__val {
   font-family: var(--font-display);
   font-size: 14px;
