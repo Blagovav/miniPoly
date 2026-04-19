@@ -55,14 +55,17 @@ export function addPlayer(
   name: string,
   avatar?: string,
 ): Player | null {
-  if (room.phase !== "lobby") return null;
+  // Reconnect of an existing player must work in any phase (rolling,
+  // action, auction, ...). The lobby-only gate below applies strictly to
+  // NEW joins — otherwise a player who refreshed mid-match would be
+  // permanently locked out of their own game.
   const existing = room.players.find((p) => p.tgUserId === tgUserId);
   if (existing) {
     existing.connected = true;
-    // Обновляем имя, если пользователь ввёл новое при пере-входе.
     if (name && name !== existing.name) existing.name = name;
     return existing;
   }
+  if (room.phase !== "lobby") return null;
   if (room.players.length >= (room.maxPlayers ?? MAX_PLAYERS)) return null;
 
   const defaultTokens = ["token-car", "token-dog", "token-hat", "token-cat", "token-crown", "token-ufo"];
