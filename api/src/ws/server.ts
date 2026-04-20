@@ -37,7 +37,7 @@ function sweepOfflineLobby(room: RoomState): void {
   const offline = room.players.filter((p) => !p.connected && !p.isBot);
   for (const p of offline) removePlayer(room, p.id);
 }
-import { getRoom, onStateChange, saveRoom } from "../rooms/manager";
+import { getRoom, onStateChange, registerBroadcasters, saveRoom } from "../rooms/manager";
 
 interface Conn {
   send(msg: ServerMessage): void;
@@ -94,6 +94,9 @@ function sendState(roomId: string): void {
 
 export async function registerWebSocket(app: FastifyInstance): Promise<void> {
   await app.register(websocket);
+
+  // Let the room manager push messages + state from its bot-turn timer.
+  registerBroadcasters(broadcast, sendState);
 
   app.get("/ws", { websocket: true }, (socket) => {
     const ws = socket as unknown as WebSocket;

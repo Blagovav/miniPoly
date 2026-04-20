@@ -1,4 +1,4 @@
-import type { RoomState } from "../../../shared/types";
+import type { RoomState, ServerMessage } from "../../../shared/types";
 import { config } from "../config";
 import { notifyTurn } from "../telegram";
 import {
@@ -17,6 +17,20 @@ const BOT_TURN_DELAY_MS = 2500;
 const rooms = new Map<string, RoomState>();
 const turnTimers = new Map<string, NodeJS.Timeout>();
 const notifiedTurns = new Map<string, string>();
+
+// Broadcasters are injected by the WS server on startup so the bot-turn
+// timer can push `diceRolled` + `state` to clients. Without these, the bot
+// would mutate state silently and the client would stall on "Ход Bot X".
+let broadcastMsg: ((roomId: string, msg: ServerMessage) => void) | null = null;
+let broadcastState: ((roomId: string) => void) | null = null;
+
+export function registerBroadcasters(
+  msg: (roomId: string, m: ServerMessage) => void,
+  state: (roomId: string) => void,
+): void {
+  broadcastMsg = msg;
+  broadcastState = state;
+}
 
 export function saveRoom(room: RoomState): void {
   rooms.set(room.id, room);
@@ -103,7 +117,18 @@ function resetTurnTimer(room: RoomState): void {
     }
 
     if (fresh.phase === "rolling") {
-      rollAndMove(fresh);
+      const rollRes = rollAndMove(fresh);
+      // Broadcast diceRolled so clients animate the token walk exactly like
+      // they do for human rolls. Without this the bot silently teleports.
+      if (rollRes && broadcastMsg) {
+        broadcastMsg(fresh.id, {
+          type: "diceRolled",
+          by: p.id,
+          dice: rollRes.dice,
+          from: rollRes.from,
+          to: rollRes.to,
+        });
+      }
     }
     if (fresh.phase === "buyPrompt") {
       const { BOARD } = await import("../../../shared/board");
@@ -131,6 +156,10 @@ function resetTurnTimer(room: RoomState): void {
     if (fresh.phase === "action") {
       engineEndTurn(fresh);
     }
+    // Push the final state so the client sees the bot's purchases, builds,
+    // and turn handoff. Done AFTER all mutations but BEFORE onStateChange so
+    // the next timer's resetTurnTimer sees a stable broadcast baseline.
+    if (broadcastState) broadcastState(fresh.id);
     onStateChange(fresh);
   }, delay);
   turnTimers.set(room.id, timer);
