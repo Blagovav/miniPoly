@@ -73,14 +73,26 @@ onUnmounted(() => {
   game.reset();
 });
 
-// Join on mount + remember room id for friend-invites deep link.
-onMounted(() => {
+// Join on mount AND on every WS reconnect. The server treats our new
+// socket as anonymous until it sees a `join` — without re-joining on
+// reconnect, messages like `addBot` / `roll` silently drop because
+// `conn.playerId` is null on the fresh connection.
+function sendJoin() {
   ws.send({
     type: "join",
     roomId: props.id,
     tgInitData: initData.value,
     name: userName.value || "Player",
   });
+}
+watch(
+  () => ws.connected.value,
+  (isConnected) => {
+    if (isConnected) sendJoin();
+  },
+  { immediate: true },
+);
+onMounted(() => {
   try {
     localStorage.setItem("activeRoomId", props.id);
     localStorage.setItem("activeRoomTs", String(Date.now()));

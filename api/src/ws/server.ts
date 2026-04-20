@@ -381,7 +381,13 @@ function handlePassAuction(conn: Conn): void {
 
 function handleAddBot(conn: Conn): void {
   const ctx = getRoomAndPlayer(conn);
-  if (!ctx || !ctx.p) return;
+  // Surface the "not in a room" path explicitly — a silent return used to
+  // mask the reconnect bug where the client sent `addBot` on a fresh socket
+  // that never re-joined, making the button look broken to the user.
+  if (!ctx || !ctx.p) {
+    conn.send({ type: "error", message: "not in a room" });
+    return;
+  }
   if (ctx.room.hostId !== ctx.p.id) {
     conn.send({ type: "error", message: "host only" });
     return;
