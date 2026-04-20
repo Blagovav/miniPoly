@@ -28,10 +28,13 @@ import {
 } from "../game/engine";
 import { deleteRoom as mgrDeleteRoom } from "../rooms/manager";
 
-/** Чистит всех offline-игроков из лобби. Вызывается перед каждым broadcast. */
+/** Чистит всех offline-игроков из лобби. Вызывается перед каждым broadcast.
+ *  Ботов не трогаем — у них `connected: false` намеренно (у бота нет своего
+ *  WS), и sweep иначе мгновенно выметал их сразу после addBot — кнопка
+ *  "Добавить бота" выглядела как ничего не делающая. */
 function sweepOfflineLobby(room: RoomState): void {
   if (room.phase !== "lobby") return;
-  const offline = room.players.filter((p) => !p.connected);
+  const offline = room.players.filter((p) => !p.connected && !p.isBot);
   for (const p of offline) removePlayer(room, p.id);
 }
 import { getRoom, onStateChange, saveRoom } from "../rooms/manager";
@@ -147,9 +150,6 @@ export async function registerWebSocket(app: FastifyInstance): Promise<void> {
 }
 
 function handleMessage(conn: Conn, ws: WebSocket, msg: ClientMessage): void {
-  // Diagnostic: every WS message with the current conn binding. Keep until we
-  // confirm addBot / reconnect-rejoin flow works end-to-end, then trim.
-  console.log(`[ws] ${msg.type} room=${conn.roomId} player=${conn.playerId}`);
   switch (msg.type) {
     case "create":
       return handleCreate(conn, msg);
@@ -385,22 +385,18 @@ function handlePassAuction(conn: Conn): void {
 function handleAddBot(conn: Conn): void {
   const ctx = getRoomAndPlayer(conn);
   if (!ctx || !ctx.p) {
-    console.log(`[addBot] REJECTED: not in a room — conn roomId=${conn.roomId} playerId=${conn.playerId}`);
     conn.send({ type: "error", message: "not in a room" });
     return;
   }
   if (ctx.room.hostId !== ctx.p.id) {
-    console.log(`[addBot] REJECTED: not host — room.hostId=${ctx.room.hostId} me=${ctx.p.id}`);
     conn.send({ type: "error", message: "host only" });
     return;
   }
   const bot = addBot(ctx.room);
   if (!bot) {
-    console.log(`[addBot] REJECTED: addBot()=null — phase=${ctx.room.phase} players=${ctx.room.players.length}/${ctx.room.maxPlayers}`);
     conn.send({ type: "error", message: "can't add bot (lobby full or game already started)" });
     return;
   }
-  console.log(`[addBot] OK bot=${bot.name} room=${ctx.room.id}`);
   sendState(ctx.room.id);
 }
 
