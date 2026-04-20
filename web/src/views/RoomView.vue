@@ -37,7 +37,7 @@ const props = defineProps<{ id: string }>();
 const { t, locale } = useI18n();
 const router = useRouter();
 const route = useRoute();
-const { initData, userName, haptic, notify } = useTelegram();
+const { initData, userName, haptic, notify, setClosingConfirmation } = useTelegram();
 const game = useGameStore();
 const ws = useWs();
 const shake = useShake();
@@ -71,6 +71,8 @@ const off = ws.onMessage((m) => {
 onUnmounted(() => {
   off();
   game.reset();
+  // Снимаем подтверждение закрытия на выходе из комнаты — дома оно не нужно.
+  setClosingConfirmation(false);
 });
 
 // Join on mount AND on every WS reconnect. The server treats our new
@@ -121,6 +123,17 @@ watch(
 const phase = computed(() => game.room?.phase);
 const isLobby = computed(() => phase.value === "lobby" || !game.room);
 const isEnded = computed(() => phase.value === "ended");
+
+// Включаем Telegram-диалог "Точно закрыть?" только пока идёт партия. В лобби и
+// после окончания выходить без подтверждения — ничего не теряется.
+watch(
+  () => phase.value,
+  (p) => {
+    const inActiveGame = !!p && p !== "lobby" && p !== "ended";
+    setClosingConfirmation(inActiveGame);
+  },
+  { immediate: true },
+);
 
 const winner = computed(() =>
   game.room?.winnerId ? game.room.players.find((p) => p.id === game.room?.winnerId) ?? null : null,

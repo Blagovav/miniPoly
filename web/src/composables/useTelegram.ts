@@ -16,6 +16,9 @@ interface TgWebApp {
   exitFullscreen?: () => void;
   disableVerticalSwipes?: () => void;
   enableVerticalSwipes?: () => void;
+  isClosingConfirmationEnabled?: boolean;
+  enableClosingConfirmation?: () => void;
+  disableClosingConfirmation?: () => void;
   onEvent?: (event: string, handler: (...args: unknown[]) => void) => void;
   offEvent?: (event: string, handler: (...args: unknown[]) => void) => void;
   requestWriteAccess?: (cb?: (granted: boolean) => void) => void;
@@ -74,11 +77,12 @@ export function useTelegram() {
       const supportsFs = w.isVersionAtLeast?.("8.0") && !!w.requestFullscreen;
       if (supportsFs && !w.isFullscreen) {
         w.requestFullscreen!();
-        // Когда в fullscreen, вертикальные свайпы закрывают приложение —
-        // отключаем, чтобы можно было скроллить внутри.
-        w.disableVerticalSwipes?.();
       }
     } catch { /* старая версия Telegram — остаёмся в expanded */ }
+    // Глобально глушим вертикальный свайп-минимайз (Bot API 7.7+). Без этого
+    // любой свайп вниз по доске/карточкам случайно сворачивает Mini App —
+    // пользователь жаловался, что свайпает товары и игра закрывается.
+    try { w.disableVerticalSwipes?.(); } catch {}
     // Просим разрешение писать в личку — нужно для push-уведомлений о ходе.
     try {
       if (w.requestWriteAccess && !localStorage.getItem("writeAccessAsked")) {
@@ -123,6 +127,15 @@ export function useTelegram() {
     try { tg.value?.close(); } catch {}
   }
 
+  // Во время активной партии включаем диалог "Точно закрыть?" на свайп/крестик
+  // Telegram — чтобы случайный жест не терял прогресс.
+  function setClosingConfirmation(enabled: boolean) {
+    try {
+      if (enabled) tg.value?.enableClosingConfirmation?.();
+      else tg.value?.disableClosingConfirmation?.();
+    } catch { /* старая версия Telegram — ignore */ }
+  }
+
   function setUserName(name: string) {
     const trimmed = name.trim().slice(0, 24);
     if (!trimmed) return;
@@ -150,5 +163,5 @@ export function useTelegram() {
     } catch { return null; }
   }
 
-  return { tg, initData, userId, userName, init, haptic, notify, close, setUserName, fetchProfile };
+  return { tg, initData, userId, userName, init, haptic, notify, close, setClosingConfirmation, setUserName, fetchProfile };
 }
