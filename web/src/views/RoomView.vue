@@ -214,6 +214,7 @@ function destroyRoom() {
 
 function addBot() {
   haptic("medium");
+  console.log("[addBot] click — ws.connected=", ws.connected.value, " myId=", game.myPlayerId, " roomId=", props.id);
   ws.send({ type: "addBot" });
 }
 function removeBot(playerId: string) {

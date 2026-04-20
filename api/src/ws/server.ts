@@ -147,6 +147,9 @@ export async function registerWebSocket(app: FastifyInstance): Promise<void> {
 }
 
 function handleMessage(conn: Conn, ws: WebSocket, msg: ClientMessage): void {
+  // Diagnostic: every WS message with the current conn binding. Keep until we
+  // confirm addBot / reconnect-rejoin flow works end-to-end, then trim.
+  console.log(`[ws] ${msg.type} room=${conn.roomId} player=${conn.playerId}`);
   switch (msg.type) {
     case "create":
       return handleCreate(conn, msg);
@@ -381,22 +384,23 @@ function handlePassAuction(conn: Conn): void {
 
 function handleAddBot(conn: Conn): void {
   const ctx = getRoomAndPlayer(conn);
-  // Surface the "not in a room" path explicitly — a silent return used to
-  // mask the reconnect bug where the client sent `addBot` on a fresh socket
-  // that never re-joined, making the button look broken to the user.
   if (!ctx || !ctx.p) {
+    console.log(`[addBot] REJECTED: not in a room — conn roomId=${conn.roomId} playerId=${conn.playerId}`);
     conn.send({ type: "error", message: "not in a room" });
     return;
   }
   if (ctx.room.hostId !== ctx.p.id) {
+    console.log(`[addBot] REJECTED: not host — room.hostId=${ctx.room.hostId} me=${ctx.p.id}`);
     conn.send({ type: "error", message: "host only" });
     return;
   }
   const bot = addBot(ctx.room);
   if (!bot) {
+    console.log(`[addBot] REJECTED: addBot()=null — phase=${ctx.room.phase} players=${ctx.room.players.length}/${ctx.room.maxPlayers}`);
     conn.send({ type: "error", message: "can't add bot (lobby full or game already started)" });
     return;
   }
+  console.log(`[addBot] OK bot=${bot.name} room=${ctx.room.id}`);
   sendState(ctx.room.id);
 }
 
