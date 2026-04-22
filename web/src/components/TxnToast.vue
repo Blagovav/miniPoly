@@ -74,6 +74,11 @@ function entryToToast(entry: GameLogEntry): Toast | null {
 // On initial room state, skip the backlog — only animate NEW entries that
 // arrive during play. Without this, reconnecting mid-match would explode a
 // stack of stale toasts.
+// Also: buffer the toast while a token is mid-hop. The server logs the
+// txn the moment it resolves, but the client walk is still playing — if
+// we show "−200" before the piece lands on the tile it feels like a
+// desync. Flush the buffer when the animation ends.
+let pendingToast: Toast | null = null;
 watch(
   () => game.room?.log.length,
   (len) => {
@@ -84,19 +89,27 @@ watch(
       lastSeenId = entries[entries.length - 1].id;
       return;
     }
-    // Walk backwards to find entries since the last seen id. We only render
-    // the most recent matching txn — multiple money moves from one action
-    // (e.g. passed GO then rent) collapse to the most impactful/latest one.
     for (let i = entries.length - 1; i >= 0; i--) {
       const e = entries[i];
       if (e.id === lastSeenId) break;
       const t = entryToToast(e);
       if (t) {
-        show(t);
+        if (game.animatingPlayerId) pendingToast = t;
+        else show(t);
         break;
       }
     }
     lastSeenId = entries[entries.length - 1].id;
+  },
+);
+
+watch(
+  () => game.animatingPlayerId,
+  (id) => {
+    if (!id && pendingToast) {
+      show(pendingToast);
+      pendingToast = null;
+    }
   },
 );
 

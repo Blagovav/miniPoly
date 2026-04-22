@@ -184,10 +184,25 @@ function resetTurnTimer(room: RoomState): void {
       }
     }
 
-    // Bots always pass auctions (simplest behaviour — lets humans always win
-    // or the auction resolves with no bidders).
+    // Bots bid in auctions instead of always passing — otherwise a bot
+    // that declines to buy effectively gifts every tile to the human for
+    // free. Willingness is 50-85% of tile price, capped so the bot keeps
+    // a $300 reserve for rents + jail fines.
     if (aiMode && fresh.auction && !fresh.auction.passedIds.includes(p.id)) {
-      passAuction(fresh, p.id);
+      const { placeBid: engPlaceBid } = await import("../game/engine");
+      const a = fresh.auction;
+      const tile = BOARD[a.tileIndex];
+      const price = (tile as { price?: number }).price ?? 0;
+      const reserve = 300;
+      const willingness = Math.floor(price * (0.5 + Math.random() * 0.35));
+      const affordable = Math.max(0, p.cash - reserve);
+      const myCap = Math.min(willingness, affordable);
+      const nextBid = a.highBid + Math.floor(10 + Math.random() * 20);
+      if (myCap > 0 && nextBid > a.highBid && nextBid <= myCap && a.highBidderId !== p.id) {
+        engPlaceBid(fresh, p.id, nextBid);
+      } else {
+        passAuction(fresh, p.id);
+      }
     }
 
     // AI: если есть монополии и деньги — строим дом на самой дешёвой улице без построек.
