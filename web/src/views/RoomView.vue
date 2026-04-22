@@ -352,8 +352,47 @@ function toggleChat() {
 // just flip it on/off. Leaves PTT tap-and-hold to the floating button
 // (which we keep mounted but hidden in-room for legacy hold behaviour).
 async function toggleVoice() {
-  haptic("medium");
-  await voice.toggle();
+  // Figma topbar voice icon replaces the old VoiceButton (which is display:none
+  // in the new design). It owns the full click-to-talk cycle: first tap joins
+  // the mesh AND starts transmitting, subsequent taps toggle transmission
+  // on/off. Without press()/release() the mic stays muted and no audio ever
+  // leaves this client, so "voice doesn't work" even though the WS join
+  // succeeds. Matches VoiceButton.vue's onClick logic 1:1.
+  if (voice.isConnecting.value) return;
+  if (!voice.isActive.value) {
+    haptic("medium");
+    await voice.toggle();
+    if (voice.isActive.value) {
+      haptic("heavy");
+      voice.press();
+    }
+    return;
+  }
+  if (voice.isTransmitting.value) {
+    haptic("light");
+    voice.release();
+  } else {
+    haptic("heavy");
+    voice.press();
+  }
+}
+// Long-press on the voice icon fully disarms (leaves the mesh + drops peers).
+// The old VoiceButton had a dedicated × badge for this; with that button
+// hidden the topbar icon needs to own disarm too.
+let voiceHoldTimer: number | null = null;
+function voiceHoldStart() {
+  if (!voice.isActive.value) return;
+  voiceHoldTimer = window.setTimeout(() => {
+    haptic("medium");
+    voice.stop();
+    voiceHoldTimer = null;
+  }, 700);
+}
+function voiceHoldEnd() {
+  if (voiceHoldTimer !== null) {
+    clearTimeout(voiceHoldTimer);
+    voiceHoldTimer = null;
+  }
 }
 
 // Player-count subtitle (russian-aware pluralisation).
@@ -642,13 +681,31 @@ void t;
           <img src="/figma/room/nav-home.png" alt="" />
         </button>
         <!-- House PNG (from Figma imgImage29) → voice-chat toggle per
-             designer. -->
+             designer. Tap = join + toggle PTT, long-press = fully leave
+             voice. Status dot in corner: red = joined/muted, pulsing green
+             = transmitting, orange = error. -->
         <button
           class="room-topbar__nav-btn"
           :aria-label="locale === 'ru' ? 'Голос' : 'Voice'"
           @click="toggleVoice"
+          @mousedown="voiceHoldStart"
+          @mouseup="voiceHoldEnd"
+          @mouseleave="voiceHoldEnd"
+          @touchstart.passive="voiceHoldStart"
+          @touchend="voiceHoldEnd"
+          @touchcancel="voiceHoldEnd"
         >
           <img src="/figma/room/nav-chat.png" alt="" />
+          <span
+            v-if="voice.isActive.value || voice.isConnecting.value || voice.lastError.value"
+            class="voice-dot"
+            :class="{
+              'voice-dot--transmit': voice.isTransmitting.value,
+              'voice-dot--connect': voice.isConnecting.value,
+              'voice-dot--err': !!voice.lastError.value,
+            }"
+            aria-hidden="true"
+          />
         </button>
         <button class="room-topbar__menu-btn" aria-label="menu" @click="handleMenu">
           <span class="room-topbar__menu-bar" />
@@ -1056,6 +1113,47 @@ void t;
   pointer-events: none;
 }
 .room-topbar__nav-btn:active { transform: scale(0.92); }
+/* Voice status dot — sits in the top-right of the voice nav button.
+   Default: red = joined but muted. Transmit: pulsing green. Connecting:
+   amber. Error: orange with gentle fade. */
+.voice-dot {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #e84b3e;
+  border: 2px solid #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+  pointer-events: none;
+}
+.voice-dot--transmit {
+  background: #4ed636;
+  animation: voice-dot-pulse 1s ease-in-out infinite;
+}
+.voice-dot--connect {
+  background: #d69e36;
+  animation: voice-dot-breath 1.1s ease-in-out infinite;
+}
+.voice-dot--err {
+  background: #e8813e;
+  animation: voice-dot-breath 0.8s ease-in-out infinite;
+}
+@keyframes voice-dot-pulse {
+  0%, 100% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(78, 214, 54, 0.5), 0 1px 3px rgba(0, 0, 0, 0.35);
+  }
+  50% {
+    transform: scale(1.15);
+    box-shadow: 0 0 0 8px rgba(78, 214, 54, 0), 0 1px 3px rgba(0, 0, 0, 0.35);
+  }
+}
+@keyframes voice-dot-breath {
+  0%, 100% { filter: brightness(0.85); }
+  50%      { filter: brightness(1.15); }
+}
 .room-topbar__menu-btn {
   width: 44px;
   height: 44px;
