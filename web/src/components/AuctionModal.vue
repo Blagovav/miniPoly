@@ -4,7 +4,6 @@ import { useI18n } from "vue-i18n";
 import { BOARD, GROUP_COLORS } from "../../../shared/board";
 import type { Locale, StreetTile } from "../../../shared/types";
 import { useGameStore } from "../stores/game";
-import Icon from "./Icon.vue";
 
 const props = defineProps<{
   onBid: (amount: number) => void;
@@ -48,7 +47,6 @@ const highBidder = computed(() => {
 const bidInput = ref(0);
 watch(auction, (a) => {
   if (!a) return;
-  // Подсказываем минимальную валидную ставку
   const base = tilePrice.value || 10;
   bidInput.value = a.highBid > 0 ? a.highBid + 10 : Math.max(10, Math.floor(base / 2));
 });
@@ -72,14 +70,6 @@ const canBidCustom = computed(() => {
     && canAffordInput.value;
 });
 
-function playerStatus(playerId: string): "leader" | "passed" | "active" | "bankrupt" {
-  const a = auction.value; const p = game.room?.players.find((pl) => pl.id === playerId);
-  if (!p || p.bankrupt) return "bankrupt";
-  if (a?.highBidderId === playerId) return "leader";
-  if (a?.passedIds.includes(playerId)) return "passed";
-  return "active";
-}
-
 const tileKindLabel = computed(() => {
   const t = tile.value;
   if (!t) return "";
@@ -89,432 +79,385 @@ const tileKindLabel = computed(() => {
   return "";
 });
 
-// When the player has no decision left (they're leading or already
-// passed), the modal auto-hides entirely — no scrim, no artefact at the
-// bottom of the screen. If someone outbids them the `iAmLeading` flips
-// false and the modal re-appears automatically.
+// Figma bidder-chip palette, keyed by seat index. Same family the leader-
+// board uses so every player is visually anchored to one colour across
+// the room UI (blue seat-1, coral seat-2, purple seat-3, brown seat-4+).
+const BIDDER_COLORS = ["#688ee2", "#e2776e", "#9251d5", "#8b5a2b"];
+function chipColor(playerId: string): string {
+  const idx = game.room?.players.findIndex((p) => p.id === playerId) ?? -1;
+  if (idx < 0) return BIDDER_COLORS[0];
+  return BIDDER_COLORS[idx % BIDDER_COLORS.length];
+}
+
+/** Players who are still in the running (not passed, not bankrupt). */
+const activeBidders = computed(() => {
+  const a = auction.value;
+  if (!a) return [];
+  return (game.room?.players ?? []).filter(
+    (p) => !p.bankrupt && !a.passedIds.includes(p.id),
+  );
+});
+
 const hasDecision = computed(() => !myPassed.value && !iAmLeading.value);
 const visible = computed(() => open.value && !!tile.value && !!auction.value && hasDecision.value);
 </script>
 
 <template>
-  <transition name="fade">
-    <div
-      v-if="visible && tile && auction"
-      class="modal-scrim"
-    >
-      <div
-        class="modal-card auction-card"
-        @click.stop
-        :style="bandColor ? { borderTopColor: bandColor } : undefined"
-      >
-        <div class="grab-bar" aria-hidden="true" />
-
-        <!-- Header -->
-        <div class="auction-head">
-          <div class="auction-head__eyebrow">
-            <span class="hammer">🔨</span>
-            {{ loc === "ru" ? "Аукцион" : "Auction" }}
-          </div>
-          <div class="auction-head__title">{{ tile.name[loc] }}</div>
-          <div class="auction-head__sub">
-            <span class="kind-pill" :style="bandColor ? { background: bandColor } : undefined">
-              {{ tileKindLabel }}
-            </span>
-            <span class="auction-head__price">
-              {{ loc === "ru" ? "Базовая" : "Base" }}
-              <b>◈ {{ tilePrice }}</b>
+  <transition name="auction-fade">
+    <div v-if="visible && tile && auction" class="auction-scrim">
+      <div class="auction-card" @click.stop>
+        <!-- Title block -->
+        <div class="auction-title">
+          <div class="auction-title__name">{{ tile.name[loc] }}</div>
+          <div class="auction-title__meta">
+            <span
+              class="auction-badge"
+              :style="bandColor ? { background: bandColor } : undefined"
+            >{{ tileKindLabel }}</span>
+            <span class="auction-meta-label">{{ loc === "ru" ? "Базовая" : "Base" }}</span>
+            <span class="auction-meta-coin">
+              <img src="/figma/room/icon-money.png" alt="" />
+              <b>{{ tilePrice }}</b>
             </span>
           </div>
         </div>
 
-        <!-- Bid display -->
-        <div class="bid-display" :class="{ 'bid-display--active': auction.highBid > 0 }">
-          <div class="bid-display__label">
-            {{ auction.highBid > 0
-              ? (loc === "ru" ? "Ведущая ставка" : "Leading bid")
-              : (loc === "ru" ? "Ставок пока нет" : "No bids yet") }}
+        <!-- Bid display: empty vs leading -->
+        <div v-if="auction.highBid === 0" class="bid-empty">
+          {{ loc === "ru" ? "Ставок пока нет" : "No bids yet" }}
+        </div>
+        <div v-else class="bid-leading">
+          <div class="bid-leading__label">
+            {{ loc === "ru" ? "Ведущая ставка" : "Leading bid" }}
           </div>
-          <div v-if="auction.highBid > 0" class="bid-display__val">
-            <span class="bid-display__amount">◈ {{ auction.highBid }}</span>
-            <span class="bid-display__by">· {{ highBidder?.name ?? "—" }}</span>
+          <div class="bid-leading__row">
+            <span class="bid-leading__who">{{ highBidder?.name ?? "—" }}</span>
+            <span class="bid-leading__amt">
+              <img src="/figma/room/icon-money.png" alt="" />
+              <b>{{ auction.highBid }}</b>
+            </span>
           </div>
         </div>
 
-        <!-- Players -->
-        <div class="players">
-          <div
-            v-for="p in game.room?.players ?? []"
+        <!-- Bidder chips (active players only) -->
+        <div class="bidders">
+          <span
+            v-for="p in activeBidders"
             :key="p.id"
-            class="player-chip"
-            :class="[`player-chip--${playerStatus(p.id)}`]"
+            class="bidder-chip"
+            :style="{ background: chipColor(p.id) }"
           >
-            <span class="player-chip__dot" :style="{ background: p.color }" />
-            <span class="player-chip__name">{{ p.name }}</span>
-            <span class="player-chip__status">
-              <template v-if="playerStatus(p.id) === 'leader'">♕</template>
-              <template v-else-if="playerStatus(p.id) === 'passed'">✕</template>
-              <template v-else-if="playerStatus(p.id) === 'bankrupt'">†</template>
-            </span>
-          </div>
+            <span class="bidder-chip__dot" :style="{ background: p.color }" />
+            {{ p.name }}
+          </span>
         </div>
 
-        <div v-if="myPassed" class="status-box">
-          {{ loc === "ru" ? "Ты спасовал — ждём остальных" : "You passed — waiting for others" }}
-        </div>
-        <div v-else-if="iAmLeading" class="status-box status-box--win">
-          <Icon name="check" :size="14" color="var(--emerald)" />
-          {{ loc === "ru" ? "Ты лидируешь! Ждём остальных" : "You're winning! Waiting for others" }}
-        </div>
-        <template v-else>
-          <!-- Quick bids -->
-          <div class="quick-bids">
-            <button class="btn btn-ghost quick-bid" :disabled="!me || (auction.highBid + 10) > (me.cash ?? 0)" @click="bidBy(10)">
-              + ◈ 10
-            </button>
-            <button class="btn btn-ghost quick-bid" :disabled="!me || (auction.highBid + 25) > (me.cash ?? 0)" @click="bidBy(25)">
-              + ◈ 25
-            </button>
-            <button class="btn btn-ghost quick-bid" :disabled="!me || (auction.highBid + 100) > (me.cash ?? 0)" @click="bidBy(100)">
-              + ◈ 100
-            </button>
+        <!-- Input + place-bid -->
+        <div class="bid-row">
+          <div class="bid-input">
+            <img src="/figma/room/icon-money.png" alt="" class="bid-input__coin" />
+            <input
+              v-model.number="bidInput"
+              type="number"
+              inputmode="numeric"
+              :min="minValidBid"
+              :max="me?.cash ?? 0"
+            />
           </div>
-          <!-- Custom bid row -->
-          <div class="custom-bid">
-            <div class="custom-bid__field">
-              <span class="custom-bid__prefix">◈</span>
-              <input
-                v-model.number="bidInput"
-                type="number"
-                :min="minValidBid"
-                :max="me?.cash ?? 0"
-                class="custom-bid__input"
-              />
-            </div>
-            <button class="btn btn-primary" :disabled="!canBidCustom" @click="bidCustom">
-              {{ loc === "ru" ? "Ставить" : "Place bid" }}
-            </button>
-          </div>
-          <!-- Pass -->
-          <button class="btn btn-wax pass-btn" @click="onPass">
-            <Icon name="x" :size="14" color="#fff" />
-            {{ loc === "ru" ? "Спасовать" : "Pass" }}
+          <button
+            class="btn-3d btn-3d--green bid-submit"
+            :disabled="!canBidCustom"
+            @click="bidCustom"
+          >
+            {{ loc === "ru" ? "Ставить" : "Place bid" }}
           </button>
-        </template>
+        </div>
+
+        <!-- Quick bids -->
+        <div class="quick-bids">
+          <button
+            v-for="delta in [10, 25, 100]"
+            :key="delta"
+            class="btn-3d btn-3d--green quick-bid"
+            :disabled="!me || (auction.highBid + delta) > (me.cash ?? 0)"
+            @click="bidBy(delta)"
+          >
+            <span>+</span>
+            <img src="/figma/room/icon-money.png" alt="" />
+            <span>{{ delta }}</span>
+          </button>
+        </div>
+
+        <!-- Pass -->
+        <button class="btn-3d btn-3d--red pass-btn" @click="onPass">
+          {{ loc === "ru" ? "Спасовать" : "Pass" }}
+        </button>
       </div>
     </div>
   </transition>
 </template>
 
 <style scoped>
-/* ── Scrim / card base (medieval parchment) ── */
-.modal-scrim {
+/* ── Scrim: sheet-ish overlay; dims the board, no backdrop click
+   (current auction flow auto-hides when the player has no decision). */
+.auction-scrim {
   position: fixed;
   inset: 0;
-  background: rgba(26, 15, 5, 0.5);
-  backdrop-filter: blur(2px);
-  -webkit-backdrop-filter: blur(2px);
+  background: rgba(0, 0, 0, 0.4);
   z-index: 500;
   display: flex;
-  align-items: flex-end;
+  align-items: center;
   justify-content: center;
-  padding: 0;
+  padding: 16px;
+  padding-bottom: calc(16px + var(--csab, 0px));
 }
-.modal-card {
-  width: 100%;
-  max-width: 420px;
-  max-height: 88vh;
-  overflow-y: auto;
-  background: var(--card-alt);
-  border-top: 3px solid var(--primary);
-  border-radius: 16px 16px 0 0;
-  padding: 14px 16px calc(20px + var(--tg-safe-area-inset-bottom, 0px));
-  animation: sheet-unfurl 320ms cubic-bezier(0.34, 1.56, 0.64, 1);
-  transform-origin: bottom;
-  box-shadow: 0 -8px 24px rgba(42, 29, 16, 0.25);
-}
-.grab-bar {
-  display: block;
-  width: 40px;
-  height: 4px;
-  background: var(--line-strong);
-  border: none;
-  border-radius: 2px;
-  margin: -2px auto 10px;
-}
-.grab-bar--interactive {
-  cursor: pointer;
-  padding: 0;
-  width: 48px;
-  height: 18px;  /* larger hit-box (invisible) so thumb-taps land reliably */
-  background: transparent;
-  position: relative;
-  margin: -6px auto 4px;
-}
-.grab-bar--interactive::before {
-  content: "";
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  width: 40px;
-  height: 4px;
-  background: var(--line-strong);
-  border-radius: 2px;
-}
-.grab-bar--interactive:hover::before { background: var(--ink-3); }
 
-/* ── Header ── */
-.auction-head {
-  text-align: center;
-  margin-bottom: 12px;
+.auction-card {
+  width: 100%;
+  max-width: 345px;
+  background: #faf3e2;
+  border-radius: 18px;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.16);
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  max-height: calc(100vh - 32px - var(--csab, 0px));
+  overflow-y: auto;
+  font-family: 'Unbounded', sans-serif;
+  color: #000;
 }
-.auction-head__eyebrow {
+
+/* ── Title block ── */
+.auction-title {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  text-align: center;
+}
+.auction-title__name {
+  font-family: 'Unbounded', sans-serif;
+  font-weight: 700;
+  font-size: 18px;
+  line-height: 26px;
+  color: #000;
+  word-break: break-word;
+}
+.auction-title__meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+.auction-badge {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  font-family: var(--font-title);
-  font-size: 11px;
-  letter-spacing: 0.2em;
-  text-transform: uppercase;
-  color: var(--gold);
+  padding: 4px 8px;
+  background: #7dd3fc;
+  border-radius: 999px;
+  font-family: 'Unbounded', sans-serif;
+  font-weight: 500;
+  font-size: 14px;
+  line-height: 16px;
+  color: #000;
 }
-.hammer {
-  display: inline-block;
-  font-size: 16px;
-  animation: hammer-swing 2s ease-in-out infinite;
-  transform-origin: 50% 80%;
+.auction-meta-label {
+  font-family: 'Unbounded', sans-serif;
+  font-weight: 500;
+  font-size: 14px;
+  line-height: 16px;
+  color: #000;
 }
-@keyframes hammer-swing {
-  0%, 100% { transform: rotate(-10deg); }
-  50% { transform: rotate(10deg); }
+.auction-meta-coin {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-family: 'Unbounded', sans-serif;
+  font-weight: 700;
+  font-size: 14px;
+  line-height: 16px;
+  color: #000;
 }
-.auction-head__title {
-  font-family: var(--font-display);
-  font-size: 20px;
-  color: var(--ink);
-  margin-top: 4px;
-  line-height: 1.2;
-}
-.auction-head__sub {
+.auction-meta-coin img { width: 24px; height: 24px; object-fit: contain; }
+
+/* ── Bid display (empty state) ── */
+.bid-empty {
   display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 70px;
+  padding: 10px;
+  border: 1.4px dashed rgba(0, 0, 0, 0.4);
+  border-radius: 12px;
+  font-family: 'Unbounded', sans-serif;
+  font-weight: 500;
+  font-size: 14px;
+  line-height: 16px;
+  color: rgba(0, 0, 0, 0.6);
+  text-align: center;
+}
+
+/* ── Bid display (leading state) ── */
+.bid-leading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 10px;
+  background: #e2776e;
+  border-radius: 12px;
+  color: #fff;
+  text-shadow: 0.2px 0.2px 0 #000;
+}
+.bid-leading__label {
+  font-family: 'Unbounded', sans-serif;
+  font-weight: 700;
+  font-size: 14px;
+  line-height: 16px;
+}
+.bid-leading__row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-family: 'Unbounded', sans-serif;
+  font-weight: 700;
+  font-size: 14px;
+  line-height: 16px;
+}
+.bid-leading__amt {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.bid-leading__amt img { width: 24px; height: 24px; object-fit: contain; }
+
+/* ── Bidder chips ── */
+.bidders {
+  display: flex;
+  flex-wrap: wrap;
   gap: 8px;
   justify-content: center;
-  align-items: center;
-  margin-top: 6px;
-  font-size: 12px;
-  color: var(--ink-3);
 }
-.kind-pill {
-  display: inline-block;
-  padding: 2px 10px;
-  background: var(--ink-3);
-  color: #fff;
-  font-family: var(--font-title);
-  font-size: 10px;
-  letter-spacing: 0.15em;
-  text-transform: uppercase;
-  border-radius: 3px;
-}
-.auction-head__price {
+.bidder-chip {
   display: inline-flex;
+  align-items: center;
   gap: 6px;
-  font-size: 12px;
+  padding: 4px 14px 4px 8px;
+  border-radius: 999px;
+  color: #fff;
+  font-family: 'Unbounded', sans-serif;
+  font-weight: 700;
+  font-size: 14px;
+  line-height: 16px;
+  text-shadow: 0.2px 0.2px 0 #000;
 }
-.auction-head__price b {
-  font-family: var(--font-mono);
-  color: var(--ink);
-  font-weight: 600;
+.bidder-chip__dot {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.3),
+              inset 0 -1px 1px rgba(0, 0, 0, 0.2);
+  flex-shrink: 0;
 }
 
-/* ── Bid display ── */
-.bid-display {
-  padding: 12px 14px;
-  border-radius: 10px;
-  background: var(--card);
-  border: 1px solid var(--line);
-  margin-bottom: 12px;
-  text-align: center;
-}
-.bid-display--active {
-  background: linear-gradient(145deg, rgba(184, 137, 46, 0.12), rgba(212, 168, 74, 0.06));
-  border-color: var(--gold);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35);
-}
-.bid-display__label {
-  font-size: 10px;
-  letter-spacing: 0.15em;
-  color: var(--ink-3);
-  text-transform: uppercase;
-}
-.bid-display__val {
-  margin-top: 4px;
+/* ── Bid row ── */
+.bid-row {
   display: flex;
-  justify-content: center;
-  align-items: baseline;
-  gap: 6px;
-  flex-wrap: wrap;
+  gap: 8px;
 }
-.bid-display__amount {
-  font-family: var(--font-mono);
-  font-size: 24px;
+.bid-input {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 10px;
+  background: #fff;
+  border: 1px solid rgba(0, 0, 0, 0.2);
+  border-radius: 12px;
+  min-width: 0;
+}
+.bid-input__coin { width: 24px; height: 24px; object-fit: contain; flex-shrink: 0; }
+.bid-input input {
+  flex: 1;
+  min-width: 0;
+  background: transparent;
+  border: none;
+  outline: none;
+  font-family: 'Unbounded', sans-serif;
   font-weight: 700;
-  color: var(--gold);
+  font-size: 14px;
+  color: #000;
+  text-align: right;
   font-variant-numeric: tabular-nums;
 }
-.bid-display__by {
-  font-family: var(--font-display);
-  font-size: 13px;
-  color: var(--ink-2);
-}
+.bid-input input::-webkit-outer-spin-button,
+.bid-input input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.bid-input input[type="number"] { -moz-appearance: textfield; }
 
-/* ── Player chips ── */
-.players {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  justify-content: center;
-  margin-bottom: 12px;
-}
-.player-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 4px 10px;
-  border-radius: 999px;
-  background: var(--card);
-  border: 1px solid var(--line);
-  font-size: 12px;
-  color: var(--ink-2);
-  font-family: var(--font-body);
-}
-.player-chip--leader {
-  background: linear-gradient(180deg, var(--gold-soft), var(--gold));
-  color: #2a1d10;
-  border-color: var(--gold);
-  font-weight: 600;
-  box-shadow: 0 2px 4px rgba(139, 105, 20, 0.25);
-}
-.player-chip--passed {
-  opacity: 0.45;
-  text-decoration: line-through;
-}
-.player-chip--bankrupt {
-  opacity: 0.3;
-}
-.player-chip__dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.3);
-}
-.player-chip__status {
-  font-family: var(--font-display);
-  font-size: 13px;
-  line-height: 1;
+.bid-submit {
+  flex: 1;
+  height: auto;
+  min-height: 40px;
+  padding: 8px 10px;
+  border-radius: 12px;
+  font-family: 'Golos Text', sans-serif;
+  font-weight: 900;
+  font-size: 18px;
+  text-transform: uppercase;
+  border: 1px solid rgba(0, 0, 0, 0.2);
+  box-shadow: none;
 }
 
 /* ── Quick bids ── */
 .quick-bids {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 6px;
-  margin-bottom: 8px;
+  gap: 8px;
 }
 .quick-bid {
-  padding: 10px 0;
-  font-family: var(--font-mono);
-  font-size: 13px;
-  font-weight: 700;
-  color: var(--gold);
-  border-color: var(--gold);
-  background: rgba(184, 137, 46, 0.05);
+  height: auto;
+  min-height: 40px;
+  padding: 8px 10px;
+  gap: 2px;
+  border-radius: 12px;
+  font-family: 'Golos Text', sans-serif;
+  font-weight: 900;
+  font-size: 18px;
+  border: 1px solid rgba(0, 0, 0, 0.2);
+  box-shadow: none;
+  text-transform: none;
+  letter-spacing: 0;
 }
-.quick-bid:hover:not(:disabled) {
-  background: rgba(184, 137, 46, 0.12);
-}
+.quick-bid img { width: 24px; height: 24px; object-fit: contain; }
 
-/* ── Custom bid row ── */
-.custom-bid {
-  display: flex;
-  gap: 6px;
-  margin-bottom: 8px;
-}
-.custom-bid__field {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 12px;
-  background: var(--card);
-  border: 1px solid var(--line);
-  border-radius: 10px;
-}
-.custom-bid__prefix {
-  font-family: var(--font-mono);
-  color: var(--gold);
-  font-size: 14px;
-  font-weight: 700;
-}
-.custom-bid__input {
-  flex: 1;
-  background: transparent;
-  border: none;
-  outline: none;
-  font-family: var(--font-mono);
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--ink);
-  text-align: right;
-  min-width: 0;
-  font-variant-numeric: tabular-nums;
-}
-.custom-bid .btn {
-  padding: 10px 14px;
-  font-size: 13px;
-  white-space: nowrap;
-}
-
-/* ── Pass ── */
+/* ── Pass button (Figma #f34822, 56px, 2px black border) ── */
 .pass-btn {
   width: 100%;
-  padding: 11px;
-  font-size: 13px;
+  height: 56px;
+  border: 2px solid #000;
+  border-radius: 18px;
+  background: #f34822;
+  color: #fff;
+  font-family: 'Golos Text', sans-serif;
+  font-weight: 900;
+  font-size: 24px;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  text-shadow: 1px 1px 0 rgba(0, 0, 0, 0.6);
+  box-shadow: inset 0 -6px 0 0 rgba(0, 0, 0, 0.2);
 }
 
-/* ── Status box ── */
-.status-box {
-  padding: 12px;
-  margin-top: 6px;
-  border-radius: 10px;
-  background: var(--card);
-  color: var(--ink-2);
-  font-size: 13px;
-  text-align: center;
-  border: 1px dashed var(--line-strong);
-  font-family: var(--font-display);
-}
-.status-box--win {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  background: rgba(45, 122, 79, 0.1);
-  color: var(--emerald);
-  border: 1px solid var(--emerald);
-  font-weight: 600;
-}
+.btn-3d--red { background: #f34822; }
 
-/* ── Animations ── */
-@keyframes sheet-unfurl {
-  0% { transform: translateY(100%); opacity: 0; }
-  100% { transform: translateY(0); opacity: 1; }
-}
-.fade-enter-active, .fade-leave-active { transition: opacity 0.2s ease; }
-.fade-enter-from, .fade-leave-to { opacity: 0; }
-.fade-enter-active .modal-card,
-.fade-leave-active .modal-card {
+/* ── Transitions ── */
+.auction-fade-enter-active, .auction-fade-leave-active { transition: opacity 0.2s ease; }
+.auction-fade-enter-from, .auction-fade-leave-to { opacity: 0; }
+.auction-fade-enter-active .auction-card,
+.auction-fade-leave-active .auction-card {
   transition: transform 0.22s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
-.fade-leave-to .modal-card { transform: translateY(20%); }
+.auction-fade-enter-from .auction-card,
+.auction-fade-leave-to .auction-card { transform: scale(0.96); }
 </style>
