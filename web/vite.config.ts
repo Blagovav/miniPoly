@@ -2,6 +2,14 @@ import { defineConfig } from "vite";
 import vue from "@vitejs/plugin-vue";
 import path from "node:path";
 
+// Proxy target switches between Docker-compose ("api" hostname, resolved
+// via the internal bridge) and local-dev ("localhost") via VITE_PROXY_HOST.
+// The compose web service sets VITE_PROXY_HOST=api; bare `npm run dev` on
+// the host machine picks up the localhost default.
+const proxyHost = process.env.VITE_PROXY_HOST ?? "localhost";
+const httpTarget = `http://${proxyHost}:3000`;
+const wsTarget = `ws://${proxyHost}:3000`;
+
 export default defineConfig({
   plugins: [vue()],
   resolve: {
@@ -16,8 +24,8 @@ export default defineConfig({
     strictPort: true,
     watch: { usePolling: true },
     proxy: {
-      "/api": { target: "http://api:3000", changeOrigin: true },
-      "/ws": { target: "ws://api:3000", ws: true },
+      "/api": { target: httpTarget, changeOrigin: true },
+      "/ws": { target: wsTarget, ws: true },
     },
   },
 });

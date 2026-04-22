@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from "vue";
+import { computed } from "vue";
 import { useI18n } from "vue-i18n";
 import { BOARD, GROUP_COLORS, GROUP_SIZE } from "../../../shared/board";
 import type { Locale, StreetTile } from "../../../shared/types";
@@ -12,7 +12,7 @@ import Sigil from "./Sigil.vue";
 const props = defineProps<{
   onBuildHouse?: (tileIndex: number) => void;
   onSellHouse?: (tileIndex: number) => void;
-  onProposeTrade?: (tileIndex: number, cash: number) => void;
+  onProposeTrade?: (tileIndex: number) => void;
   onMortgage?: (tileIndex: number) => void;
   onUnmortgage?: (tileIndex: number) => void;
 }>();
@@ -212,28 +212,16 @@ function sell() {
   if (tile.value) props.onSellHouse?.(tile.value.index);
 }
 
-// Трейд — можно предложить, если это чья-то чужая собственность (без построек).
+// Трейд — можно предложить, если это чья-то чужая собственность (заложенные нельзя).
 const canPropose = computed(() => {
   const o = owned.value;
   const me = game.me;
   if (!o || !me || o.ownerId === me.id) return false;
-  if (o.houses > 0 || o.hotel) return false;
+  if (o.mortgaged) return false;
   return true;
 });
-const proposeOpen = ref(false);
-const proposeCash = ref(0);
 function openPropose() {
-  const t = tile.value;
-  if (t && (t.kind === "street" || t.kind === "railroad" || t.kind === "utility")) {
-    proposeCash.value = t.price;
-  }
-  proposeOpen.value = true;
-}
-function sendPropose() {
-  if (!tile.value || !proposeCash.value || proposeCash.value <= 0) return;
-  props.onProposeTrade?.(tile.value.index, proposeCash.value);
-  proposeOpen.value = false;
-  game.selectTile(null);
+  if (tile.value) props.onProposeTrade?.(tile.value.index);
 }
 
 // Залог / выкуп — только для владельца, и только если это собственность без построек.
@@ -455,40 +443,10 @@ const isRu = computed(() => loc.value === "ru");
 
         <!-- Propose trade to the current owner -->
         <div v-if="canPropose && game.isMyTurn" class="actions">
-          <div v-if="!proposeOpen">
-            <button class="btn btn-primary propose-btn" @click="openPropose">
-              <Icon name="trade" :size="16" color="#fff" />
-              {{ isRu ? "Предложить выкуп" : "Propose a deal" }}
-            </button>
-          </div>
-          <div v-else class="propose-form">
-            <label class="propose-form__label">
-              {{ isRu ? "Сколько предлагаешь?" : "Your offer" }}
-              <div class="propose-form__input-wrap">
-                <span class="propose-form__glyph">◈</span>
-                <input
-                  v-model.number="proposeCash"
-                  type="number"
-                  min="1"
-                  :max="game.me?.cash ?? 0"
-                  class="propose-form__input"
-                />
-              </div>
-            </label>
-            <div class="propose-form__row">
-              <button class="btn btn-ghost" @click="proposeOpen = false">
-                {{ isRu ? "Отмена" : "Cancel" }}
-              </button>
-              <button
-                class="btn btn-primary"
-                :disabled="!proposeCash || proposeCash <= 0"
-                @click="sendPropose"
-              >
-                <Icon name="send" :size="14" color="#fff" />
-                {{ isRu ? "Отправить" : "Send" }}
-              </button>
-            </div>
-          </div>
+          <button class="btn btn-primary propose-btn" @click="openPropose">
+            <Icon name="trade" :size="16" color="#fff" />
+            {{ isRu ? "Предложить обмен" : "Propose a trade" }}
+          </button>
         </div>
       </div>
     </div>
@@ -799,63 +757,6 @@ const isRu = computed(() => loc.value === "ru");
   font-family: var(--font-display);
   font-style: italic;
   line-height: 1.3;
-}
-
-/* ── Propose form ── */
-.propose-form {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-.propose-form__label {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  font-size: 11px;
-  color: var(--ink-3);
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
-}
-.propose-form__input-wrap {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 12px;
-  background: var(--card);
-  border: 1px solid var(--line);
-  border-radius: 8px;
-}
-.propose-form__input-wrap:focus-within {
-  border-color: var(--primary);
-  box-shadow: 0 0 0 3px rgba(90, 58, 154, 0.1);
-}
-.propose-form__glyph {
-  color: var(--gold);
-  font-family: var(--font-mono);
-  font-size: 16px;
-  font-weight: 700;
-}
-.propose-form__input {
-  flex: 1;
-  background: transparent;
-  border: none;
-  color: var(--ink);
-  font-family: var(--font-mono);
-  font-size: 16px;
-  font-weight: 700;
-  outline: none;
-  padding: 0;
-  text-transform: none;
-  letter-spacing: 0;
-}
-.propose-form__row {
-  display: flex;
-  gap: 8px;
-}
-.propose-form__row .btn {
-  flex: 1;
-  padding: 12px;
-  justify-content: center;
 }
 
 /* ── Animations ── */

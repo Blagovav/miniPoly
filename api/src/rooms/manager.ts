@@ -1,4 +1,5 @@
 import type { RoomState, ServerMessage } from "../../../shared/types";
+import { BOARD } from "../../../shared/board";
 import { config } from "../config";
 import { notifyTurn } from "../telegram";
 import {
@@ -73,11 +74,11 @@ export function onStateChange(room: RoomState): void {
     return;
   }
 
-  // Trade targeted at a bot: auto-decline so the game doesn't stall.
+  // Trade targeted at a bot: evaluate and accept/decline so the game doesn't stall.
   if (room.pendingTrade) {
     const target = room.players.find((pl) => pl.id === room.pendingTrade!.toId);
     if (target?.isBot) {
-      resolveTrade(room, target.id, false);
+      resolveTrade(room, target.id, botShouldAcceptTrade(room, target.id));
     }
   }
 
@@ -92,6 +93,12 @@ export function onStateChange(room: RoomState): void {
     if (!p.connected && !p.isBot) {
       notifyTurn(p.tgUserId, room.id, p.name);
     }
+    resetTurnTimer(room);
+  } else if (room.phase === "rolling" && (!p.connected || p.isBot)) {
+    // Same bot is up again (doubles). currentTurn didn't change, so the
+    // turn-change branch above doesn't fire — but the bot still needs a
+    // timer to auto-roll the bonus turn. Without this re-arm, a bot that
+    // rolls doubles just freezes.
     resetTurnTimer(room);
   }
 }
@@ -203,4 +210,37 @@ function clearTurnTimer(roomId: string): void {
   const t = turnTimers.get(roomId);
   if (t) clearTimeout(t);
   turnTimers.delete(roomId);
+}
+
+/** Простая оценка входящего обмена глазами бота: принимаем если ценность того
+ *  что получаем заметно выше того, что отдаём. Дома/отели на клетке плюсуют
+ *  к её цене. Карточка "выйти из тюрьмы" оценена в $50 (стоимость штрафа). */
+function botShouldAcceptTrade(room: RoomState, botId: string): boolean {
+  const t = room.pendingTrade;
+  if (!t || t.toId !== botId) return false;
+  const bot = room.players.find((p) => p.id === botId);
+  if (!bot) return false;
+  // Бот не может отдать то, чего у него нет (на всякий — engine это тоже проверит).
+  if (bot.cash < t.takeCash) return false;
+  if (bot.getOutCards < t.takeJailCards) return false;
+
+  const JAIL_CARD_VALUE = 50;
+
+  function tileValue(idx: number): number {
+    const tile = BOARD[idx];
+    if (!tile) return 0;
+    const base = (tile as { price?: number }).price ?? 0;
+    const owned = room.properties[idx];
+    if (owned?.hotel) return base + 5 * ((tile as { houseCost?: number }).houseCost ?? 0);
+    if (owned?.houses) return base + owned.houses * ((tile as { houseCost?: number }).houseCost ?? 0);
+    return base;
+  }
+
+  const botReceives =
+    t.giveTiles.reduce((s, i) => s + tileValue(i), 0) + t.giveCash + t.giveJailCards * JAIL_CARD_VALUE;
+  const botGives =
+    t.takeTiles.reduce((s, i) => s + tileValue(i), 0) + t.takeCash + t.takeJailCards * JAIL_CARD_VALUE;
+
+  // Нужно минимум на 20% выгоднее — иначе бот "думает" и отказывается.
+  return botReceives >= botGives * 1.2 && botReceives > 0;
 }

@@ -110,23 +110,27 @@ function pips(v: number) {
   align-items: center;
   justify-content: center;
 }
+/* Redesigned for the Figma room-screen (node 16:2339) — bright white
+   rounded cube with subtle soft-shadow, no parchment/cream tint. The
+   pip grid + tumble animation are unchanged so the roll feel matches
+   whatever muscle memory the existing player has. */
 .die {
   position: relative;
-  width: 52px;
-  height: 52px;
-  background: linear-gradient(145deg, #fefaf0 0%, #e8dcc0 100%);
-  border: 1px solid #c9b88e;
-  border-radius: 7px;
+  width: 56px;
+  height: 56px;
+  background: #ffffff;
+  border: none;
+  border-radius: 12px;
   box-shadow:
-    inset 0 1px 2px rgba(255, 255, 255, 0.6),
-    inset 0 -2px 3px rgba(90, 60, 30, 0.2),
-    0 3px 6px rgba(42, 29, 16, 0.25);
+    0 6px 12px rgba(0, 0, 0, 0.18),
+    0 1px 0 rgba(0, 0, 0, 0.08),
+    inset 0 -4px 0 rgba(0, 0, 0, 0.06);
   display: grid;
   grid-template-areas:
     "tl .  tr"
     "ml m  mr"
     "bl .  br";
-  padding: 8px;
+  padding: 10px;
   gap: 2px;
 }
 .die--rolling {
@@ -145,28 +149,26 @@ function pips(v: number) {
 @keyframes dieFlash {
   0% {
     transform: scale(1.2);
-    background: linear-gradient(145deg, #fff 0%, #fff3d4 100%);
+    background: #fff;
     box-shadow:
-      inset 0 1px 2px rgba(255, 255, 255, 0.8),
-      0 4px 10px rgba(212, 168, 74, 0.5),
-      0 0 0 0 rgba(212, 168, 74, 0.9);
+      0 8px 20px rgba(34, 131, 243, 0.45),
+      0 0 0 0 rgba(34, 131, 243, 0.4);
   }
   100% {
     transform: scale(1);
-    background: linear-gradient(145deg, #fefaf0 0%, #e8dcc0 100%);
+    background: #fff;
     box-shadow:
-      inset 0 1px 2px rgba(255, 255, 255, 0.6),
-      inset 0 -2px 3px rgba(90, 60, 30, 0.2),
-      0 3px 6px rgba(42, 29, 16, 0.25),
-      0 0 0 14px rgba(212, 168, 74, 0);
+      0 6px 12px rgba(0, 0, 0, 0.18),
+      0 1px 0 rgba(0, 0, 0, 0.08),
+      inset 0 -4px 0 rgba(0, 0, 0, 0.06),
+      0 0 0 14px rgba(34, 131, 243, 0);
   }
 }
 .pip {
-  width: 8px;
-  height: 8px;
+  width: 10px;
+  height: 10px;
   border-radius: 50%;
-  background: #2a1d10;
-  box-shadow: inset 0 0 1px rgba(212, 168, 74, 0.6);
+  background: #000;
   align-self: center;
   justify-self: center;
 }

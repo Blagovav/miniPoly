@@ -183,7 +183,15 @@ function handleMessage(conn: Conn, ws: WebSocket, msg: ClientMessage): void {
     case "sellHouse":
       return handleSellHouse(conn, msg.tileIndex);
     case "proposeTrade":
-      return handleProposeTrade(conn, msg.tileIndex, msg.cash);
+      return handleProposeTrade(conn, {
+        toId: msg.toId,
+        giveTiles: msg.giveTiles,
+        giveCash: msg.giveCash,
+        giveJailCards: msg.giveJailCards,
+        takeTiles: msg.takeTiles,
+        takeCash: msg.takeCash,
+        takeJailCards: msg.takeJailCards,
+      });
     case "respondTrade":
       return handleRespondTrade(conn, msg.accept);
     case "mortgage":
@@ -551,10 +559,21 @@ function handleSellHouse(conn: Conn, tileIndex: number): void {
   sendState(ctx.room.id);
 }
 
-function handleProposeTrade(conn: Conn, tileIndex: number, cash: number): void {
+function handleProposeTrade(
+  conn: Conn,
+  offer: {
+    toId: string;
+    giveTiles: number[];
+    giveCash: number;
+    giveJailCards: number;
+    takeTiles: number[];
+    takeCash: number;
+    takeJailCards: number;
+  },
+): void {
   const ctx = getRoomAndPlayer(conn);
   if (!ctx || !ctx.p) return;
-  const res = proposeTrade(ctx.room, ctx.p.id, tileIndex, cash);
+  const res = proposeTrade(ctx.room, ctx.p.id, offer);
   if (!res.ok) {
     conn.send({ type: "error", message: res.error ?? "can't propose trade" });
     return;

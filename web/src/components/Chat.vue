@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, ref, watch } from "vue";
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { useGameStore } from "../stores/game";
 import { useInventoryStore } from "../stores/inventory";
@@ -71,6 +71,21 @@ watch(
     }
   },
 );
+
+// External trigger — RoomView's header has a chat icon that dispatches
+// this event. Keeps Chat self-contained (no prop drilling) and mirrors
+// the open-tour pattern already in App.vue.
+function handleExternalToggle() { toggle(); }
+onMounted(() => {
+  if (typeof window !== "undefined") {
+    window.addEventListener("toggle-chat", handleExternalToggle);
+  }
+});
+onUnmounted(() => {
+  if (typeof window !== "undefined") {
+    window.removeEventListener("toggle-chat", handleExternalToggle);
+  }
+});
 </script>
 
 <template>

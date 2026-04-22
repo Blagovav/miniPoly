@@ -216,23 +216,21 @@ onBeforeUnmount(() => {
               {{ locale === 'ru' ? 'Карта' : 'Card' }}
             </button>
           </template>
-          <button class="btn btn-primary big" @click="onRoll">
-            <Icon name="dice" :size="16" color="#fff" />
-            <span>{{ t("game.roll") }}</span>
+          <button class="btn-3d btn-3d--blue" @click="onRoll">
+            {{ t("game.roll") }}
           </button>
         </template>
         <template v-else-if="isMyTurn && room.phase === 'buyPrompt'">
-          <button class="btn btn-emerald big" @click="onBuy">
-            {{ t("game.buy", { price: currentTilePrice }) }}
-          </button>
-          <button class="btn btn-ghost" @click="onSkipBuy">
+          <button class="btn-3d btn-3d--gold" @click="onSkipBuy">
             {{ t("game.skip") }}
+          </button>
+          <button class="btn-3d btn-3d--green" @click="onBuy">
+            {{ t("game.buy", { price: currentTilePrice }) }}
           </button>
         </template>
         <template v-else-if="isMyTurn && room.phase === 'action'">
-          <button class="btn btn-primary big" @click="onEndTurn">
-            <Icon name="check" :size="16" color="#fff" />
-            <span>{{ t("game.endTurn") }}</span>
+          <button class="btn-3d btn-3d--purple" @click="onEndTurn">
+            {{ t("game.endTurn") }}
           </button>
         </template>
         <div v-else class="hint-card">
@@ -455,7 +453,8 @@ onBeforeUnmount(() => {
   gap: 6px;
   min-width: 0;
 }
-.action-slot .btn {
+.action-slot .btn,
+.action-slot .btn-3d {
   width: 100%;
 }
 .big {
