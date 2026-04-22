@@ -158,7 +158,7 @@ const subtitle = computed(() => {
      of leaving a flat green slab where the preroll covers the middle. */
   background-color: #9fe101;
   background-image:
-    linear-gradient(rgba(159, 225, 1, 0.45), rgba(159, 225, 1, 0.45)),
+    linear-gradient(rgba(159, 225, 1, 0.7), rgba(159, 225, 1, 0.7)),
     url('/figma/room/bg-pattern.png');
   background-size: auto, cover;
   background-position: center, center;

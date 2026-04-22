@@ -106,9 +106,11 @@ onMounted(() => {
   game.loadFriends(userId.value);
 });
 
-// Redirect to home if the server tells us the room is gone — and wipe the
-// rejoin hint from localStorage so the "Active game" banner doesn't respawn
-// pointing at a dead room.
+// Room doesn't exist / already closed — show an explicit "game over" modal
+// instead of silently redirecting, so the user understands why they bounced.
+// Also wipes the rejoin hint so the home banner doesn't keep pointing at the
+// dead room.
+const gameEndedModal = ref(false);
 watch(
   () => game.lastError,
   (err) => {
@@ -117,10 +119,14 @@ watch(
         localStorage.removeItem("activeRoomId");
         localStorage.removeItem("activeRoomTs");
       } catch {}
-      setTimeout(() => router.replace({ name: "home" }), 2000);
+      gameEndedModal.value = true;
     }
   },
 );
+function closeGameEnded() {
+  gameEndedModal.value = false;
+  router.replace({ name: "home" });
+}
 
 // ── Computed phase flags & friends/winner ───────────────
 const phase = computed(() => game.room?.phase);
@@ -447,10 +453,11 @@ const turnSlots = computed<{ key: string; player: Player; role: "prev" | "curren
   ];
 });
 
-// Rank-coloured pills per Figma node 16:2591. Not tied to the player's
-// assigned token colour — the leaderboard uses its own palette keyed by
-// standing (gold-ish blue for #1, coral for #2, purple for #3, etc.).
-const RANK_COLORS = ["#688ee2", "#e2776e", "#9754dc", "#8b5a2b"];
+// Leaderboard pills now use each player's assigned token colour (same as the
+// turn-slider dots) — users reported the old rank-keyed palette felt
+// disconnected from the rest of the UI ("everything is green but players
+// are red and blue"). Keyed by player index in room.players so the colour is
+// stable for a player regardless of their current standing.
 
 // Current-tile plate under the turn slider. Shows name of whatever tile
 // the active player stands on; value depends on the tile kind:
@@ -461,7 +468,14 @@ const currentTileInfo = computed<{ name: string; value: number | null } | null>(
   const r = game.room;
   const cp = game.currentPlayer;
   if (!r || !cp) return null;
-  const tile = BOARD[cp.position];
+  // Server updates cp.position to the destination BEFORE the client's
+  // animated walk finishes. If we read it directly the tile plate flashes
+  // "Jail" / "Chance" / etc while the token is still hopping, which looks
+  // like a state bug to the player. Prefer the animated position while the
+  // walk is in progress; fall back to the real position once it lands.
+  const animPos = game.animatedPositions?.[cp.id];
+  const pos = typeof animPos === "number" ? animPos : cp.position;
+  const tile = BOARD[pos];
   if (!tile) return null;
   const name = locale.value === "ru" ? tile.name.ru : tile.name.en;
 
@@ -499,18 +513,19 @@ const leaderboard = computed(() => {
     return sum;
   };
   return r.players
-    .map((p) => ({
+    .map((p, seat) => ({
       id: p.id,
       name: p.name,
       cash: p.cash,
       worth: p.cash + propValue(p.id),
+      seat,
     }))
     .sort((a, b) => b.worth - a.worth)
-    .map((row, idx) => ({
+    .map((row) => ({
       id: row.id,
       name: row.name,
       cash: row.cash,
-      color: RANK_COLORS[idx % RANK_COLORS.length],
+      color: ORDERED_PLAYER_COLORS[row.seat % ORDERED_PLAYER_COLORS.length],
     }));
 });
 
@@ -943,6 +958,27 @@ void t;
       :fullscreen="true"
       :message="locale === 'ru' ? 'Загружаем игру…' : 'Loading the game…'"
     />
+
+    <!-- ── Dead-room modal: server said "not found". Shown instead of the
+         2s silent redirect so the user understands why they bounced. ── -->
+    <div v-if="gameEndedModal" class="game-ended-backdrop" @click.self="closeGameEnded">
+      <div class="game-ended-card">
+        <div class="game-ended-icon">🏁</div>
+        <h2 class="game-ended-title">
+          {{ locale === 'ru' ? 'Партия завершена' : 'Game over' }}
+        </h2>
+        <p class="game-ended-msg">
+          {{
+            locale === 'ru'
+              ? 'Эта партия уже закрыта — возможно, хост закрыл комнату или все игроки вышли.'
+              : 'This match has already ended — the host closed the room or all players left.'
+          }}
+        </p>
+        <button class="game-ended-btn" @click="closeGameEnded">
+          {{ locale === 'ru' ? 'НА ГЛАВНУЮ' : 'HOME' }}
+        </button>
+      </div>
+    </div>
 
     <!-- ── Global overlays (chat, card, auction, tile, profile, trade) ── -->
     <Chat v-if="game.room" :on-send="sendChat" />
@@ -1643,6 +1679,68 @@ void t;
   height: 32px;
   object-fit: contain;
 }
+
+/* ── Dead-room modal ── */
+.game-ended-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+.game-ended-card {
+  width: 100%;
+  max-width: 340px;
+  background: #fff;
+  border: 2px solid #000;
+  border-radius: 22px;
+  padding: 28px 24px 24px;
+  text-align: center;
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.32);
+  font-family: 'Unbounded', 'Golos Text', sans-serif;
+}
+.game-ended-icon {
+  font-size: 48px;
+  line-height: 1;
+  margin-bottom: 12px;
+}
+.game-ended-title {
+  margin: 0 0 10px;
+  font-weight: 900;
+  font-size: 20px;
+  color: #000;
+  letter-spacing: 0.01em;
+}
+.game-ended-msg {
+  margin: 0 0 20px;
+  font-weight: 500;
+  font-size: 14px;
+  line-height: 20px;
+  color: #4a4a4a;
+}
+.game-ended-btn {
+  width: 100%;
+  height: 52px;
+  border: 2px solid #000;
+  border-radius: 16px;
+  background: #a322f3;
+  color: #fff;
+  font-family: 'Golos Text', 'Unbounded', sans-serif;
+  font-weight: 900;
+  font-size: 18px;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  box-shadow: inset 0 -5px 0 rgba(0, 0, 0, 0.2);
+  transition: transform 120ms ease;
+}
+.game-ended-btn:active {
+  transform: translateY(2px);
+  box-shadow: inset 0 -2px 0 rgba(0, 0, 0, 0.2);
+}
 </style>
 
 <style>
@@ -1657,7 +1755,7 @@ html.room-figma-root,
 body.room-figma-root {
   background-color: #9fe101 !important;
   background-image:
-    linear-gradient(rgba(159, 225, 1, 0.45), rgba(159, 225, 1, 0.45)),
+    linear-gradient(rgba(159, 225, 1, 0.7), rgba(159, 225, 1, 0.7)),
     url('/figma/room/bg-pattern.png') !important;
   background-size: auto, cover !important;
   background-position: center, center !important;
