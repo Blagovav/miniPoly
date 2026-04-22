@@ -164,26 +164,11 @@ void lighten;
 <template>
   <div class="board-wrap">
     <div class="board">
-      <!-- ── Central emblem (inner 9x9) ── -->
-      <div class="board-center">
-        <div class="board-center__stack">
-          <svg viewBox="0 0 80 40" class="board-center__crown" aria-hidden="true">
-            <path d="M5 30 L12 10 L25 22 L40 5 L55 22 L68 10 L75 30 Z" fill="currentColor"/>
-            <circle cx="12" cy="10" r="2" fill="currentColor"/>
-            <circle cx="40" cy="5" r="2" fill="currentColor"/>
-            <circle cx="68" cy="10" r="2" fill="currentColor"/>
-          </svg>
-          <div class="board-center__title">MINI·POLY</div>
-          <div class="board-center__sub">— ❦ —</div>
-        </div>
-        <!-- Decorative shields (heraldic, no interaction) -->
-        <div class="board-center__shield board-center__shield--wax" aria-hidden="true">
-          <div class="board-center__shield-inner" />
-        </div>
-        <div class="board-center__shield board-center__shield--plum" aria-hidden="true">
-          <div class="board-center__shield-inner board-center__shield-inner--star">✦</div>
-        </div>
-      </div>
+      <!-- ── Central area (inner 9x9) — stays blank. In the new Figma
+           design the board centre is overlaid by the RoomView HUD
+           (dice + turn banner + timer + budget), so we just paint a
+           soft green wash here and let the parent render on top. ── -->
+      <div class="board-center" aria-hidden="true"></div>
 
       <!-- ── 40 perimeter tiles ── -->
       <BoardTile
@@ -303,12 +288,11 @@ void lighten;
      emblem is wide, without having to change the grid span of .board-center. */
   grid-template-columns: 1.4fr repeat(9, 1fr) 1.4fr;
   grid-template-rows: 1.4fr repeat(9, 1fr) 1.4fr;
-  gap: 1px;
-  background: var(--ink-2);
+  gap: 0;
+  background: transparent;
   border-radius: 6px;
-  padding: 1px;
-  overflow: hidden;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18);
+  padding: 0;
+  overflow: visible;
 
   /* Fit within Telegram's safe area. */
   --safe-h: calc(
@@ -329,87 +313,12 @@ void lighten;
   margin: 0 auto;
 }
 
-/* Inner 9x9 emblem */
+/* Inner 9x9 area — left blank; RoomView paints its HUD on top. */
 .board-center {
   grid-column: 2 / 11;
   grid-row: 2 / 11;
-  background:
-    repeating-linear-gradient(45deg, transparent 0 8px, rgba(180, 140, 80, 0.07) 8px 9px),
-    linear-gradient(145deg, var(--card-alt), var(--bg-deep));
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-direction: column;
-  position: relative;
+  background: transparent;
   pointer-events: none;
-  color: var(--gold);
-  gap: 6px;
-  padding: 12px;
-}
-.board-center__stack {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 4px;
-  text-align: center;
-}
-.board-center__crown {
-  width: clamp(44px, 14%, 96px);
-  opacity: 0.8;
-  filter: drop-shadow(0 1px 0 rgba(0, 0, 0, 0.15));
-}
-.board-center__title {
-  font-family: var(--font-title);
-  font-size: clamp(14px, 3.4vmin, 26px);
-  letter-spacing: 0.22em;
-  color: var(--primary);
-  text-transform: uppercase;
-  text-shadow: 0 1px 0 rgba(247, 238, 218, 0.6);
-}
-.board-center__sub {
-  font-family: var(--font-display);
-  font-size: clamp(8px, 1.4vmin, 11px);
-  letter-spacing: 0.28em;
-  color: var(--ink-3);
-  margin-top: 2px;
-}
-
-/* Decorative tilted shields (from design-ref) */
-.board-center__shield {
-  position: absolute;
-  border-radius: 2px;
-  box-shadow:
-    0 2px 4px rgba(0, 0, 0, 0.2),
-    inset 0 1px 0 rgba(255, 255, 255, 0.15);
-}
-.board-center__shield--wax {
-  top: 18%;
-  right: 14%;
-  width: clamp(26px, 5.2vmin, 40px);
-  height: clamp(18px, 3.8vmin, 28px);
-  background: linear-gradient(135deg, #8b1a1a, #6a1212);
-  border: 1px solid #4a0e0e;
-  transform: rotate(-12deg);
-}
-.board-center__shield--plum {
-  bottom: 22%;
-  left: 18%;
-  width: clamp(24px, 4.8vmin, 36px);
-  height: clamp(16px, 3.5vmin, 26px);
-  background: linear-gradient(135deg, #3e2272, #2d1a5a);
-  border: 1px solid #1a0e3a;
-  transform: rotate(14deg);
-}
-.board-center__shield-inner {
-  position: absolute;
-  inset: 3px;
-  border: 1px solid rgba(212, 168, 74, 0.5);
-  border-radius: 1px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: rgba(212, 168, 74, 0.8);
-  font-size: clamp(8px, 1.6vmin, 12px);
 }
 
 /* ── Juice: landing impact ── */

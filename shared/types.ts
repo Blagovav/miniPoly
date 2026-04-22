@@ -156,8 +156,14 @@ export interface TradeOffer {
   id: string;
   fromId: string;
   toId: string;
-  tileIndex: number;
-  cash: number;
+  // What the initiator gives to the recipient.
+  giveTiles: number[];
+  giveCash: number;
+  giveJailCards: number;
+  // What the initiator wants in return.
+  takeTiles: number[];
+  takeCash: number;
+  takeJailCards: number;
   ts: number;
 }
 
@@ -230,7 +236,16 @@ export type ClientMessage =
   | { type: "destroyRoom" }
   | { type: "buildHouse"; tileIndex: number }
   | { type: "sellHouse"; tileIndex: number }
-  | { type: "proposeTrade"; tileIndex: number; cash: number }
+  | {
+      type: "proposeTrade";
+      toId: string;
+      giveTiles: number[];
+      giveCash: number;
+      giveJailCards: number;
+      takeTiles: number[];
+      takeCash: number;
+      takeJailCards: number;
+    }
   | { type: "respondTrade"; accept: boolean }
   | { type: "mortgage"; tileIndex: number }
   | { type: "unmortgage"; tileIndex: number }

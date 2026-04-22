@@ -88,13 +88,27 @@ const tileKindLabel = computed(() => {
   if (t.kind === "utility") return loc.value === "ru" ? "Инфра" : "Utility";
   return "";
 });
+
+// When the player has no decision left (they're leading or already
+// passed), the modal auto-hides entirely — no scrim, no artefact at the
+// bottom of the screen. If someone outbids them the `iAmLeading` flips
+// false and the modal re-appears automatically.
+const hasDecision = computed(() => !myPassed.value && !iAmLeading.value);
+const visible = computed(() => open.value && !!tile.value && !!auction.value && hasDecision.value);
 </script>
 
 <template>
   <transition name="fade">
-    <div v-if="open && tile && auction" class="modal-scrim" @click.self>
-      <div class="modal-card auction-card" @click.stop :style="bandColor ? { borderTopColor: bandColor } : undefined">
-        <div class="grab-bar" />
+    <div
+      v-if="visible && tile && auction"
+      class="modal-scrim"
+    >
+      <div
+        class="modal-card auction-card"
+        @click.stop
+        :style="bandColor ? { borderTopColor: bandColor } : undefined"
+      >
+        <div class="grab-bar" aria-hidden="true" />
 
         <!-- Header -->
         <div class="auction-head">
@@ -220,12 +234,35 @@ const tileKindLabel = computed(() => {
   box-shadow: 0 -8px 24px rgba(42, 29, 16, 0.25);
 }
 .grab-bar {
+  display: block;
+  width: 40px;
+  height: 4px;
+  background: var(--line-strong);
+  border: none;
+  border-radius: 2px;
+  margin: -2px auto 10px;
+}
+.grab-bar--interactive {
+  cursor: pointer;
+  padding: 0;
+  width: 48px;
+  height: 18px;  /* larger hit-box (invisible) so thumb-taps land reliably */
+  background: transparent;
+  position: relative;
+  margin: -6px auto 4px;
+}
+.grab-bar--interactive::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
   width: 40px;
   height: 4px;
   background: var(--line-strong);
   border-radius: 2px;
-  margin: -2px auto 10px;
 }
+.grab-bar--interactive:hover::before { background: var(--ink-3); }
 
 /* ── Header ── */
 .auction-head {

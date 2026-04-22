@@ -343,37 +343,86 @@ export function unmortgageProperty(room: RoomState, playerId: string, tileIndex:
   return { ok: true };
 }
 
-/** Предложить купить чужую собственность. */
+export interface TradeProposal {
+  toId: string;
+  giveTiles: number[];
+  giveCash: number;
+  giveJailCards: number;
+  takeTiles: number[];
+  takeCash: number;
+  takeJailCards: number;
+}
+
+/** Предложить двусторонний обмен: улицы + кэш + карточки тюрьмы ↔ улицы + кэш + карточки. */
 export function proposeTrade(
   room: RoomState,
   fromId: string,
-  tileIndex: number,
-  cash: number,
+  offer: TradeProposal,
 ): { ok: boolean; error?: string } {
   if (room.phase === "lobby" || room.phase === "ended") return { ok: false, error: "not in game" };
   if (room.pendingTrade) return { ok: false, error: "a trade is already pending" };
+
   const from = room.players.find((p) => p.id === fromId);
-  if (!from || from.bankrupt) return { ok: false, error: "no buyer" };
-  const owned = room.properties[tileIndex];
-  if (!owned) return { ok: false, error: "nobody owns this" };
-  if (owned.ownerId === fromId) return { ok: false, error: "already yours" };
-  if (owned.houses > 0 || owned.hotel) return { ok: false, error: "sell houses first" };
-  const offer = Math.max(0, Math.floor(cash));
-  if (from.cash < offer) return { ok: false, error: "not enough cash" };
+  const to = room.players.find((p) => p.id === offer.toId);
+  if (!from || !to) return { ok: false, error: "no player" };
+  if (from.id === to.id) return { ok: false, error: "cannot trade with yourself" };
+  if (from.bankrupt || to.bankrupt) return { ok: false, error: "bankrupt player" };
+
+  // Инициировать можно только в свой ход.
+  if (room.players[room.currentTurn].id !== fromId) return { ok: false, error: "not your turn" };
+
+  const giveCash = Math.max(0, Math.floor(offer.giveCash));
+  const takeCash = Math.max(0, Math.floor(offer.takeCash));
+  const giveJail = Math.max(0, Math.floor(offer.giveJailCards));
+  const takeJail = Math.max(0, Math.floor(offer.takeJailCards));
+  const giveTiles = Array.from(new Set(offer.giveTiles));
+  const takeTiles = Array.from(new Set(offer.takeTiles));
+
+  // Хоть что-то должно быть на столе.
+  if (
+    giveCash + takeCash + giveJail + takeJail + giveTiles.length + takeTiles.length ===
+    0
+  ) {
+    return { ok: false, error: "empty trade" };
+  }
+
+  // Ничего на двух сторонах одновременно быть не должно.
+  for (const i of giveTiles) {
+    if (takeTiles.includes(i)) return { ok: false, error: "tile on both sides" };
+  }
+
+  if (from.cash < giveCash) return { ok: false, error: "not enough cash" };
+  if (to.cash < takeCash) return { ok: false, error: "recipient lacks cash" };
+  if (from.getOutCards < giveJail) return { ok: false, error: "not enough jail cards" };
+  if (to.getOutCards < takeJail) return { ok: false, error: "recipient lacks jail cards" };
+
+  // Заложенные участки нельзя трогать (дома — можно, переходят к новому владельцу).
+  for (const idx of giveTiles) {
+    const owned = room.properties[idx];
+    if (!owned || owned.ownerId !== from.id) return { ok: false, error: "you don't own a tile" };
+    if (owned.mortgaged) return { ok: false, error: "mortgaged tile in offer" };
+  }
+  for (const idx of takeTiles) {
+    const owned = room.properties[idx];
+    if (!owned || owned.ownerId !== to.id) return { ok: false, error: "they don't own a tile" };
+    if (owned.mortgaged) return { ok: false, error: "mortgaged tile requested" };
+  }
 
   room.pendingTrade = {
     id: nanoid(8),
     fromId,
-    toId: owned.ownerId,
-    tileIndex,
-    cash: offer,
+    toId: to.id,
+    giveTiles,
+    giveCash,
+    giveJailCards: giveJail,
+    takeTiles,
+    takeCash,
+    takeJailCards: takeJail,
     ts: Date.now(),
   };
-  const tile = BOARD[tileIndex];
-  const owner = room.players.find((p) => p.id === owned.ownerId);
   log(room, {
-    en: `${from.name} offers $${offer} for ${tile.name.en} to ${owner?.name ?? "?"}`,
-    ru: `${from.name} предлагает $${offer} за ${tile.name.ru} игроку ${owner?.name ?? "?"}`,
+    en: `${from.name} sends a trade offer to ${to.name}`,
+    ru: `${from.name} шлёт предложение обмена игроку ${to.name}`,
   });
   return { ok: true };
 }
@@ -389,27 +438,43 @@ export function resolveTrade(
 
   const from = room.players.find((p) => p.id === t.fromId);
   const to = room.players.find((p) => p.id === t.toId);
-  const prop = room.properties[t.tileIndex];
-  const tile = BOARD[t.tileIndex];
   room.pendingTrade = null;
 
   if (!accept) {
     log(room, {
-      en: `${to?.name ?? "?"} rejected offer for ${tile?.name.en ?? "?"}`,
-      ru: `${to?.name ?? "?"} отклонил предложение за ${tile?.name.ru ?? "?"}`,
+      en: `${to?.name ?? "?"} declined the trade from ${from?.name ?? "?"}`,
+      ru: `${to?.name ?? "?"} отклонил обмен от ${from?.name ?? "?"}`,
     });
     return { ok: true };
   }
 
-  if (!from || !to || !prop || from.bankrupt) return { ok: false, error: "trade invalid" };
-  if (from.cash < t.cash) return { ok: false, error: "buyer no longer has cash" };
+  if (!from || !to || from.bankrupt || to.bankrupt) return { ok: false, error: "trade invalid" };
 
-  from.cash -= t.cash;
-  to.cash += t.cash;
-  prop.ownerId = from.id;
+  // Перепроверяем состояние — за время ожидания ответа могло всё поменяться.
+  if (from.cash < t.giveCash) return { ok: false, error: "initiator no longer has cash" };
+  if (to.cash < t.takeCash) return { ok: false, error: "recipient no longer has cash" };
+  if (from.getOutCards < t.giveJailCards) return { ok: false, error: "initiator no longer has jail cards" };
+  if (to.getOutCards < t.takeJailCards) return { ok: false, error: "recipient no longer has jail cards" };
+  for (const idx of t.giveTiles) {
+    const o = room.properties[idx];
+    if (!o || o.ownerId !== from.id || o.mortgaged) return { ok: false, error: "tile unavailable" };
+  }
+  for (const idx of t.takeTiles) {
+    const o = room.properties[idx];
+    if (!o || o.ownerId !== to.id || o.mortgaged) return { ok: false, error: "tile unavailable" };
+  }
+
+  from.cash += t.takeCash - t.giveCash;
+  to.cash += t.giveCash - t.takeCash;
+  from.getOutCards += t.takeJailCards - t.giveJailCards;
+  to.getOutCards += t.giveJailCards - t.takeJailCards;
+  // Дома/отели остаются на клетке и переходят к новому владельцу.
+  for (const idx of t.giveTiles) room.properties[idx].ownerId = to.id;
+  for (const idx of t.takeTiles) room.properties[idx].ownerId = from.id;
+
   log(room, {
-    en: `${to.name} sold ${tile.name.en} to ${from.name} for $${t.cash}`,
-    ru: `${to.name} продал ${tile.name.ru} игроку ${from.name} за $${t.cash}`,
+    en: `${from.name} and ${to.name} completed a trade`,
+    ru: `${from.name} и ${to.name} совершили обмен`,
   });
   return { ok: true };
 }

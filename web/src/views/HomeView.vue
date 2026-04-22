@@ -1,13 +1,9 @@
 <script setup lang="ts">
-import { computed, ref, onMounted } from "vue";
+import { computed, ref, onMounted, onUnmounted } from "vue";
 import { useI18n } from "vue-i18n";
 import { useRouter } from "vue-router";
-import { setLocale } from "../i18n";
 import { useInventoryStore } from "../stores/inventory";
 import { useTelegram } from "../composables/useTelegram";
-import Icon from "../components/Icon.vue";
-import Sigil from "../components/Sigil.vue";
-import { PLAYER_COLORS } from "../utils/palette";
 
 const { locale } = useI18n();
 const router = useRouter();
@@ -17,51 +13,51 @@ const { haptic, notify, userName, setUserName, tg } = useTelegram();
 const isRu = computed(() => locale.value === "ru");
 const L = computed(() => isRu.value
   ? {
-      title: "MINI · POLY",
-      sub: "Классическая настолка",
-      hero: `Привет, ${userName.value || "Игрок"}`,
-      retinue: "Фишки готовы к броску.",
-      play: "Играть",
-      tavernT: "Игры",    tavernS: "Найти партию",
-      scribeT: "Создать", scribeS: "Новая игра",
-      shopT: "Магазин",   shopS: "Фишки и бусты",
-      friendsT: "Друзья", friendsS: "Список друзей",
-      lastMatch: "Последняя игра",
-      alliesInPlay: "Друзья в игре",
-      closeApp: "Закрыть",
-      daily: "Ежедневный бонус",
-      yourName: "Твоё имя",
+      greeting: "С возвращением,",
+      createT: "Создать партию",
+      createS: "Ваши правила и ваш список участников",
+      joinT:   "Войти в партию",
+      joinS:   "Войдите в заранее созданные другими игроками партии",
+      history: "История",
+      shop:    "Магазин",
+      friends: "Друзья",
+      daily:   "Ежедневный бонус",
+      settingsAria: "Настройки",
+      playerFallback: "Игрок",
       rejoinEyebrow: "Активная партия",
       rejoinMsg: "Ты не вышел из партии — вернуться к игре?",
       rejoinBtn: "Вернуться",
       rejoinForget: "Забыть",
+      saveName: "Сохранить",
     }
   : {
-      title: "MINI · POLY",
-      sub: "The classic board game",
-      hero: `Hi, ${userName.value || "Player"}`,
-      retinue: "Your tokens are ready to roll.",
-      play: "Play",
-      tavernT: "Games",   tavernS: "Find a match",
-      scribeT: "Create",  scribeS: "New game",
-      shopT: "Shop",      shopS: "Tokens & boosts",
-      friendsT: "Friends", friendsS: "Friends list",
-      lastMatch: "Recent match",
-      alliesInPlay: "Friends in play",
-      closeApp: "Close",
-      daily: "Daily bonus",
-      yourName: "Your name",
+      greeting: "Welcome back,",
+      createT: "Create match",
+      createS: "Your rules, your guest list",
+      joinT:   "Join a match",
+      joinS:   "Hop into matches other players have set up",
+      history: "History",
+      shop:    "Shop",
+      friends: "Friends",
+      daily:   "Daily bonus",
+      settingsAria: "Settings",
+      playerFallback: "Player",
       rejoinEyebrow: "Active match",
       rejoinMsg: "You didn't leave the match — want to return?",
       rejoinBtn: "Return",
       rejoinForget: "Forget",
+      saveName: "Save",
     });
 
+const displayName = computed(() => userName.value || L.value.playerFallback);
+
+// ── Daily bonus toast (unchanged from prior design) ──
 const bonusAmount = ref(0);
 const bonusToast = ref(false);
-// Rejoin banner — surfaces if a roomId was saved in localStorage within the
-// last REJOIN_TTL_MS. After 5 min the room has almost certainly been cleaned
-// up on the server, so the banner would just lead to a dead-end.
+
+// ── Rejoin banner — surfaces if a roomId was saved in localStorage within
+// the last REJOIN_TTL_MS. After 5 min the room has almost certainly been
+// cleaned up server-side, so the banner would just lead to a dead-end.
 const REJOIN_TTL_MS = 5 * 60 * 1000;
 const activeRoomId = ref<string | null>(null);
 
@@ -89,6 +85,15 @@ onMounted(() => {
     setTimeout(() => (bonusToast.value = false), 3500);
   }
   loadActiveRoom();
+  // index.html и style.css красят html/body в parchment #f0e4c8.
+  // Для нового синего редизайна главной переопределяем фон на уровне
+  // <html>/<body>, иначе safe-area полосы (top/bottom) светят кремом.
+  document.documentElement.classList.add("home-figma-root");
+  document.body.classList.add("home-figma-root");
+});
+onUnmounted(() => {
+  document.documentElement.classList.remove("home-figma-root");
+  document.body.classList.remove("home-figma-root");
 });
 
 function rejoinRoom() {
@@ -105,180 +110,103 @@ function forgetRoom() {
   activeRoomId.value = null;
 }
 
+// Inline name edit — surfaces only in dev (no real TG profile) so the user
+// can set a test name. In prod the cog is still tappable but is a no-op
+// visually; the click still fires haptic for tactile feedback.
 const editingName = ref(false);
 const nameDraft = ref(userName.value);
-function startEditName() { nameDraft.value = userName.value; editingName.value = true; }
+function startEditName() {
+  haptic("light");
+  nameDraft.value = userName.value;
+  editingName.value = true;
+}
 function saveName() { setUserName(nameDraft.value); editingName.value = false; }
 
 function go(name: string) { haptic("light"); router.push({ name }); }
-function toggleLocale() { setLocale(isRu.value ? "en" : "ru"); }
-
-// Список TG-друзей в игре. Пока сервер не отдаёт friends.status, держим
-// пустым — показывать заглушку с фейковыми именами хуже, чем скрыть секцию.
-// TODO: заменить на реальные данные (GET /api/users/:id/last-match, и friends.status).
-const allies = computed<{ n: string; c: string; s: string }[]>(() => []);
-
-function allyDotColor(status: string): string {
-  if (status === "Playing") return "var(--emerald)";
-  if (status === "Online") return "var(--gold)";
-  return "var(--ink-4)";
-}
-
-const avatarInitial = computed(() => (userName.value?.[0] ?? "L").toUpperCase());
 </script>
 
 <template>
-  <div class="app home">
-    <div class="topbar">
-      <button class="avatar-btn" @click="startEditName">{{ avatarInitial }}</button>
-      <div class="title">
-        <h1 :style="{ fontFamily: 'var(--font-title)', fontSize: '22px', letterSpacing: '0.08em' }">{{ L.title }}</h1>
-        <div class="sub">{{ L.sub }}</div>
-      </div>
-      <button class="icon-btn" aria-label="notifications"><Icon name="bell" :size="18"/></button>
-      <button class="icon-btn" aria-label="language" @click="toggleLocale">
-        <Icon name="globe" :size="18"/>
-      </button>
-    </div>
+  <div class="app home-v2">
+    <img class="home-v2__bg" src="/figma/home/bg-pattern.png" alt="" aria-hidden="true" />
 
-    <div class="content">
-      <!-- Rejoin card: surfaces an accidentally-closed game so the player
-           can hop back in (or dismiss it). -->
+    <div class="home-v2__content">
       <transition name="rejoin-fade">
-        <div v-if="activeRoomId" class="rejoin-card">
-          <div class="rejoin-card__pulse">
-            <Icon name="dice" :size="20" color="#fff"/>
+        <div v-if="activeRoomId" class="home-v2__rejoin">
+          <div class="home-v2__rejoin-body">
+            <div class="home-v2__rejoin-eyebrow">
+              {{ L.rejoinEyebrow }} · {{ activeRoomId }}
+            </div>
+            <div class="home-v2__rejoin-msg">{{ L.rejoinMsg }}</div>
           </div>
-          <div class="rejoin-card__body">
-            <div class="rejoin-card__eyebrow">{{ L.rejoinEyebrow }} · {{ activeRoomId }}</div>
-            <div class="rejoin-card__msg">{{ L.rejoinMsg }}</div>
-          </div>
-          <div class="rejoin-card__actions">
-            <button class="btn btn-primary rejoin-card__go" @click="rejoinRoom">
-              {{ L.rejoinBtn }}
-            </button>
-            <button class="rejoin-card__forget" @click="forgetRoom" :aria-label="L.rejoinForget">
-              <Icon name="x" :size="12" color="var(--ink-3)"/>
-            </button>
-          </div>
+          <button class="home-v2__rejoin-go" @click="rejoinRoom">
+            {{ L.rejoinBtn }}
+          </button>
+          <button
+            class="home-v2__rejoin-forget"
+            @click="forgetRoom"
+            :aria-label="L.rejoinForget"
+          >
+            ✕
+          </button>
         </div>
       </transition>
 
-      <!-- Name edit input (inline, dev-mode когда нет реального tg-профиля) -->
-      <div v-if="!tg && editingName" class="card" style="margin-bottom: 10px; padding: 10px; display: flex; gap: 8px;">
+      <div class="home-v2__greeting-row">
+        <h1 class="home-v2__greeting">
+          <span>{{ L.greeting }}</span>
+          <span>{{ displayName }}</span>
+        </h1>
+        <button
+          class="home-v2__settings"
+          :aria-label="L.settingsAria"
+          @click="startEditName"
+        >
+          <img src="/figma/home/settings.png" alt="" />
+        </button>
+      </div>
+
+      <div v-if="!tg && editingName" class="home-v2__name-edit">
         <input
           v-model="nameDraft"
-          class="name-input"
+          class="home-v2__name-input"
           maxlength="24"
           autofocus
           @keydown.enter="saveName"
         />
-        <button class="btn btn-primary" @click="saveName">✓</button>
+        <button class="home-v2__name-save" @click="saveName">✓</button>
       </div>
 
-      <!-- Hero banner -->
-      <div class="hero">
-        <svg viewBox="0 0 80 40" class="hero__crown">
-          <path d="M5 30 L12 10 L25 22 L40 5 L55 22 L68 10 L75 30 Z" fill="#d4a84a"/>
-          <circle cx="12" cy="10" r="2" fill="#d4a84a"/>
-          <circle cx="40" cy="5" r="2" fill="#d4a84a"/>
-          <circle cx="68" cy="10" r="2" fill="#d4a84a"/>
-        </svg>
-        <div class="hero__year">Anno MMXXVI</div>
-        <div class="hero__title">{{ L.hero }}</div>
-        <div class="hero__sub">{{ L.retinue }}</div>
-        <div class="hero__cta">
-          <button
-            class="btn btn-primary hero__play"
-            @click="go('rooms')"
-          >
-            <Icon name="dice" :size="16" color="#2a1d10"/>
-            {{ L.play }}
-          </button>
-          <button
-            class="btn btn-ghost hero__create"
-            @click="go('create')"
-            aria-label="Create"
-          >
-            <Icon name="plus" :size="16" color="#f7eeda"/>
-          </button>
-          <div class="hero__coins chip">
-            <Icon name="coin" :size="14" color="var(--gold-soft)"/>
-            <span class="money">{{ inv.coins }}</span>
-          </div>
-        </div>
-      </div>
-
-      <!-- Quick actions -->
-      <div class="quick-grid">
-        <button class="home-tile" @click="go('rooms')">
-          <div class="home-tile__icon"><Icon name="users" :size="17" color="var(--primary)"/></div>
-          <div>
-            <div class="home-tile__title">{{ L.tavernT }}</div>
-            <div class="home-tile__sub">{{ L.tavernS }}</div>
-          </div>
+      <div class="home-v2__cards">
+        <button class="home-v2__card home-v2__card--create" @click="go('create')">
+          <img class="home-v2__card-art" src="/figma/home/dice.png" alt="" />
+          <div class="home-v2__card-title">{{ L.createT }}</div>
+          <div class="home-v2__card-sub">{{ L.createS }}</div>
         </button>
-        <button class="home-tile" @click="go('create')">
-          <div class="home-tile__icon"><Icon name="scroll" :size="17" color="var(--primary)"/></div>
-          <div>
-            <div class="home-tile__title">{{ L.scribeT }}</div>
-            <div class="home-tile__sub">{{ L.scribeS }}</div>
-          </div>
-        </button>
-        <button class="home-tile" @click="go('shop')">
-          <div class="home-tile__icon"><Icon name="bag" :size="17" color="var(--primary)"/></div>
-          <div>
-            <div class="home-tile__title">{{ L.shopT }}</div>
-            <div class="home-tile__sub">{{ L.shopS }}</div>
-          </div>
-        </button>
-        <button class="home-tile" @click="go('friends')">
-          <div class="home-tile__icon"><Icon name="shield" :size="17" color="var(--primary)"/></div>
-          <div>
-            <div class="home-tile__title">{{ L.friendsT }}</div>
-            <div class="home-tile__sub">{{ L.friendsS }}</div>
-          </div>
+        <button class="home-v2__card home-v2__card--join" @click="go('rooms')">
+          <img
+            class="home-v2__card-art home-v2__card-art--join"
+            src="/figma/home/magnifier.png"
+            alt=""
+          />
+          <div class="home-v2__card-title">{{ L.joinT }}</div>
+          <div class="home-v2__card-sub">{{ L.joinS }}</div>
         </button>
       </div>
 
-      <!-- Last match -->
-      <div class="card last-match">
-        <div class="row between" style="margin-bottom: 8px;">
-          <div class="section-label">{{ L.lastMatch }}</div>
-          <div class="last-match__delta">+ 1 240 ◈</div>
-        </div>
-        <div class="row" style="gap: 8px;">
-          <Sigil :name="userName || 'Classic'" :color="PLAYER_COLORS.you" :size="32"/>
-          <div style="flex: 1;">
-            <div style="font-family: var(--font-display); font-size: 15px;">
-              {{ isRu ? "Классика" : "Classic" }}
-            </div>
-            <div style="font-size: 11px; color: var(--ink-3);">
-              {{ isRu ? "4 игрока · 28 раундов · победа" : "4 players · 28 rounds · won" }}
-            </div>
-          </div>
-          <div class="rank-badge">1st</div>
-        </div>
-      </div>
-
-      <!-- Allies in play — hidden until the server provides real friends.
-           Previously showed hardcoded demo data (Elara/Magnus/Finn/…) which
-           confused users into thinking those were their real TG friends. -->
-      <template v-if="allies.length > 0">
-        <div class="section-label" style="margin-bottom: 6px; text-align: center;">{{ L.alliesInPlay }}</div>
-        <div class="rail allies-rail" style="padding-bottom: 4px; justify-content: center;">
-          <div v-for="f in allies" :key="f.n" class="ally">
-            <div class="ally__wrap">
-              <Sigil :name="f.n" :color="f.c" :size="44"/>
-              <div
-                class="ally__dot"
-                :style="{ background: allyDotColor(f.s) }"
-              />
-            </div>
-            <div class="ally__name">{{ f.n }}</div>
-          </div>
-        </div>
-      </template>
+      <nav class="home-v2__nav">
+        <button class="home-v2__nav-item" @click="go('history')">
+          <img src="/figma/home/history.png" alt="" />
+          <span>{{ L.history }}</span>
+        </button>
+        <button class="home-v2__nav-item" @click="go('shop')">
+          <img src="/figma/home/shop.png" alt="" />
+          <span>{{ L.shop }}</span>
+        </button>
+        <button class="home-v2__nav-item" @click="go('friends')">
+          <img src="/figma/home/friends.png" alt="" />
+          <span>{{ L.friends }}</span>
+        </button>
+      </nav>
     </div>
 
     <transition name="bonus">
@@ -294,248 +222,281 @@ const avatarInitial = computed(() => (userName.value?.[0] ?? "L").toUpperCase())
 </template>
 
 <style scoped>
-.app {
+.home-v2 {
   position: relative;
   display: flex;
   flex-direction: column;
-  min-height: 100dvh;
-  background: var(--bg);
-}
-
-/* ── Rejoin card (active-match banner) ── */
-.rejoin-card {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 10px 12px;
-  margin-bottom: 10px;
-  /* Более насыщенный фон — иначе жёлтый текст терялся на полупрозрачной заливке. */
-  background: linear-gradient(180deg, rgba(184, 137, 46, 0.18) 0%, rgba(184, 137, 46, 0.08) 100%);
-  border: 1px solid var(--gold);
-  border-radius: var(--r-md);
-  box-shadow: 0 2px 8px rgba(184, 137, 46, 0.18), inset 0 1px 0 rgba(255, 255, 255, 0.35);
-}
-.rejoin-card__pulse {
-  width: 38px; height: 38px;
-  border-radius: 50%;
-  background: radial-gradient(circle at 35% 30%, var(--gold-soft), var(--gold));
-  display: flex; align-items: center; justify-content: center;
-  flex-shrink: 0;
-  box-shadow: inset 0 1px 2px rgba(255, 255, 255, 0.4), 0 2px 6px rgba(139, 105, 20, 0.35);
-  animation: rejoin-pulse 1.6s ease-in-out infinite;
-}
-.rejoin-card__body { flex: 1; min-width: 0; line-height: 1.25; }
-.rejoin-card__eyebrow {
-  font-family: var(--font-title);
-  font-size: 10px;
-  letter-spacing: 0.18em;
-  /* Было var(--gold) — плохо читалось на золотом фоне.
-     Ставим тёмный охровый для достаточного контраста. */
-  color: #6a4a1c;
-  text-transform: uppercase;
-  font-weight: 700;
-}
-.rejoin-card__msg {
-  font-family: var(--font-display);
-  font-size: 13px;
-  color: var(--ink);
-  margin-top: 2px;
-  /* italic + тонкий шрифт превращались в блёклый текст — убираем курсив, усиливаем вес. */
-  font-weight: 500;
-}
-.rejoin-card__actions {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  flex-shrink: 0;
-}
-.rejoin-card__go {
-  padding: 8px 14px;
-  font-size: 13px;
-}
-.rejoin-card__forget {
-  width: 24px; height: 24px;
-  border-radius: 50%;
-  border: 1px solid var(--line);
-  background: var(--card);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  padding: 0;
-}
-.rejoin-card__forget:hover { background: var(--card-alt); }
-@keyframes rejoin-pulse {
-  0%, 100% { box-shadow: inset 0 1px 2px rgba(255,255,255,0.4), 0 2px 6px rgba(139,105,20,0.35); }
-  50%      { box-shadow: inset 0 1px 2px rgba(255,255,255,0.4), 0 2px 14px rgba(212,168,74,0.6); }
-}
-.rejoin-fade-enter-active, .rejoin-fade-leave-active { transition: opacity 220ms ease, transform 220ms ease; }
-.rejoin-fade-enter-from, .rejoin-fade-leave-to { opacity: 0; transform: translateY(-6px); }
-
-.hero {
-  position: relative;
-  border-radius: 12px;
-  overflow: hidden;
-  border: 1px solid var(--line);
-  background:
-    radial-gradient(ellipse at 80% 20%, rgba(184, 137, 46, 0.25) 0%, transparent 50%),
-    linear-gradient(140deg, #4a2e82 0%, #2d1a5a 100%);
-  padding: 14px 14px 12px;
-  color: #f0e4c8;
-  margin-bottom: 10px;
-}
-.hero__crown {
-  position: absolute;
-  right: 10px;
-  top: 8px;
-  width: 56px;
-  opacity: 0.35;
-}
-.hero__year {
-  font-size: 10px;
-  letter-spacing: 0.15em;
-  color: #d4a84a;
-  text-transform: uppercase;
-}
-.hero__title {
-  font-family: var(--font-display);
-  font-size: 20px;
-  margin-top: 2px;
-  color: #f7eeda;
-}
-.hero__sub {
-  font-size: 11px;
-  color: #c9b88e;
-  margin-top: 2px;
-  line-height: 1.3;
-}
-.hero__cta {
-  margin-top: 10px;
-  display: flex;
-  gap: 8px;
-  align-items: center;
-}
-.hero__play {
-  background: linear-gradient(180deg, #d4a84a 0%, #b8892e 100%);
-  color: #2a1d10;
   flex: 1;
-  padding: 10px;
+  min-height: 0;
+  background: #0d68db;
+  color: #fff;
+  overflow: hidden;
+  font-family: 'Golos Text', var(--font-body);
 }
-.hero__create {
-  background: rgba(247, 238, 218, 0.12);
-  color: #f7eeda;
-  border: 1px solid rgba(212, 168, 74, 0.4);
-  padding: 10px 14px;
-}
-.hero__coins {
-  background: rgba(247, 238, 218, 0.1);
-  border-color: rgba(212, 168, 74, 0.3);
-  color: #f7eeda;
-  padding: 6px 10px;
-}
-.hero__coins .money { color: #f7eeda; }
 
-.quick-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 8px;
-  margin-bottom: 10px;
+.home-v2__bg {
+  position: absolute;
+  left: -42px;
+  bottom: 0;
+  width: 476px;
+  height: 852px;
+  max-height: 100%;
+  object-fit: contain;
+  object-position: bottom left;
+  opacity: 0.4;
+  pointer-events: none;
+  z-index: 0;
 }
-.home-tile {
-  background: var(--card);
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  padding: 14px 12px;
-  text-align: left;
-  cursor: pointer;
-  font-family: var(--font-body);
-  color: var(--ink);
+
+.home-v2__content {
+  position: relative;
+  z-index: 1;
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  min-height: 78px;
-}
-.home-tile__icon {
-  width: 32px; height: 32px;
-  border-radius: 8px;
-  background: rgba(90, 58, 154, 0.1);
-  color: var(--primary);
-  display: flex; align-items: center; justify-content: center;
-}
-.home-tile__title {
-  font-family: var(--font-display);
-  font-size: 15px;
-  color: var(--ink);
-}
-.home-tile__sub {
-  font-size: 11px;
-  color: var(--ink-3);
-  margin-top: 1px;
+  flex: 1;
+  min-height: 0;
+  padding: 24px 24px 24px;
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 
-.last-match { padding: 12px; margin-bottom: 10px; }
-.last-match__delta {
-  font-size: 11px;
-  color: var(--emerald);
-  font-weight: 600;
+/* ── Greeting row ── */
+.home-v2__greeting-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
 }
-.section-label {
-  font-size: 10px;
-  color: var(--ink-3);
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
+.home-v2__greeting {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  font-family: 'Golos Text', sans-serif;
+  font-weight: 700;
+  font-size: 28px;
+  line-height: 34px;
+  color: #fff;
+  text-shadow: 1px 1px 0 #000;
+  word-break: break-word;
 }
-.rank-badge {
-  padding: 3px 9px;
-  border: 1px solid var(--gold);
-  border-radius: 999px;
-  color: var(--gold);
-  font-size: 10px;
-  font-family: var(--font-title);
-  letter-spacing: 0.12em;
-}
+.home-v2__greeting span { display: block; }
 
-.ally {
-  text-align: center;
-  width: 64px;
-  flex-shrink: 0;
-}
-.ally__wrap {
+.home-v2__settings {
   position: relative;
-  width: 44px; height: 44px;
-  margin: 0 auto;
+  width: 48px; height: 48px;
+  padding: 0;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: transform 120ms ease;
 }
-.ally__dot {
+.home-v2__settings img {
   position: absolute;
-  bottom: 0; right: 0;
-  width: 11px; height: 11px;
-  border-radius: 50%;
-  border: 2px solid var(--bg);
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 66px;
+  height: 66px;
+  object-fit: contain;
+  pointer-events: none;
 }
-.ally__name {
-  font-size: 11px;
-  margin-top: 6px;
-  color: var(--ink);
-  font-family: var(--font-display);
-  line-height: 1.2;
+.home-v2__settings:active { transform: scale(0.92); }
+
+/* ── Inline name edit ── */
+.home-v2__name-edit {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+  padding: 10px;
+  background: rgba(255, 255, 255, 0.14);
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  border-radius: 14px;
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+.home-v2__name-input {
+  flex: 1;
+  padding: 10px 12px;
+  background: #fff;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 10px;
+  color: #000;
+  font-size: 14px;
+  font-family: 'Golos Text', sans-serif;
+  outline: none;
+}
+.home-v2__name-save {
+  padding: 8px 14px;
+  background: #fff;
+  color: #0d68db;
+  border: none;
+  border-radius: 10px;
+  font-weight: 700;
+  font-family: 'Golos Text', sans-serif;
+  font-size: 16px;
+  cursor: pointer;
+}
+
+/* ── Rejoin banner ── */
+.home-v2__rejoin {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 16px;
+  padding: 10px 10px 10px 14px;
+  background: #feffff;
+  border-radius: 14px;
+  box-shadow:
+    0 4px 8px rgba(0, 0, 0, 0.16),
+    inset 0 0 8px rgba(0, 0, 0, 0.06);
+  color: #000;
+}
+.home-v2__rejoin-body { flex: 1; min-width: 0; line-height: 1.25; }
+.home-v2__rejoin-eyebrow {
+  font-family: 'Unbounded', sans-serif;
+  font-weight: 700;
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  color: #0d68db;
+  text-transform: uppercase;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
-
-.name-input {
-  flex: 1;
-  padding: 8px 10px;
-  background: var(--card);
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  color: var(--ink);
-  font-size: 14px;
-  font-family: var(--font-body);
-  outline: none;
+.home-v2__rejoin-msg {
+  font-family: 'Golos Text', sans-serif;
+  font-weight: 500;
+  font-size: 13px;
+  color: #000;
+  margin-top: 2px;
 }
-.name-input:focus { border-color: var(--primary); }
+.home-v2__rejoin-go {
+  background: #0d68db;
+  color: #fff;
+  font-family: 'Golos Text', sans-serif;
+  font-weight: 700;
+  font-size: 13px;
+  padding: 8px 14px;
+  border: none;
+  border-radius: 999px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.home-v2__rejoin-forget {
+  width: 24px; height: 24px;
+  border-radius: 50%;
+  border: 1px solid rgba(0, 0, 0, 0.14);
+  background: #fff;
+  color: #000;
+  font-size: 11px;
+  cursor: pointer;
+  padding: 0;
+  flex-shrink: 0;
+}
+.rejoin-fade-enter-active, .rejoin-fade-leave-active {
+  transition: opacity 220ms ease, transform 220ms ease;
+}
+.rejoin-fade-enter-from, .rejoin-fade-leave-to {
+  opacity: 0;
+  transform: translateY(-6px);
+}
 
+/* ── Primary cards ── */
+.home-v2__cards {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  margin-top: 32px;
+}
+.home-v2__card {
+  position: relative;
+  width: 100%;
+  min-height: 140px;
+  padding: 76px 16px 22px;
+  background: #feffff;
+  border: none;
+  border-radius: 18px;
+  box-shadow:
+    0 4px 8px rgba(0, 0, 0, 0.16),
+    inset 0 0 8px rgba(0, 0, 0, 0.16);
+  text-align: left;
+  cursor: pointer;
+  color: #000;
+  overflow: visible;
+  transition: transform 120ms ease;
+}
+.home-v2__card--join { min-height: 156px; }
+.home-v2__card:active { transform: scale(0.99); }
+
+.home-v2__card-art {
+  position: absolute;
+  top: -37px;
+  left: 3px;
+  width: 128px;
+  height: 128px;
+  object-fit: contain;
+  pointer-events: none;
+}
+.home-v2__card-art--join {
+  top: -40px;
+  left: -1px;
+  width: 134px;
+  height: 134px;
+}
+
+.home-v2__card-title {
+  font-family: 'Unbounded', sans-serif;
+  font-weight: 700;
+  font-size: 24px;
+  line-height: 26px;
+  color: #000;
+}
+.home-v2__card-sub {
+  margin-top: 10px;
+  font-family: 'Golos Text', sans-serif;
+  font-weight: 500;
+  font-size: 14px;
+  line-height: 16px;
+  color: rgba(0, 0, 0, 0.6);
+}
+
+/* ── Bottom 3-tile nav ── */
+.home-v2__nav {
+  margin-top: auto;
+  padding-top: 32px;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+}
+.home-v2__nav-item {
+  background: transparent;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  width: 72px;
+  transition: transform 120ms ease;
+}
+.home-v2__nav-item img {
+  width: 72px;
+  height: 72px;
+  object-fit: contain;
+  pointer-events: none;
+}
+.home-v2__nav-item span {
+  font-family: 'Unbounded', sans-serif;
+  font-weight: 700;
+  font-size: 14px;
+  line-height: 16px;
+  color: #feffff;
+  text-shadow: 1px 1px 0 #000;
+}
+.home-v2__nav-item:active { transform: scale(0.92); }
+
+/* ── Bonus toast ── */
 .bonus-toast {
   position: fixed;
   top: calc(12px + var(--tg-safe-area-inset-top, 0px));
@@ -545,63 +506,46 @@ const avatarInitial = computed(() => (userName.value?.[0] ?? "L").toUpperCase())
   align-items: center;
   gap: 12px;
   padding: 12px 18px;
-  background: var(--card);
-  border: 1px solid var(--gold);
+  background: #fff;
   border-radius: 16px;
-  box-shadow: 0 8px 24px rgba(42, 29, 16, 0.25);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+  color: #000;
   z-index: 90;
 }
 .bonus-toast__icon { font-size: 28px; }
 .bonus-toast__title {
-  font-size: 11px;
+  font-family: 'Unbounded', sans-serif;
+  font-weight: 700;
+  font-size: 10px;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
-  color: var(--ink-3);
-  letter-spacing: 0.1em;
+  color: rgba(0, 0, 0, 0.6);
 }
 .bonus-toast__val {
   font-weight: 700;
   font-size: 18px;
-  color: var(--gold);
+  color: #0d68db;
   margin-top: 2px;
-  font-family: var(--font-mono);
+  font-family: 'Golos Text', sans-serif;
 }
-.bonus-enter-active, .bonus-leave-active { transition: transform 0.3s cubic-bezier(0.3, 1.2, 0.4, 1), opacity 0.2s; }
-.bonus-enter-from, .bonus-leave-to { transform: translate(-50%, -30px); opacity: 0; }
+.bonus-enter-active, .bonus-leave-active {
+  transition: transform 0.3s cubic-bezier(0.3, 1.2, 0.4, 1), opacity 0.2s;
+}
+.bonus-enter-from, .bonus-leave-to {
+  transform: translate(-50%, -30px);
+  opacity: 0;
+}
 
-/* Desktop: wider viewport, spacious mockup layout. */
 @media (min-width: 900px) {
-  .hero {
-    padding: 24px 28px 22px;
-    margin-bottom: 16px;
-    border-radius: 14px;
-  }
-  .hero__title { font-size: 28px; margin-top: 4px; }
-  .hero__sub { font-size: 13px; margin-top: 4px; }
-  .hero__cta { margin-top: 16px; gap: 10px; }
-  .hero__play { padding: 14px; font-size: 15px; }
-  .hero__crown { width: 72px; top: 12px; right: 16px; }
+  .home-v2__content { padding: 40px 40px 40px; }
+  .home-v2__greeting { font-size: 34px; line-height: 40px; }
+  .home-v2__card-title { font-size: 28px; line-height: 30px; }
+}
+</style>
 
-  .quick-grid {
-    gap: 16px;
-    margin-bottom: 16px;
-  }
-  .home-tile {
-    min-height: 130px;
-    padding: 20px 22px;
-    gap: 12px;
-    border-radius: 12px;
-  }
-  .home-tile__icon {
-    width: 44px; height: 44px;
-    border-radius: 10px;
-  }
-  .home-tile__title { font-size: 17px; }
-  .home-tile__sub { font-size: 12px; margin-top: 3px; }
-
-  .last-match { padding: 16px 18px; margin-bottom: 16px; }
-
-  /* Sidebar already shows brand + nav at this breakpoint — the home-view
-     topbar (avatar + MINI·POLY title + bell/globe) becomes duplicate chrome. */
-  .home > .topbar { display: none; }
+<style>
+html.home-figma-root,
+body.home-figma-root {
+  background: #0d68db !important;
 }
 </style>
