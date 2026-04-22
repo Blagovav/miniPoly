@@ -369,15 +369,20 @@ const turnSlots = computed<{ key: string; player: Player; role: "prev" | "curren
   if (!r || r.players.length === 0) return [];
   const n = r.players.length;
   const i = r.currentTurn;
-  // Wrap-around; for a 2-player room prev === next (same opponent).
   const prev = r.players[(i - 1 + n) % n];
   const cur  = r.players[i];
   const next = r.players[(i + 1) % n];
-  return [
-    { key: `prev-${prev.id}`,    player: prev, role: "prev" },
-    { key: `current-${cur.id}`,  player: cur,  role: "current" },
-    { key: `next-${next.id}`,    player: next, role: "next" },
+  // Key by player.id so Vue's TransitionGroup FLIP can slide persistent cards
+  // (B stays in DOM, moves from current→prev slot; old prev fades out, new next
+  // fades in). In a 2-player room prev === next, so drop the duplicate next
+  // slot — otherwise Vue errors on dup keys and FLIP breaks.
+  const slots = [
+    { key: prev.id, player: prev, role: "prev" as const },
+    { key: cur.id,  player: cur,  role: "current" as const },
+    { key: next.id, player: next, role: "next" as const },
   ];
+  if (n === 2) slots.pop();
+  return slots;
 });
 
 // Rank-coloured pills per Figma node 16:2591. Not tied to the player's
@@ -736,7 +741,7 @@ void t;
               stroke-linejoin="round"
             />
           </svg>
-          <div class="turn-rail">
+          <TransitionGroup tag="div" name="turn" class="turn-rail">
             <div
               v-for="slot in turnSlots"
               :key="slot.key"
@@ -751,7 +756,7 @@ void t;
                 </div>
               </div>
             </div>
-          </div>
+          </TransitionGroup>
         </div>
 
         <!-- Current-tile plate — name + price/rent of the tile the active
@@ -1226,6 +1231,7 @@ void t;
   gap: 12px;
   padding: 4px 16px 8px;
   min-width: 0;
+  position: relative;
 }
 .turn-card {
   flex: 0 0 160px;
@@ -1237,11 +1243,41 @@ void t;
   border-radius: 14px;
   min-width: 0;
   cursor: default;
+  /* Role swap (prev → current → next) animates background + padding so the
+     card shape morphs instead of snapping when the slider shifts. */
+  transition:
+    background-color 320ms ease,
+    color 320ms ease,
+    border-color 320ms ease,
+    padding 320ms ease;
 }
 .turn-card--current {
   background: #e84b3e;
   border: 2px solid #000;
   padding: 6px;
+}
+
+/* FLIP slide: the current card shifts left into "prev", the next card
+   shifts left into "current", a fresh card fades in from the right, and
+   the old "prev" fades out to the left. `position: absolute` on leaving
+   cards lets the remaining ones collapse the gap smoothly. */
+.turn-move,
+.turn-enter-active,
+.turn-leave-active {
+  transition:
+    opacity 350ms ease,
+    transform 350ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+.turn-enter-from {
+  opacity: 0;
+  transform: translateX(40px);
+}
+.turn-leave-to {
+  opacity: 0;
+  transform: translateX(-40px);
+}
+.turn-leave-active {
+  position: absolute;
 }
 .turn-card__avatar {
   width: 40px;
