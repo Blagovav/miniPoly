@@ -153,12 +153,13 @@ const subtitle = computed(() => {
   padding: 16px;
   /* Solid green backdrop hides the board entirely — the board (all pieces
      at GO) is visually noisy and irrelevant during the pre-roll. The same
-     pattern image used by .room-bg is layered in for texture continuity. */
+     pattern image used by .room-bg is layered in edge-to-edge (cover) so
+     there's no bald green slab at the top or right of the screen. */
   background-color: #9fe101;
   background-image: url('/figma/room/bg-pattern.png');
   background-repeat: no-repeat;
-  background-position: left bottom;
-  background-size: 476px auto;
+  background-position: center;
+  background-size: cover;
   background-blend-mode: multiply;
 }
 .preroll__card {
