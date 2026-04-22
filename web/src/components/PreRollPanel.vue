@@ -151,16 +151,19 @@ const subtitle = computed(() => {
   align-items: center;
   justify-content: center;
   padding: 16px;
-  /* Solid green backdrop hides the board entirely — the board (all pieces
-     at GO) is visually noisy and irrelevant during the pre-roll. The same
-     pattern image used by .room-bg is layered in edge-to-edge (cover) so
-     there's no bald green slab at the top or right of the screen. */
+  /* Hide the board underneath with the exact same dual-layer bg as
+     <body>.room-figma-root — a 45% green overlay on top of the pattern,
+     then multiply-blended against the solid green. Matching the body layer
+     means the overlay stitches seamlessly with the safe-area strips instead
+     of leaving a flat green slab where the preroll covers the middle. */
   background-color: #9fe101;
-  background-image: url('/figma/room/bg-pattern.png');
-  background-repeat: no-repeat;
-  background-position: center;
-  background-size: cover;
-  background-blend-mode: multiply;
+  background-image:
+    linear-gradient(rgba(159, 225, 1, 0.45), rgba(159, 225, 1, 0.45)),
+    url('/figma/room/bg-pattern.png');
+  background-size: auto, cover;
+  background-position: center, center;
+  background-repeat: no-repeat, no-repeat;
+  background-blend-mode: normal, multiply;
 }
 .preroll__card {
   pointer-events: auto;
