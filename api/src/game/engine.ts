@@ -7,6 +7,7 @@ import type {
   I18nText,
   OwnedProperty,
   Player,
+  PreRollBracket,
   PropertyTile,
   RoomState,
   StreetTile,
@@ -49,6 +50,9 @@ export function createRoom(hostId: string, isPublic = true, maxPlayers = MAX_PLA
     hotelBank: HOTEL_BANK_SIZE,
     createdAt: Date.now(),
     startedAt: null,
+    preRollBrackets: [],
+    preRollOrder: [],
+    preRollRolls: {},
   };
 }
 
@@ -102,11 +106,132 @@ export function startGame(room: RoomState): boolean {
 
   // drop players who never connected/ready (bots survive — they're `ready`).
   room.players = active;
-  room.phase = "rolling";
+  room.phase = "preRoll";
   room.currentTurn = 0;
   room.startedAt = Date.now();
-  log(room, { en: "Game started!", ru: "Игра началась!" });
+  // Seed the first bracket with every active player in join order. The head
+  // of `pending` is who rolls next; seats resolve as rolls come in.
+  room.preRollBrackets = [
+    {
+      playerIds: active.map((p) => p.id),
+      rolls: {},
+      pending: active.map((p) => p.id),
+      isReRoll: false,
+    },
+  ];
+  room.preRollOrder = [];
+  room.preRollRolls = {};
+  log(room, { en: "Roll for turn order!", ru: "Бросаем на порядок хода!" });
   return true;
+}
+
+/** Current roller during the pre-roll phase (null if not in preRoll). */
+export function preRollCurrentPlayer(room: RoomState): Player | null {
+  if (room.phase !== "preRoll") return null;
+  const bracket = room.preRollBrackets[0];
+  const pid = bracket?.pending[0];
+  if (!pid) return null;
+  return room.players.find((p) => p.id === pid) ?? null;
+}
+
+/** Roll for seat order. Returns dice rolled, or null if it's not the caller's
+ *  turn or phase is wrong. Resolves the active bracket when its queue empties.
+ *  Transitions the room to phase "rolling" once all seats are determined. */
+export function rollForOrder(
+  room: RoomState,
+): { by: string; dice: [number, number] } | null {
+  if (room.phase !== "preRoll") return null;
+  const bracket = room.preRollBrackets[0];
+  if (!bracket) return null;
+  const pid = bracket.pending[0];
+  if (!pid) return null;
+  const p = room.players.find((pl) => pl.id === pid);
+  if (!p) return null;
+
+  const d1 = rollDie();
+  const d2 = rollDie();
+  const sum = d1 + d2;
+  bracket.rolls[pid] = sum;
+  room.preRollRolls[pid] = sum;
+  // Also expose via `room.dice` so the Dice component in the HUD snaps to the
+  // real values after tumble — same path as in-game rolls.
+  room.dice = [d1, d2];
+  bracket.pending.shift();
+
+  log(room, {
+    en: `${p.name} rolled ${d1} + ${d2} = ${sum}`,
+    ru: `${p.name} выбросил ${d1} + ${d2} = ${sum}`,
+  });
+
+  if (bracket.pending.length === 0) {
+    resolveBracket(room);
+  }
+  return { by: pid, dice: [d1, d2] };
+}
+
+function resolveBracket(room: RoomState): void {
+  const bracket = room.preRollBrackets[0];
+  if (!bracket) return;
+
+  // Group by roll value (desc). Singletons resolve to final seats; still-tied
+  // groups become new brackets queued ahead of the rest.
+  const byValue = new Map<number, string[]>();
+  for (const pid of bracket.playerIds) {
+    const v = bracket.rolls[pid] ?? 0;
+    const arr = byValue.get(v) ?? [];
+    arr.push(pid);
+    byValue.set(v, arr);
+  }
+  const sortedValues = [...byValue.keys()].sort((a, b) => b - a);
+
+  const newBrackets: PreRollBracket[] = [];
+  for (const v of sortedValues) {
+    const group = byValue.get(v)!;
+    if (group.length === 1) {
+      room.preRollOrder.push(group[0]);
+    } else {
+      newBrackets.push({
+        playerIds: [...group],
+        rolls: {},
+        pending: [...group],
+        isReRoll: true,
+      });
+      const names = group
+        .map((id) => room.players.find((pl) => pl.id === id)?.name ?? "?")
+        .join(", ");
+      log(room, {
+        en: `Tie at ${v}: ${names} roll again`,
+        ru: `Ничья ${v}: ${names} перебрасывают`,
+      });
+    }
+  }
+
+  room.preRollBrackets.shift();
+  room.preRollBrackets.unshift(...newBrackets);
+
+  if (room.preRollBrackets.length === 0) {
+    finalizePreRoll(room);
+  }
+}
+
+function finalizePreRoll(room: RoomState): void {
+  const byId = new Map(room.players.map((p) => [p.id, p]));
+  room.players = room.preRollOrder
+    .map((id) => byId.get(id))
+    .filter((p): p is Player => !!p);
+  room.preRollOrder = [];
+  room.preRollBrackets = [];
+  room.preRollRolls = {};
+  room.currentTurn = 0;
+  room.phase = "rolling";
+  room.dice = null;
+  const first = room.players[0];
+  if (first) {
+    log(room, {
+      en: `${first.name} goes first!`,
+      ru: `${first.name} ходит первым!`,
+    });
+  }
 }
 
 /** Передать хоста следующему подключённому игроку. Боты хостить не могут. */
@@ -178,6 +303,31 @@ export function leaveActiveGame(room: RoomState, playerId: string): void {
   if (room.phase === "lobby" || room.phase === "ended") return;
   const p = room.players.find((pl) => pl.id === playerId);
   if (!p || p.bankrupt) return;
+
+  // Pre-roll: game hasn't really started, so just yank the leaver from all
+  // brackets and the accumulated order. If that empties a bracket, resolve
+  // it so the flow continues. No bankruptcy book-keeping needed.
+  if (room.phase === "preRoll") {
+    for (const b of room.preRollBrackets) {
+      b.pending = b.pending.filter((id) => id !== playerId);
+      b.playerIds = b.playerIds.filter((id) => id !== playerId);
+      delete b.rolls[playerId];
+    }
+    room.preRollBrackets = room.preRollBrackets.filter((b) => b.playerIds.length > 0);
+    room.preRollOrder = room.preRollOrder.filter((id) => id !== playerId);
+    delete room.preRollRolls[playerId];
+    room.players = room.players.filter((pl) => pl.id !== playerId);
+    log(room, { en: `${p.name} left before rolling`, ru: `${p.name} вышел до броска` });
+    const first = room.preRollBrackets[0];
+    if (first && first.pending.length === 0) resolveBracket(room);
+    if (room.players.length < MIN_PLAYERS) {
+      // Not enough players to continue — end the game cleanly.
+      room.phase = "ended";
+      room.winnerId = room.players[0]?.id ?? null;
+    }
+    reassignHostIfNeeded(room);
+    return;
+  }
   p.bankrupt = true;
   p.cash = 0;
   // освобождаем его собственность + возвращаем постройки в банк
