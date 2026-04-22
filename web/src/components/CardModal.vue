@@ -26,16 +26,29 @@ const drawer = computed(() =>
 );
 const isMyCard = computed(() => !!drawerId.value && drawerId.value === game.myPlayerId);
 
+// Show the card ONLY after the drawer's token has finished its step-by-step
+// walk. Server sets lastCard the instant the tile resolves, but the client
+// is still animating the hop — popping the modal mid-walk feels like the
+// state skipped ahead. Watch both lastCard.ts and animatingPlayerId so we
+// fire the reveal on either (a) new card arriving when no animation or
+// (b) the drawer's animation ending after a buffered card.
+let lastShownTs = 0;
 watch(
-  () => game.room?.lastCard?.ts,
-  (ts) => {
-    if (!ts || !game.room?.lastCard) return;
-    current.value = game.room.lastCard;
+  [() => game.room?.lastCard?.ts, () => game.animatingPlayerId],
+  () => {
+    const card = game.room?.lastCard;
+    if (!card || !card.ts) return;
+    if (card.ts === lastShownTs) return;
+    // Wait — drawer's token is still hopping. We'll re-evaluate when animId flips.
+    if (game.animatingPlayerId === card.by) return;
+    lastShownTs = card.ts;
+    current.value = card;
     visible.value = true;
     if (timeout) clearTimeout(timeout);
     // Jail-key cards get a longer dwell so the keep-message is read.
     timeout = setTimeout(() => (visible.value = false), isJailKeyCard.value ? 5000 : 3500);
   },
+  { immediate: true },
 );
 
 function close() {
