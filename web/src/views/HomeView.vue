@@ -544,8 +544,14 @@ function go(name: string) { haptic("light"); router.push({ name }); }
 </style>
 
 <style>
+/* Blue edge-to-edge: every wrapper between <html> and .home-v2 defaults to
+   var(--bg) (parchment), so without these overrides the Telegram safe-area
+   strips at top/bottom bleed cream behind the new figma panel. */
 html.home-figma-root,
-body.home-figma-root {
+body.home-figma-root,
+body.home-figma-root #app,
+body.home-figma-root .app-root,
+body.home-figma-root .app-main {
   background: #0d68db !important;
 }
 </style>
