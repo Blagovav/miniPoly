@@ -7,8 +7,10 @@ import {
   endTurn as engineEndTurn,
   passAuction,
   payJailFine,
+  preRollCurrentPlayer,
   resolveTrade,
   rollAndMove,
+  rollForOrder,
   skipBuy,
 } from "../game/engine";
 
@@ -82,6 +84,17 @@ export function onStateChange(room: RoomState): void {
     }
   }
 
+  // Pre-roll: current roller lives in the first bracket's pending queue, not
+  // room.currentTurn. Always reset the timer — every roll hands off to the
+  // next player, so there's no "same turn continues" case to skip.
+  if (room.phase === "preRoll") {
+    const roller = preRollCurrentPlayer(room);
+    if (!roller) return;
+    notifiedTurns.set(room.id, roller.id);
+    resetTurnTimer(room);
+    return;
+  }
+
   const p = currentPlayer(room);
   if (!p) return;
 
@@ -105,12 +118,34 @@ export function onStateChange(room: RoomState): void {
 
 function resetTurnTimer(room: RoomState): void {
   clearTurnTimer(room.id);
-  const current = currentPlayer(room);
+  const current =
+    room.phase === "preRoll" ? preRollCurrentPlayer(room) : currentPlayer(room);
   // Bots act almost immediately; disconnected humans get the full 180s grace.
   const delay = current?.isBot ? BOT_TURN_DELAY_MS : config.turnTimeoutSec * 1000;
   const timer = setTimeout(async () => {
     const fresh = getRoom(room.id);
     if (!fresh) return;
+
+    // Pre-roll branch: auto-roll for whichever player is up. Same semantics as
+    // the in-game timeout — bots act fast, AFK humans get the full grace period.
+    if (fresh.phase === "preRoll") {
+      const roller = preRollCurrentPlayer(fresh);
+      if (!roller) return;
+      const result = rollForOrder(fresh);
+      if (result && broadcastMsg) {
+        broadcastMsg(fresh.id, {
+          type: "diceRolled",
+          by: roller.id,
+          dice: result.dice,
+          from: roller.position,
+          to: roller.position,
+        });
+      }
+      if (broadcastState) broadcastState(fresh.id);
+      onStateChange(fresh);
+      return;
+    }
+
     const p = currentPlayer(fresh);
     if (!p) return;
 

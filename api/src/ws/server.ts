@@ -19,6 +19,7 @@ import {
   removePlayer,
   resolveTrade,
   rollAndMove,
+  rollForOrder,
   selectToken,
   sellHouse,
   skipBuy,
@@ -350,6 +351,33 @@ function handleStart(conn: Conn): void {
 function handleRoll(conn: Conn): void {
   const ctx = getRoomAndPlayer(conn);
   if (!ctx || !ctx.p) return;
+
+  // Pre-roll: the "current" player is the head of the first bracket's pending
+  // queue, not room.players[currentTurn]. Reuse the `diceRolled` message with
+  // from === to so clients animate the dice without moving tokens.
+  if (ctx.room.phase === "preRoll") {
+    const bracket = ctx.room.preRollBrackets[0];
+    if (!bracket || bracket.pending[0] !== ctx.p.id) {
+      conn.send({ type: "error", message: "not your turn to roll for order" });
+      return;
+    }
+    const result = rollForOrder(ctx.room);
+    if (!result) {
+      conn.send({ type: "error", message: "can't roll now" });
+      return;
+    }
+    broadcast(ctx.room.id, {
+      type: "diceRolled",
+      by: ctx.p.id,
+      dice: result.dice,
+      from: ctx.p.position,
+      to: ctx.p.position,
+    });
+    sendState(ctx.room.id);
+    onStateChange(ctx.room);
+    return;
+  }
+
   if (ctx.room.players[ctx.room.currentTurn].id !== ctx.p.id) {
     conn.send({ type: "error", message: "not your turn" });
     return;

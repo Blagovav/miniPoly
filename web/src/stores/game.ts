@@ -104,6 +104,20 @@ export const useGameStore = defineStore("game", () => {
   const currentPlayer = computed(() => room.value?.players[room.value.currentTurn] ?? null);
   const isMyTurn = computed(() => !!me.value && currentPlayer.value?.id === me.value.id);
   const isHost = computed(() => !!me.value && room.value?.hostId === me.value.id);
+  // Pre-roll phase: the "current" roller is the head of the first bracket's
+  // pending queue — NOT room.players[currentTurn]. A separate computed so the
+  // existing turn-slider + primary-button logic stays unchanged.
+  const preRollCurrent = computed(() => {
+    const r = room.value;
+    if (!r || r.phase !== "preRoll") return null;
+    const b = r.preRollBrackets?.[0];
+    const pid = b?.pending?.[0];
+    if (!pid) return null;
+    return r.players.find((p) => p.id === pid) ?? null;
+  });
+  const isMyPreRoll = computed(
+    () => !!me.value && preRollCurrent.value?.id === me.value.id,
+  );
 
   function applyMessage(m: ServerMessage) {
     switch (m.type) {
@@ -179,6 +193,8 @@ export const useGameStore = defineStore("game", () => {
     currentPlayer,
     isMyTurn,
     isHost,
+    preRollCurrent,
+    isMyPreRoll,
     applyMessage,
     reset,
     markChatRead,

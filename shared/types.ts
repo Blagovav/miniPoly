@@ -118,12 +118,27 @@ export interface OwnedProperty {
 
 export type GamePhase =
   | "lobby"
+  | "preRoll"
   | "rolling"
   | "moving"
   | "action"
   | "buyPrompt"
   | "auction"
   | "ended";
+
+// Order-determining pre-roll bracket. Each bracket is a set of players still
+// tied for a contiguous range of seats; rolling happens head-first (pending[0]
+// is up next). When pending empties, the bracket is evaluated: unique rolls
+// resolve to final seats; still-tied subsets become new brackets.
+export interface PreRollBracket {
+  playerIds: string[];
+  rolls: Record<string, number>;
+  pending: string[];
+  // true when this bracket was spawned by a tie — UI uses it to differentiate
+  // "first roll" from "re-roll" labels. The initial bracket (all players) is
+  // false; any bracket created via resolveBracket() is true.
+  isReRoll: boolean;
+}
 
 // Structured money-move metadata attached to log entries. The client uses it
 // to render transaction toasts (e.g. "-100 → Alex" when you land on a rented
@@ -198,6 +213,12 @@ export interface RoomState {
   hotelBank: number;
   createdAt: number;
   startedAt: number | null;
+  // Pre-roll state: brackets of players rolling for seat order. Active bracket
+  // is brackets[0]; order accumulates into `preRollOrder` as seats resolve.
+  // `preRollRolls` is the flat "latest roll per player" view for UI.
+  preRollBrackets: PreRollBracket[];
+  preRollOrder: string[];
+  preRollRolls: Record<string, number>;
 }
 
 export interface PublicRoomSummary {

@@ -22,6 +22,7 @@ import { useVoice } from "../composables/useVoice";
 import CardModal from "../components/CardModal.vue";
 import CardHistoryModal from "../components/CardHistoryModal.vue";
 import AuctionModal from "../components/AuctionModal.vue";
+import PreRollPanel from "../components/PreRollPanel.vue";
 import TileInfoModal from "../components/TileInfoModal.vue";
 import PlayerProfileModal from "../components/PlayerProfileModal.vue";
 import TradeBanner from "../components/TradeBanner.vue";
@@ -125,6 +126,7 @@ watch(
 const phase = computed(() => game.room?.phase);
 const isLobby = computed(() => phase.value === "lobby" || !game.room);
 const isEnded = computed(() => phase.value === "ended");
+const isPreRoll = computed(() => phase.value === "preRoll");
 
 // Включаем Telegram-диалог "Точно закрыть?" только пока идёт партия. В лобби и
 // после окончания выходить без подтверждения — ничего не теряется.
@@ -524,6 +526,18 @@ const primaryButtons = computed<ActionButton[] | null>(() => {
     }];
   }
 
+  // Pre-roll: the roll-for-order button is driven by `isMyPreRoll`, not the
+  // regular `isMyTurn` (which points at room.currentTurn — meaningless here).
+  // Suppress while dice are still tumbling so a double-tap can't double-send.
+  if (r.phase === "preRoll") {
+    if (!game.isMyPreRoll || game.rolling) return null;
+    return [{
+      variant: "roll",
+      label: isRu ? "БРОСИТЬ КУБИКИ" : "ROLL DICE",
+      handler: roll,
+    }];
+  }
+
   if (!game.isMyTurn) return null;
 
   // Suppress the bar while the dice are tumbling or the pawn is still
@@ -651,6 +665,17 @@ void t;
 
     <!-- ── In-game / ended phases ── -->
     <template v-else-if="game.room">
+      <!-- Pre-roll overlay: shown above the board while players roll for
+           turn order. The board itself is already rendered below (all tokens
+           sit at GO), so the overlay sits on top without replacing it. -->
+      <PreRollPanel
+        v-if="isPreRoll"
+        :room="game.room"
+        :my-player-id="game.myPlayerId"
+        :dice="game.room.dice ?? game.lastDice"
+        :rolling="game.rolling"
+      />
+
       <!-- Scrollable body (board + HUD overlays + carousel + leaderboard). -->
       <div class="room-body">
         <!-- Board + center HUD overlay (dice + ВАШ ХОД! + timer + budget) -->
@@ -662,6 +687,8 @@ void t;
             <div class="board-hud__dice">
               <Dice :dice="game.room?.dice ?? null" :rolling="game.rolling" />
             </div>
+            <!-- Pre-roll has its own overlay panel; don't echo turn/timer here. -->
+            <template v-if="!isPreRoll">
             <div v-if="activeBannerPlayer" class="board-hud__turn board-hud__turn--other">
               {{ activeBannerPlayer.name?.toUpperCase() || '…' }}
             </div>
@@ -675,7 +702,8 @@ void t;
               <img src="/figma/room/icon-stopwatch.png" alt="" />
               <span>{{ turnRemainingSec }}</span>
             </div>
-            <div v-if="game.me" class="board-hud__budget">
+            </template>
+            <div v-if="game.me && !isPreRoll" class="board-hud__budget">
               <div class="board-hud__budget-row">
                 <span>{{ locale === 'ru' ? 'Ваш бюджет' : 'Your budget' }}</span>
                 <span class="board-hud__budget-val">
@@ -695,9 +723,10 @@ void t;
         </div>
 
         <!-- Текущий ход — static prev/current/next banner. Not a slider:
-             no scroll, no swipe, no tap. Arrow above the centre card. -->
-        <div class="turn-label">{{ locale === 'ru' ? 'Текущий ход' : 'Current turn' }}</div>
-        <div class="turn-slider">
+             no scroll, no swipe, no tap. Arrow above the centre card.
+             Hidden during pre-roll (player order isn't final yet). -->
+        <div v-if="!isPreRoll" class="turn-label">{{ locale === 'ru' ? 'Текущий ход' : 'Current turn' }}</div>
+        <div v-if="!isPreRoll" class="turn-slider">
           <svg class="turn-slider__arrow" viewBox="0 0 14 11" aria-hidden="true">
             <path
               d="M2 0.7h10.4c1.05 0 1.67 1.18 1.07 2.04L8.26 10.23c-0.52 0.74-1.62 0.74-2.14 0L0.93 2.74C0.34 1.88 0.96 0.7 2 0.7Z"
@@ -727,8 +756,9 @@ void t;
 
         <!-- Current-tile plate — name + price/rent of the tile the active
              player stands on. Figma node 32:1065. Only shown on property
-             tiles; chest/chance/tax/etc have no number to display. -->
-        <div v-if="currentTileInfo" class="tile-info">
+             tiles; chest/chance/tax/etc have no number to display.
+             Hidden during pre-roll (tile/position is meaningless yet). -->
+        <div v-if="currentTileInfo && !isPreRoll" class="tile-info">
           <span class="tile-info__name">{{ currentTileInfo.name }}</span>
           <span v-if="currentTileInfo.value !== null" class="tile-info__value">
             <img src="/figma/room/icon-money.png" alt="" />
@@ -738,8 +768,9 @@ void t;
 
         <!-- Leaderboard — tap a row to open that player's profile/assets.
              Per Figma 32:2037: 24px medal on the left, coloured pill with
-             avatar + name + cash on the right. -->
-        <div v-if="leaderboard.length > 0" class="leaderboard">
+             avatar + name + cash on the right. Skipped during pre-roll —
+             the standings aren't meaningful until seats are set. -->
+        <div v-if="leaderboard.length > 0 && !isPreRoll" class="leaderboard">
           <button
             v-for="(p, i) in leaderboard.slice(0, 4)"
             :key="p.id"
