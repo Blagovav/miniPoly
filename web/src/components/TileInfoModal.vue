@@ -2,12 +2,8 @@
 import { computed } from "vue";
 import { useI18n } from "vue-i18n";
 import { BOARD, GROUP_COLORS, GROUP_SIZE } from "../../../shared/board";
-import type { Locale, StreetTile } from "../../../shared/types";
-import { SHOP_ITEMS } from "../shop/items";
+import type { ColorGroup, Locale, StreetTile } from "../../../shared/types";
 import { useGameStore } from "../stores/game";
-import { ORDERED_PLAYER_COLORS } from "../utils/palette";
-import Icon from "./Icon.vue";
-import Sigil from "./Sigil.vue";
 
 const props = defineProps<{
   onBuildHouse?: (tileIndex: number) => void;
@@ -21,6 +17,8 @@ const { locale } = useI18n();
 const game = useGameStore();
 
 const loc = computed<Locale>(() => (locale.value === "ru" ? "ru" : "en"));
+const isRu = computed(() => loc.value === "ru");
+
 const tile = computed(() => {
   const idx = game.selectedTileIndex;
   return idx !== null ? BOARD[idx] : null;
@@ -34,28 +32,57 @@ const owner = computed(() => {
   return o ? game.room?.players.find((p) => p.id === o.ownerId) ?? null : null;
 });
 
-const ownerIcon = computed(() => {
-  const p = owner.value;
-  if (!p) return "●";
-  return SHOP_ITEMS.find((i) => i.id === p.token)?.icon ?? "●";
-});
-
-/** Stable medieval hue tied to the owner's seat index in the room. */
-const ownerColor = computed(() => {
-  const o = owner.value;
-  if (!o || !game.room) return "var(--ink-3)";
-  const idx = game.room.players.findIndex((pp) => pp.id === o.id);
-  if (idx < 0) return o.color || "var(--ink-3)";
-  return ORDERED_PLAYER_COLORS[idx % ORDERED_PLAYER_COLORS.length];
-});
-
-const bandColor = computed(() => {
+const bandColor = computed<string | null>(() => {
   const t = tile.value;
   if (!t || t.kind !== "street") return null;
-  return GROUP_COLORS[t.group];
+  return GROUP_COLORS[t.group] ?? null;
 });
 
-interface RentRow { label: string; value: string }
+// Group → localised "Квартал" label shown in the badge at top of the card.
+const GROUP_LABEL_RU: Record<ColorGroup, string> = {
+  brown: "Коричневый квартал",
+  lightBlue: "Голубой квартал",
+  pink: "Розовый квартал",
+  orange: "Оранжевый квартал",
+  red: "Красный квартал",
+  yellow: "Жёлтый квартал",
+  green: "Зелёный квартал",
+  darkBlue: "Синий квартал",
+};
+const GROUP_LABEL_EN: Record<ColorGroup, string> = {
+  brown: "Brown district",
+  lightBlue: "Light blue district",
+  pink: "Pink district",
+  orange: "Orange district",
+  red: "Red district",
+  yellow: "Yellow district",
+  green: "Green district",
+  darkBlue: "Dark blue district",
+};
+// Groups where the badge needs white text (dark fill). Light fills use black.
+const DARK_GROUPS: ColorGroup[] = ["brown", "red", "green", "darkBlue"];
+
+const groupLabel = computed<string | null>(() => {
+  const t = tile.value;
+  if (!t || t.kind !== "street") return null;
+  const g = (t as StreetTile).group;
+  return (isRu.value ? GROUP_LABEL_RU[g] : GROUP_LABEL_EN[g]) ?? null;
+});
+const groupBadgeStyle = computed(() => {
+  const t = tile.value;
+  if (!t || t.kind !== "street") {
+    return { background: "#7dd3fc", color: "#000", textShadow: "none" };
+  }
+  const g = (t as StreetTile).group;
+  const dark = DARK_GROUPS.includes(g);
+  return {
+    background: GROUP_COLORS[g] ?? "#7dd3fc",
+    color: dark ? "#fff" : "#000",
+    textShadow: dark ? "0.4px 0.4px 0 rgba(0,0,0,0.6)" : "none",
+  };
+});
+
+interface RentRow { label: string; value: number }
 
 const rentRows = computed<RentRow[]>(() => {
   const t = tile.value;
@@ -63,27 +90,21 @@ const rentRows = computed<RentRow[]>(() => {
   if (t.kind === "street") {
     const s = t as StreetTile;
     return [
-      { label: loc.value === "ru" ? "Базовая" : "Base",       value: `◈ ${s.rent[0]}` },
-      { label: loc.value === "ru" ? "Монополия"  : "Monopoly", value: `◈ ${s.rent[0] * 2}` },
-      { label: loc.value === "ru" ? "1 дом"  : "1 house",     value: `◈ ${s.rent[1]}` },
-      { label: loc.value === "ru" ? "2 дома"  : "2 houses",   value: `◈ ${s.rent[2]}` },
-      { label: loc.value === "ru" ? "3 дома"  : "3 houses",   value: `◈ ${s.rent[3]}` },
-      { label: loc.value === "ru" ? "4 дома"  : "4 houses",   value: `◈ ${s.rent[4]}` },
-      { label: loc.value === "ru" ? "Отель"   : "Hotel",      value: `◈ ${s.rent[5]}` },
+      { label: isRu.value ? "Базовая"   : "Base",     value: s.rent[0] },
+      { label: isRu.value ? "Монополия" : "Monopoly", value: s.rent[0] * 2 },
+      { label: isRu.value ? "1 дом"     : "1 house",  value: s.rent[1] },
+      { label: isRu.value ? "2 дома"    : "2 houses", value: s.rent[2] },
+      { label: isRu.value ? "3 дома"    : "3 houses", value: s.rent[3] },
+      { label: isRu.value ? "4 дома"    : "4 houses", value: s.rent[4] },
+      { label: isRu.value ? "Отель"     : "Hotel",    value: s.rent[5] },
     ];
   }
   if (t.kind === "railroad") {
     return [
-      { label: loc.value === "ru" ? "1 ж/д" : "1 RR", value: "◈ 25" },
-      { label: loc.value === "ru" ? "2 ж/д" : "2 RR", value: "◈ 50" },
-      { label: loc.value === "ru" ? "3 ж/д" : "3 RR", value: "◈ 100" },
-      { label: loc.value === "ru" ? "4 ж/д" : "4 RR", value: "◈ 200" },
-    ];
-  }
-  if (t.kind === "utility") {
-    return [
-      { label: loc.value === "ru" ? "1 инфра" : "1 util", value: loc.value === "ru" ? "×4 кубиков" : "×4 dice" },
-      { label: loc.value === "ru" ? "2 инфры" : "2 utils", value: loc.value === "ru" ? "×10 кубиков" : "×10 dice" },
+      { label: isRu.value ? "1 ж/д" : "1 RR", value: 25 },
+      { label: isRu.value ? "2 ж/д" : "2 RR", value: 50 },
+      { label: isRu.value ? "3 ж/д" : "3 RR", value: 100 },
+      { label: isRu.value ? "4 ж/д" : "4 RR", value: 200 },
     ];
   }
   return [];
@@ -93,40 +114,17 @@ const description = computed<string | null>(() => {
   const t = tile.value;
   if (!t) return null;
   switch (t.kind) {
-    case "go":
-      return loc.value === "ru" ? "Проходя — получи ◈ 200" : "Collect ◈ 200 when you pass";
-    case "jail":
-      return loc.value === "ru" ? "Тюрьма / В гостях" : "Jail / Just Visiting";
-    case "goToJail":
-      return loc.value === "ru" ? "Отправляешься в тюрьму без сбора ◈ 200" : "Go to Jail — do not pass GO";
-    case "freeParking":
-      return loc.value === "ru" ? "Просто отдых — ничего не происходит" : "Rest — no effect";
-    case "tax":
-      return loc.value === "ru" ? `Заплати ◈ ${t.amount}` : `Pay ◈ ${t.amount}`;
-    case "chance":
-      return loc.value === "ru" ? "Тяни карту Шанс — может быть что угодно" : "Draw a Chance card — could be anything";
-    case "chest":
-      return loc.value === "ru" ? "Тяни карту Казны — обычно выигрыш/штраф" : "Draw a Community Chest card";
-    default:
-      return null;
-  }
-});
-
-const iconText = computed(() => {
-  const t = tile.value;
-  if (!t) return "";
-  switch (t.kind) {
-    case "go": return "▶";
-    case "jail": return "⛓";
-    case "goToJail": return "⚔";
-    case "freeParking": return "♜";
-    case "chance": return "?";
-    case "chest": return "⎔";
-    case "tax": return "◈";
-    case "railroad": return "♞";
-    case "utility": return t.index === 12 ? "✦" : "≈";
-    case "street": return "⌂";
-    default: return "";
+    case "go":          return isRu.value ? "Проходя — получи 200" : "Collect 200 when you pass";
+    case "jail":        return isRu.value ? "Тюрьма / В гостях" : "Jail / Just Visiting";
+    case "goToJail":    return isRu.value ? "Отправляешься в тюрьму без сбора 200" : "Go to Jail — do not pass GO";
+    case "freeParking": return isRu.value ? "Просто отдых — ничего не происходит" : "Rest — no effect";
+    case "tax":         return isRu.value ? `Заплати ${t.amount}` : `Pay ${t.amount}`;
+    case "chance":      return isRu.value ? "Тяни карту Шанс" : "Draw a Chance card";
+    case "chest":       return isRu.value ? "Тяни карту Казны" : "Draw a Community Chest card";
+    case "utility":     return isRu.value
+      ? "Аренда = значение на кубиках × 4 (×10 с монополией)"
+      : "Rent = dice roll × 4 (×10 with monopoly)";
+    default: return null;
   }
 });
 
@@ -136,13 +134,13 @@ const isMineStreet = computed(() => {
   const t = tile.value;
   const o = owned.value;
   const me = game.me;
-  return t?.kind === "street" && o && me && o.ownerId === me.id;
+  return t?.kind === "street" && !!o && !!me && o.ownerId === me.id;
 });
 
 const hasMonopoly = computed(() => {
   const t = tile.value;
   if (!t || t.kind !== "street" || !game.room || !owned.value) return false;
-  const group = t.group;
+  const group = (t as StreetTile).group;
   const groupTiles = BOARD.filter((x) => x.kind === "street" && (x as StreetTile).group === group);
   if (groupTiles.length !== (GROUP_SIZE[group] ?? 0)) return false;
   return groupTiles.every((gt) => game.room?.properties[gt.index]?.ownerId === owned.value?.ownerId);
@@ -184,15 +182,24 @@ const bankHasSupply = computed(() => {
   return o.houses >= 4 ? r.hotelBank > 0 : r.houseBank > 0;
 });
 
-const canBuild = computed(() => {
+// Дом: build next house (only when fewer than 4).
+const canBuildHouse = computed(() => {
   if (!isMineStreet.value || !hasMonopoly.value) return false;
   const o = owned.value;
   if (!o || o.mortgaged) return false;
-  if (o.hotel) return false;
+  if (o.hotel || o.houses >= 4) return false;
   if (!bankHasSupply.value) return false;
   return evenBuildOk.value;
 });
-
+// Отель: upgrade 4 houses → hotel.
+const canBuildHotel = computed(() => {
+  if (!isMineStreet.value || !hasMonopoly.value) return false;
+  const o = owned.value;
+  if (!o || o.mortgaged) return false;
+  if (o.hotel || o.houses < 4) return false;
+  if (!bankHasSupply.value) return false;
+  return evenBuildOk.value;
+});
 const canSell = computed(() => {
   const o = owned.value;
   if (!isMineStreet.value || !o) return false;
@@ -205,14 +212,9 @@ const buildCost = computed(() => {
   return t?.kind === "street" ? (t as StreetTile).houseCost : 0;
 });
 
-function build() {
-  if (tile.value) props.onBuildHouse?.(tile.value.index);
-}
-function sell() {
-  if (tile.value) props.onSellHouse?.(tile.value.index);
-}
+function build() { if (tile.value) props.onBuildHouse?.(tile.value.index); }
+function sell()  { if (tile.value) props.onSellHouse?.(tile.value.index); }
 
-// Трейд — можно предложить, если это чья-то чужая собственность (заложенные нельзя).
 const canPropose = computed(() => {
   const o = owned.value;
   const me = game.me;
@@ -220,11 +222,8 @@ const canPropose = computed(() => {
   if (o.mortgaged) return false;
   return true;
 });
-function openPropose() {
-  if (tile.value) props.onProposeTrade?.(tile.value.index);
-}
+function openPropose() { if (tile.value) props.onProposeTrade?.(tile.value.index); }
 
-// Залог / выкуп — только для владельца, и только если это собственность без построек.
 const isMineProperty = computed(() => {
   const t = tile.value;
   const o = owned.value;
@@ -246,529 +245,451 @@ const canUnmortgage = computed(() => {
 const mortgageValue = computed(() => {
   const t = tile.value;
   if (!t || (t.kind !== "street" && t.kind !== "railroad" && t.kind !== "utility")) return 0;
-  return (t as any).mortgage as number;
+  return (t as { mortgage?: number }).mortgage ?? 0;
 });
 const unmortgageCost = computed(() => Math.ceil(mortgageValue.value * 1.1));
 
-function mortgage() {
-  if (tile.value) props.onMortgage?.(tile.value.index);
-}
-function unmortgage() {
-  if (tile.value) props.onUnmortgage?.(tile.value.index);
+function toggleMortgage() {
+  if (!tile.value) return;
+  if (canUnmortgage.value) props.onUnmortgage?.(tile.value.index);
+  else if (canMortgage.value) props.onMortgage?.(tile.value.index);
 }
 
-const isRu = computed(() => loc.value === "ru");
+const isProperty = computed(() => {
+  const t = tile.value;
+  return !!t && (t.kind === "street" || t.kind === "railroad" || t.kind === "utility");
+});
+
+// Build/sell hint: explains why the Дом button is inactive.
+const buildHint = computed<string | null>(() => {
+  if (!isMineStreet.value || !game.isMyTurn) return null;
+  if (!hasMonopoly.value) {
+    return isRu.value ? "Нужен весь цветовой квартал" : "You need the full colour group";
+  }
+  if (hasMonopoly.value && !evenBuildOk.value && !owned.value?.hotel) {
+    return isRu.value ? "Сначала достройся равномерно" : "Build evenly across the group first";
+  }
+  if ((owned.value?.houses || owned.value?.hotel) && !evenSellOk.value) {
+    return isRu.value ? "Сначала снеси с других улиц группы" : "Sell from more-developed streets first";
+  }
+  if (hasMonopoly.value && !bankHasSupply.value) {
+    return owned.value?.houses === 4
+      ? (isRu.value ? "В банке закончились отели" : "No hotels left in the bank")
+      : (isRu.value ? "В банке закончились дома" : "No houses left in the bank");
+  }
+  return null;
+});
+
+// Label for the combined Дом button — swaps to "Продать" when the tile
+// has 1-4 houses or a hotel and the even-sell rule is satisfied. This
+// keeps the 3-button Figma layout useful even after building has peaked.
+const houseButton = computed(() => {
+  if (canBuildHouse.value) {
+    return { label: isRu.value ? "Дом" : "House", cost: buildCost.value, onClick: build, enabled: true };
+  }
+  if (canSell.value) {
+    return { label: isRu.value ? "Продать" : "Sell", cost: Math.floor(buildCost.value / 2), onClick: sell, enabled: true };
+  }
+  return { label: isRu.value ? "Дом" : "House", cost: buildCost.value, onClick: build, enabled: false };
+});
+const mortgageButton = computed(() => {
+  if (canUnmortgage.value) {
+    return { label: isRu.value ? "Выкуп" : "Redeem", cost: unmortgageCost.value, enabled: true };
+  }
+  return { label: isRu.value ? "Залог" : "Mortgage", cost: mortgageValue.value, enabled: canMortgage.value };
+});
 </script>
 
 <template>
-  <transition name="fade">
-    <div v-if="tile" class="modal-scrim" @click="close">
-      <div
-        class="modal-card"
-        :style="bandColor ? { borderTopColor: bandColor } : undefined"
-        @click.stop
-      >
-        <div class="grab-handle" />
-
-        <!-- Header: icon + name + close -->
-        <div class="head">
-          <div
-            class="head__icon"
-            :style="bandColor ? { background: bandColor, color: '#fff' } : undefined"
-          >
-            {{ iconText }}
-          </div>
-          <div class="head__body">
-            <div v-if="tile.kind === 'street'" class="head__kicker">
-              {{ (tile as StreetTile).group.toUpperCase() }}
-              {{ isRu ? "КВАРТАЛ" : "QUARTER" }}
+  <transition name="info-fade">
+    <div v-if="tile" class="info-scrim" @click="close">
+      <div class="info-wrap" @click.stop>
+        <div class="info-card">
+          <!-- Header: group badge + title + cost -->
+          <div class="info-head">
+            <span
+              v-if="groupLabel"
+              class="info-group"
+              :style="groupBadgeStyle"
+            >{{ groupLabel }}</span>
+            <div class="info-name">{{ tile.name[loc] }}</div>
+            <div v-if="isProperty" class="info-cost">
+              <span>{{ isRu ? "Стоимость" : "Price" }}</span>
+              <img src="/figma/room/icon-money.png" alt="" />
+              <b>{{ 'price' in tile ? tile.price : 0 }}</b>
             </div>
-            <div v-else class="head__kicker">
-              {{ isRu ? "ГРАМОТА" : "DEED" }}
-            </div>
-            <div class="head__title">{{ tile.name[loc] }}</div>
           </div>
-          <button class="icon-btn head__close" @click="close" aria-label="close">
-            <Icon name="x" :size="16" color="var(--ink-2)" />
-          </button>
-        </div>
 
-        <!-- Price row -->
-        <div
-          v-if="tile.kind === 'street' || tile.kind === 'railroad' || tile.kind === 'utility'"
-          class="price-row row between"
-        >
-          <span class="price-row__label">{{ isRu ? "Цена" : "Price" }}</span>
-          <span class="price-row__val">◈ {{ tile.price }}</span>
-        </div>
+          <!-- Owner state -->
+          <div v-if="isProperty && !owner" class="info-free">
+            {{ isRu ? "Владельца нет" : "Unclaimed land" }}
+          </div>
+          <div v-else-if="owner" class="info-owner">
+            <div class="info-owner__label">{{ isRu ? "Владелец" : "Owner" }}</div>
+            <div class="info-owner__row">
+              <span class="info-owner__dot" :style="{ background: owner.color }" />
+              <span class="info-owner__name">{{ owner.name }}</span>
+              <span v-if="owned?.mortgaged" class="info-owner__chip">
+                {{ isRu ? "В залоге" : "Mortgaged" }}
+              </span>
+              <span v-else-if="owned?.hotel" class="info-owner__chip info-owner__chip--ok">
+                {{ isRu ? "Отель" : "Hotel" }}
+              </span>
+              <span v-else-if="owned && owned.houses > 0" class="info-owner__chip info-owner__chip--ok">
+                {{ owned.houses }} {{ isRu ? "дом." : "houses" }}
+              </span>
+            </div>
+          </div>
 
-        <!-- Rent table -->
-        <div v-if="rentRows.length" class="rent">
-          <div class="rent__head">{{ isRu ? "Аренда" : "Rent schedule" }}</div>
-          <div class="rent__table">
+          <!-- Flavor text for non-property tiles -->
+          <div v-if="description && !isProperty" class="info-free">{{ description }}</div>
+
+          <!-- Rent table -->
+          <div v-if="rentRows.length" class="rent-table">
             <div
               v-for="(r, i) in rentRows"
               :key="r.label"
-              class="rent__row"
-              :class="{ 'rent__row--last': i === rentRows.length - 1 }"
+              class="rent-row"
+              :class="{ 'rent-row--alt': i % 2 === 0 }"
             >
-              <span class="rent__label">{{ r.label }}</span>
-              <span class="rent__val">{{ r.value }}</span>
+              <span class="rent-row__label">{{ r.label }}</span>
+              <span class="rent-row__val">
+                <img src="/figma/room/icon-money.png" alt="" />
+                <b>{{ r.value }}</b>
+              </span>
             </div>
           </div>
-        </div>
 
-        <!-- Extra stats: house / mortgage -->
-        <div v-if="tile.kind === 'street'" class="stat-grid">
-          <div class="stat-box">
-            <div class="stat-box__label">{{ isRu ? "Дом" : "House" }}</div>
-            <div class="stat-box__val">◈ {{ (tile as StreetTile).houseCost }}</div>
+          <!-- Bottom action buttons: Дом / Отель / Залог.
+               Shown when the player owns the tile and it's a property. -->
+          <div v-if="isMineProperty && game.isMyTurn" class="action-grid">
+            <button
+              v-if="tile.kind === 'street'"
+              class="action-btn"
+              :disabled="!houseButton.enabled"
+              @click="houseButton.onClick"
+            >
+              <span class="action-btn__label">{{ houseButton.label }}</span>
+              <span class="action-btn__cost">
+                <img src="/figma/room/icon-money.png" alt="" />
+                <b>{{ houseButton.cost }}</b>
+              </span>
+            </button>
+            <button
+              v-if="tile.kind === 'street'"
+              class="action-btn"
+              :disabled="!canBuildHotel"
+              @click="build"
+            >
+              <span class="action-btn__label">{{ isRu ? "Отель" : "Hotel" }}</span>
+              <span class="action-btn__cost">
+                <img src="/figma/room/icon-money.png" alt="" />
+                <b>{{ buildCost }}</b>
+              </span>
+            </button>
+            <button
+              class="action-btn"
+              :disabled="!mortgageButton.enabled"
+              @click="toggleMortgage"
+            >
+              <span class="action-btn__label">{{ mortgageButton.label }}</span>
+              <span class="action-btn__cost">
+                <img src="/figma/room/icon-money.png" alt="" />
+                <b>{{ mortgageButton.cost }}</b>
+              </span>
+            </button>
           </div>
-          <div class="stat-box">
-            <div class="stat-box__label">{{ isRu ? "Отель" : "Hotel" }}</div>
-            <div class="stat-box__val">◈ {{ (tile as StreetTile).houseCost }}</div>
-          </div>
-          <div class="stat-box">
-            <div class="stat-box__label">{{ isRu ? "Залог" : "Mortgage" }}</div>
-            <div class="stat-box__val">◈ {{ (tile as StreetTile).mortgage }}</div>
-          </div>
-        </div>
-        <div v-else-if="tile.kind === 'railroad' || tile.kind === 'utility'" class="stat-grid">
-          <div class="stat-box">
-            <div class="stat-box__label">{{ isRu ? "Залог" : "Mortgage" }}</div>
-            <div class="stat-box__val">◈ {{ (tile as any).mortgage }}</div>
-          </div>
-        </div>
 
-        <!-- Flavor description for non-property tiles -->
-        <div v-if="description" class="desc">{{ description }}</div>
+          <!-- Hint (why Дом is disabled) -->
+          <p v-if="buildHint" class="info-hint">{{ buildHint }}</p>
 
-        <!-- Owner panel -->
-        <div v-if="owner" class="owner">
-          <div class="owner__head">{{ isRu ? "Владелец" : "Owner" }}</div>
-          <div class="owner__row">
-            <Sigil :name="owner.name" :color="ownerColor" :size="32" />
-            <span class="owner__name">{{ owner.name }}</span>
-            <span v-if="owned?.mortgaged" class="chip owner__mortgage">
-              <Icon name="lock" :size="11" color="var(--accent)" />
-              {{ isRu ? "В залоге" : "Mortgaged" }}
-            </span>
-          </div>
-          <div v-if="owned && (owned.houses || owned.hotel)" class="owner__buildings">
-            <span v-if="owned.hotel" class="owner__castle">
-              ♖ {{ isRu ? "Отель" : "Hotel" }}
-            </span>
-            <span v-else-if="owned.houses > 0" class="owner__houses">
-              <span v-for="n in owned.houses" :key="n">⌂</span>
-            </span>
-          </div>
-        </div>
-        <div
-          v-else-if="tile.kind === 'street' || tile.kind === 'railroad' || tile.kind === 'utility'"
-          class="free"
-        >
-          <Icon name="scroll" :size="14" color="var(--emerald)" />
-          {{ isRu ? "Свободно — земля без владельца" : "Unclaimed land" }}
-        </div>
-
-        <!-- Build / sell actions -->
-        <div v-if="isMineStreet && game.isMyTurn" class="actions">
+          <!-- Propose trade (non-owner) -->
           <button
-            class="btn btn-primary build-btn"
-            :disabled="!canBuild"
-            @click="build"
-          >
-            <Icon :name="owned?.houses === 4 ? 'castle' : 'home'" :size="16" color="#fff" />
-            <span class="build-btn__text">
-              {{ owned?.houses === 4
-                ? (isRu ? "Построить отель" : "Build a hotel")
-                : (isRu ? "Построить дом" : "Build a house") }}
-            </span>
-            <span class="build-btn__cost">◈ {{ buildCost }}</span>
-          </button>
-          <button
-            class="btn btn-ghost sell-btn"
-            :disabled="!canSell"
-            @click="sell"
-          >
-            <Icon name="coin" :size="15" color="var(--gold)" />
-            <span class="build-btn__text">
-              {{ isRu ? "Продать" : "Sell" }}
-            </span>
-            <span class="build-btn__cost">◈ {{ Math.floor(buildCost / 2) }}</span>
-          </button>
-          <p v-if="!hasMonopoly" class="hint">
-            {{ isRu
-              ? "Нужна вся цветовая группа, чтобы строить"
-              : "You need the full colour group to build" }}
-          </p>
-          <p v-else-if="hasMonopoly && !evenBuildOk && !owned?.hotel" class="hint">
-            {{ isRu
-              ? "Сначала достройся на других улицах группы (равномерная стройка)"
-              : "Build evenly across the group first" }}
-          </p>
-          <p v-else-if="(owned?.houses || owned?.hotel) && !evenSellOk" class="hint">
-            {{ isRu
-              ? "Сначала снеси с более застроенных улиц группы"
-              : "Sell from the more-developed streets first" }}
-          </p>
-          <p v-else-if="hasMonopoly && !bankHasSupply" class="hint">
-            {{ owned?.houses === 4
-              ? (isRu ? "В банке закончились отели — дождись, пока кто-то продаст" : "No hotels left in the bank — wait for someone to sell")
-              : (isRu ? "В банке закончились дома — дождись, пока кто-то продаст" : "No houses left in the bank — wait for someone to sell") }}
-          </p>
+            v-if="canPropose && game.isMyTurn"
+            class="propose-btn btn-3d btn-3d--blue"
+            @click="openPropose"
+          >{{ isRu ? "Предложить обмен" : "Propose a trade" }}</button>
         </div>
 
-        <!-- Mortgage / unmortgage (owner only, during own turn) -->
-        <div v-if="isMineProperty && game.isMyTurn && (canMortgage || canUnmortgage)" class="actions">
-          <button
-            v-if="canMortgage"
-            class="btn btn-wax"
-            @click="mortgage"
-          >
-            <Icon name="lock" :size="15" color="#fff" />
-            <span class="build-btn__text">{{ isRu ? "Заложить" : "Mortgage" }}</span>
-            <span class="build-btn__cost">+ ◈ {{ mortgageValue }}</span>
-          </button>
-          <button
-            v-if="canUnmortgage"
-            class="btn btn-emerald"
-            @click="unmortgage"
-          >
-            <Icon name="unlock" :size="15" color="#fff" />
-            <span class="build-btn__text">{{ isRu ? "Выкупить из залога" : "Redeem" }}</span>
-            <span class="build-btn__cost">− ◈ {{ unmortgageCost }}</span>
-          </button>
-        </div>
-
-        <!-- Propose trade to the current owner -->
-        <div v-if="canPropose && game.isMyTurn" class="actions">
-          <button class="btn btn-primary propose-btn" @click="openPropose">
-            <Icon name="trade" :size="16" color="#fff" />
-            {{ isRu ? "Предложить обмен" : "Propose a trade" }}
-          </button>
-        </div>
+        <!-- Floating close button -->
+        <button class="info-close" @click="close" aria-label="close">
+          <svg viewBox="0 0 24 24" width="18" height="18">
+            <path
+              d="M6 6l12 12M18 6L6 18"
+              stroke="#000"
+              stroke-width="2.5"
+              stroke-linecap="round"
+            />
+          </svg>
+        </button>
       </div>
     </div>
   </transition>
 </template>
 
 <style scoped>
-/* ── Scrim: absolute over the full viewport, sheet docked to bottom ── */
-.modal-scrim {
+.info-scrim {
   position: fixed;
   inset: 0;
-  background: rgba(26, 15, 5, 0.5);
-  backdrop-filter: blur(2px);
-  -webkit-backdrop-filter: blur(2px);
+  background: rgba(0, 0, 0, 0.4);
   z-index: 110;
   display: flex;
-  align-items: flex-end;
+  align-items: center;
   justify-content: center;
+  padding: 16px;
+  padding-bottom: calc(16px + var(--csab, 0px));
 }
 
-.modal-card {
-  width: 100%;
-  max-width: 480px;
-  max-height: 85dvh;
-  overflow-y: auto;
-  background: var(--card-alt);
-  border-top: 3px solid var(--primary);
-  border-radius: 16px 16px 0 0;
-  padding: 14px 16px calc(20px + var(--csab, 0px));
-  animation: sheet-unfurl 320ms cubic-bezier(0.34, 1.56, 0.64, 1);
-  transform-origin: bottom;
+.info-wrap {
   position: relative;
-  box-shadow: 0 -8px 24px rgba(42, 29, 16, 0.25);
+  width: 100%;
+  max-width: 345px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  max-height: calc(100vh - 32px - var(--csab, 0px));
 }
 
-.grab-handle {
-  width: 40px;
-  height: 4px;
-  background: var(--line-strong);
-  border-radius: 2px;
-  margin: -4px auto 12px;
+.info-card {
+  width: 100%;
+  background: #faf3e2;
+  border-radius: 18px;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.16);
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  overflow-y: auto;
+  font-family: 'Unbounded', sans-serif;
+  color: #000;
 }
 
 /* ── Header ── */
-.head {
+.info-head {
   display: flex;
+  flex-direction: column;
   align-items: center;
   gap: 12px;
-  padding-bottom: 12px;
-  border-bottom: 1px solid var(--divider);
-  margin-bottom: 12px;
+  text-align: center;
 }
-.head__icon {
-  width: 44px;
-  height: 44px;
-  border-radius: 10px;
-  background: var(--card);
-  border: 1px solid var(--line);
-  color: var(--ink);
+.info-group {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-family: 'Unbounded', sans-serif;
+  font-weight: 500;
+  font-size: 14px;
+  line-height: 16px;
+}
+.info-name {
+  font-family: 'Unbounded', sans-serif;
+  font-weight: 700;
+  font-size: 18px;
+  line-height: 26px;
+  color: #000;
+  word-break: break-word;
+}
+.info-cost {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: 'Unbounded', sans-serif;
+  font-weight: 700;
+  font-size: 14px;
+  line-height: 16px;
+  color: #000;
+}
+.info-cost img { width: 24px; height: 24px; object-fit: contain; }
+
+/* ── Owner / free ── */
+.info-free {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-family: var(--font-display);
-  font-size: 22px;
-  flex-shrink: 0;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.3);
+  min-height: 44px;
+  padding: 10px;
+  border: 1.4px dashed rgba(0, 0, 0, 0.4);
+  border-radius: 12px;
+  font-family: 'Unbounded', sans-serif;
+  font-weight: 500;
+  font-size: 14px;
+  line-height: 16px;
+  color: rgba(0, 0, 0, 0.6);
+  text-align: center;
 }
-.head__body {
-  flex: 1;
-  min-width: 0;
-}
-.head__kicker {
-  font-size: 9px;
-  letter-spacing: 0.18em;
-  color: var(--ink-3);
-  text-transform: uppercase;
-  font-family: var(--font-title);
-  line-height: 1;
-}
-.head__title {
-  font-family: var(--font-display);
-  font-size: 19px;
-  color: var(--ink);
-  line-height: 1.15;
-  margin-top: 4px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.head__close {
-  width: 32px;
-  height: 32px;
-}
-
-/* ── Price row ── */
-.price-row {
+.info-owner {
+  background: rgba(0, 0, 0, 0.04);
+  border-radius: 12px;
   padding: 10px 12px;
-  background: var(--card);
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  margin-bottom: 12px;
 }
-.price-row__label {
+.info-owner__label {
+  font-family: 'Unbounded', sans-serif;
+  font-weight: 500;
   font-size: 11px;
   letter-spacing: 0.1em;
   text-transform: uppercase;
-  color: var(--ink-3);
-}
-.price-row__val {
-  font-family: var(--font-mono);
-  font-size: 16px;
-  font-weight: 600;
-  color: var(--gold);
-}
-
-/* ── Rent table ── */
-.rent {
-  margin-bottom: 12px;
-}
-.rent__head {
-  font-size: 11px;
-  color: var(--ink-3);
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
+  color: rgba(0, 0, 0, 0.5);
   margin-bottom: 6px;
 }
-.rent__table {
-  background: var(--card);
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  overflow: hidden;
-}
-.rent__row {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 8px 12px;
-  border-bottom: 1px solid var(--divider);
-  font-size: 13px;
-}
-.rent__row--last {
-  border-bottom: none;
-}
-.rent__label {
-  color: var(--ink-2);
-}
-.rent__val {
-  font-family: var(--font-mono);
-  color: var(--ink);
-  font-weight: 600;
-}
-
-/* ── Stat grid (house / mortgage / etc) ── */
-.stat-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(90px, 1fr));
-  gap: 8px;
-  margin-bottom: 12px;
-}
-.stat-box {
-  text-align: center;
-  padding: 8px;
-  background: var(--card);
-  border: 1px solid var(--line);
-  border-radius: 8px;
-}
-.stat-box__label {
-  font-size: 10px;
-  color: var(--ink-3);
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
-}
-.stat-box__val {
-  font-family: var(--font-mono);
-  font-size: 14px;
-  color: var(--ink);
-  margin-top: 2px;
-  font-weight: 600;
-}
-
-/* ── Flavor description ── */
-.desc {
-  padding: 12px 14px;
-  background: var(--card);
-  border: 1px dashed var(--line-strong);
-  border-radius: 8px;
-  color: var(--ink-2);
-  font-size: 13px;
-  line-height: 1.4;
-  margin-bottom: 12px;
-  font-family: var(--font-display);
-  font-style: italic;
-}
-
-/* ── Owner panel ── */
-.owner {
-  padding: 10px 12px;
-  background: var(--card);
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  margin-bottom: 12px;
-}
-.owner__head {
-  font-size: 10px;
-  color: var(--ink-3);
-  text-transform: uppercase;
-  letter-spacing: 0.12em;
-  margin-bottom: 8px;
-}
-.owner__row {
+.info-owner__row {
   display: flex;
   align-items: center;
   gap: 10px;
 }
-.owner__name {
+.info-owner__dot {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.3),
+              inset 0 -1px 1px rgba(0, 0, 0, 0.2);
+  flex-shrink: 0;
+}
+.info-owner__name {
   flex: 1;
-  font-family: var(--font-display);
+  font-family: 'Unbounded', sans-serif;
+  font-weight: 700;
   font-size: 14px;
-  color: var(--ink);
+  color: #000;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.owner__mortgage {
-  background: rgba(139, 26, 26, 0.08);
-  border-color: rgba(139, 26, 26, 0.3);
-  color: var(--accent);
-  font-weight: 600;
+.info-owner__chip {
+  padding: 2px 10px;
+  border-radius: 999px;
+  background: #f34822;
+  color: #fff;
+  font-family: 'Unbounded', sans-serif;
+  font-weight: 500;
+  font-size: 11px;
+  white-space: nowrap;
 }
-.owner__buildings {
-  margin-top: 8px;
-  padding-top: 8px;
-  border-top: 1px solid var(--divider);
-  font-family: var(--font-display);
+.info-owner__chip--ok {
+  background: #4ed636;
+}
+
+/* ── Rent table ── */
+.rent-table {
+  background: rgba(0, 0, 0, 0.04);
+  border-radius: 12px;
+  overflow: hidden;
+}
+.rent-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 48px;
+  padding: 0 12px;
+}
+.rent-row--alt {
+  background: rgba(0, 0, 0, 0.04);
+}
+.rent-row__label {
+  font-family: 'Unbounded', sans-serif;
+  font-weight: 700;
   font-size: 14px;
-  color: var(--ink-2);
-  display: flex;
-  gap: 6px;
+  color: #484337;
+}
+.rent-row__val {
+  display: inline-flex;
   align-items: center;
-}
-.owner__castle {
-  color: var(--gold);
-  font-weight: 600;
-  letter-spacing: 0.05em;
-}
-.owner__houses {
-  letter-spacing: 0.15em;
-  color: var(--emerald);
-  font-size: 16px;
-}
-
-/* ── Free chip ── */
-.free {
-  padding: 10px 12px;
-  background: rgba(45, 122, 79, 0.08);
-  border: 1px solid rgba(45, 122, 79, 0.3);
-  border-radius: 8px;
-  color: var(--emerald);
-  font-size: 12px;
-  font-family: var(--font-display);
-  letter-spacing: 0.03em;
-  text-align: center;
-  margin-bottom: 12px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
   gap: 6px;
+  font-family: 'Unbounded', sans-serif;
+  font-weight: 700;
+  font-size: 14px;
+  color: #484337;
 }
+.rent-row__val img { width: 24px; height: 24px; object-fit: contain; }
 
-/* ── Action blocks ── */
-.actions {
+/* ── Action grid (Дом / Отель / Залог) ── */
+.action-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+.action-btn {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  margin-bottom: 12px;
-}
-.actions .btn {
-  width: 100%;
-  padding: 12px 14px;
-  font-size: 14px;
-  justify-content: space-between;
-}
-.actions .btn > :first-child {
-  flex-shrink: 0;
-}
-.build-btn__text {
-  flex: 1;
-  text-align: left;
-  margin-left: 4px;
-}
-.build-btn__cost {
-  font-family: var(--font-mono);
-  font-weight: 600;
-  opacity: 0.92;
-}
-.sell-btn .build-btn__cost {
-  color: var(--gold);
-}
-.propose-btn {
+  align-items: center;
   justify-content: center;
-  gap: 8px;
+  gap: 2px;
+  min-height: 56px;
+  padding: 6px 10px;
+  background: #4ed636;
+  border: 1px solid rgba(0, 0, 0, 0.2);
+  border-radius: 12px;
+  color: #fff;
+  cursor: pointer;
+  transition: transform 80ms, filter 120ms;
 }
+.action-btn:active {
+  transform: translateY(1px);
+}
+.action-btn:disabled {
+  filter: grayscale(0.6) brightness(0.92);
+  cursor: not-allowed;
+}
+.action-btn__label {
+  font-family: 'Unbounded', sans-serif;
+  font-weight: 700;
+  font-size: 12px;
+  line-height: 14px;
+}
+.action-btn__cost {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  font-family: 'Golos Text', sans-serif;
+  font-weight: 900;
+  font-size: 18px;
+  line-height: 20px;
+  text-shadow: 1px 1px 0 rgba(0, 0, 0, 0.6);
+}
+.action-btn__cost img { width: 24px; height: 24px; object-fit: contain; }
+.action-btn__cost b { font-weight: 900; }
 
-.hint {
-  font-size: 11px;
-  color: var(--ink-3);
+.info-hint {
+  margin: 0;
+  font-family: 'Golos Text', sans-serif;
+  font-weight: 500;
+  font-size: 12px;
+  line-height: 1.35;
+  color: rgba(0, 0, 0, 0.55);
   text-align: center;
-  margin: 2px 0 0;
-  font-family: var(--font-display);
-  font-style: italic;
-  line-height: 1.3;
 }
 
-/* ── Animations ── */
-@keyframes sheet-unfurl {
-  0% { transform: translateY(100%); opacity: 0; }
-  100% { transform: translateY(0); opacity: 1; }
+.propose-btn {
+  width: 100%;
+  font-family: 'Golos Text', sans-serif;
 }
-.fade-enter-active, .fade-leave-active { transition: opacity 0.2s ease; }
-.fade-enter-from, .fade-leave-to { opacity: 0; }
-.fade-enter-active .modal-card,
-.fade-leave-active .modal-card {
+
+/* ── Floating close button (Figma: 44px white circle, 4px black
+      border, offset 2.75/2.75 hard-shadow sitting below the card). */
+.info-close {
+  margin-top: 14px;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: #fff;
+  border: 4px solid #000;
+  box-shadow: 2.75px 2.75px 0 0 #000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 0;
+  transition: transform 80ms;
+}
+.info-close:active { transform: translate(1px, 1px); box-shadow: 1.5px 1.5px 0 0 #000; }
+
+/* ── Transitions ── */
+.info-fade-enter-active, .info-fade-leave-active { transition: opacity 0.2s ease; }
+.info-fade-enter-from, .info-fade-leave-to { opacity: 0; }
+.info-fade-enter-active .info-wrap,
+.info-fade-leave-active .info-wrap {
   transition: transform 0.22s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
-.fade-leave-to .modal-card { transform: translateY(20%); }
+.info-fade-enter-from .info-wrap,
+.info-fade-leave-to .info-wrap { transform: scale(0.96); }
 </style>
