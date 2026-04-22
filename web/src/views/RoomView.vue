@@ -603,15 +603,10 @@ void t;
 
 <template>
   <div class="room" :class="{ 'room--figma': game.room && !isLobby }">
-    <!-- ── Decorative background pattern (only in-game; lobby keeps its
-         original parchment look until designer delivers that screen) ── -->
-    <img
-      v-if="game.room && !isLobby"
-      class="room-bg"
-      src="/figma/room/bg-pattern.png"
-      alt=""
-      aria-hidden="true"
-    />
+    <!-- Room bg pattern lives on <body> via the `room-figma-root` class
+         applied by the phase watcher, so it reaches the safe-area strips
+         Telegram draws above/below the app (a component-local <img> can't
+         cross the #app viewport boundary). -->
 
     <!-- ── Topbar ── -->
     <div v-if="isLobby" class="topbar">
@@ -990,30 +985,13 @@ void t;
    (in-game phases). Lobby keeps the legacy parchment look.
    ═══════════════════════════════════════════════════════════════ */
 .room--figma {
-  background: #9fe101;
+  /* bg color lives on <body> via room-figma-root (so safe-areas stay green) */
+  background: transparent;
   color: #fff;
   padding: 0;
   overflow-y: hidden;
   font-family: 'Unbounded', 'Golos Text', sans-serif;
 }
-.room-bg {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  object-position: center;
-  /* The Figma "image 6" asset is exported as blue icons on a blue
-     background (it's the same pattern used by the home screen). To
-     reach the designer's green-on-green look we multiply it with the
-     #9fe101 bg so blue lifts into matching green tones rather than
-     leaving muddy teal blotches. */
-  mix-blend-mode: multiply;
-  opacity: 0.55;
-  pointer-events: none;
-  z-index: 0;
-}
-
 /* ── In-game topbar ── */
 .room-topbar {
   position: relative;
@@ -1558,15 +1536,29 @@ void t;
 </style>
 
 <style>
-/* Green edge-to-edge while a match is running — parent wrappers (#app,
-   .app-root, .app-main) default to var(--bg) parchment, so without this
-   the Telegram safe-area strips at top/bottom bleed cream behind the
-   board. Applied via `room-figma-root` body class from the phase watcher. */
+/* Figma green pattern on <body> so it fills every pixel of the Telegram
+   viewport including the safe-area strips. The pattern PNG is exported as
+   blue icons on a blue field; `background-blend-mode: multiply` with the
+   green bg turns those blue tones into matching green — same trick the old
+   <img mix-blend-mode: multiply> used. Wrappers go transparent so the body
+   layer shows through. Applied while a match is running (phase ≠ lobby/ended)
+   via the room-figma-root body class toggled by the phase watcher. */
 html.room-figma-root,
-body.room-figma-root,
+body.room-figma-root {
+  background-color: #9fe101 !important;
+  background-image:
+    linear-gradient(rgba(159, 225, 1, 0.45), rgba(159, 225, 1, 0.45)),
+    url('/figma/room/bg-pattern.png') !important;
+  background-size: auto, cover !important;
+  background-position: center, center !important;
+  background-repeat: no-repeat, no-repeat !important;
+  background-attachment: fixed, fixed !important;
+  background-blend-mode: normal, multiply !important;
+}
 body.room-figma-root #app,
 body.room-figma-root .app-root,
-body.room-figma-root .app-main {
-  background: #9fe101 !important;
+body.room-figma-root .app-main,
+body.room-figma-root .room {
+  background: transparent !important;
 }
 </style>

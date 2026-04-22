@@ -127,8 +127,6 @@ function go(name: string) { haptic("light"); router.push({ name }); }
 
 <template>
   <div class="app home-v2">
-    <img class="home-v2__bg" src="/figma/home/bg-pattern.png" alt="" aria-hidden="true" />
-
     <div class="home-v2__content">
       <transition name="rejoin-fade">
         <div v-if="activeRoomId" class="home-v2__rejoin">
@@ -228,22 +226,11 @@ function go(name: string) { haptic("light"); router.push({ name }); }
   flex-direction: column;
   flex: 1;
   min-height: 0;
-  background: #0d68db;
+  /* bg color + pattern live on <body> via home-figma-root so safe-areas stay blue */
+  background: transparent;
   color: #fff;
   overflow: hidden;
   font-family: 'Golos Text', var(--font-body);
-}
-
-.home-v2__bg {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  object-position: center;
-  opacity: 0.4;
-  pointer-events: none;
-  z-index: 0;
 }
 
 .home-v2__content {
@@ -542,14 +529,27 @@ function go(name: string) { haptic("light"); router.push({ name }); }
 </style>
 
 <style>
-/* Blue edge-to-edge: every wrapper between <html> and .home-v2 defaults to
-   var(--bg) (parchment), so without these overrides the Telegram safe-area
-   strips at top/bottom bleed cream behind the new figma panel. */
+/* Figma bg lives on <body> so it fills every pixel of the Telegram viewport
+   including the safe-area strips above/below the app. Every wrapper between
+   <html> and .home-v2 is forced transparent so the body layer shows through.
+   The pattern sits under a 55% blue overlay (layer order: overlay → pattern →
+   solid color) so the icons show at ~45% strength — matches the previous
+   <img opacity: 0.4> look without needing an extra element. */
 html.home-figma-root,
-body.home-figma-root,
+body.home-figma-root {
+  background-color: #0d68db !important;
+  background-image:
+    linear-gradient(rgba(13, 104, 219, 0.55), rgba(13, 104, 219, 0.55)),
+    url('/figma/home/bg-pattern.png') !important;
+  background-size: auto, cover !important;
+  background-position: center, center !important;
+  background-repeat: no-repeat, no-repeat !important;
+  background-attachment: fixed, fixed !important;
+}
 body.home-figma-root #app,
 body.home-figma-root .app-root,
-body.home-figma-root .app-main {
-  background: #0d68db !important;
+body.home-figma-root .app-main,
+body.home-figma-root .home-v2 {
+  background: transparent !important;
 }
 </style>
