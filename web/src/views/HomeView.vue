@@ -236,13 +236,11 @@ function go(name: string) { haptic("light"); router.push({ name }); }
 
 .home-v2__bg {
   position: absolute;
-  left: -42px;
-  bottom: 0;
-  width: 476px;
-  height: 852px;
-  max-height: 100%;
-  object-fit: contain;
-  object-position: bottom left;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
   opacity: 0.4;
   pointer-events: none;
   z-index: 0;

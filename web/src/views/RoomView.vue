@@ -998,11 +998,11 @@ void t;
 }
 .room-bg {
   position: absolute;
-  left: -42px;
-  bottom: 0;
-  width: 476px;
-  max-width: none;
-  height: auto;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
   /* The Figma "image 6" asset is exported as blue icons on a blue
      background (it's the same pattern used by the home screen). To
      reach the designer's green-on-green look we multiply it with the
