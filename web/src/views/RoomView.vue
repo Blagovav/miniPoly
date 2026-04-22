@@ -427,17 +427,24 @@ const turnSlots = computed<{ key: string; player: Player; role: "prev" | "curren
   const prev = r.players[(i - 1 + n) % n];
   const cur  = r.players[i];
   const next = r.players[(i + 1) % n];
-  // Key by player.id so Vue's TransitionGroup FLIP can slide persistent cards
-  // (B stays in DOM, moves from current→prev slot; old prev fades out, new next
-  // fades in). In a 2-player room prev === next, so drop the duplicate next
-  // slot — otherwise Vue errors on dup keys and FLIP breaks.
-  const slots = [
-    { key: prev.id, player: prev, role: "prev" as const },
-    { key: cur.id,  player: cur,  role: "current" as const },
-    { key: next.id, player: next, role: "next" as const },
+  // 3+ players: key by player.id so Vue's TransitionGroup FLIP slides
+  // persistent cards (current→prev, next→current, fresh next fades in).
+  // 2-player: prev === next — duplicate player.id keys would crash Vue, so
+  // prefix with role to keep them unique. FLIP persistence is lost but the
+  // visual stays a 3-slot banner with the red current card centered, which
+  // is what the designer intended.
+  if (n >= 3) {
+    return [
+      { key: prev.id, player: prev, role: "prev" as const },
+      { key: cur.id,  player: cur,  role: "current" as const },
+      { key: next.id, player: next, role: "next" as const },
+    ];
+  }
+  return [
+    { key: `prev-${prev.id}`,    player: prev, role: "prev" as const },
+    { key: `current-${cur.id}`,  player: cur,  role: "current" as const },
+    { key: `next-${next.id}`,    player: next, role: "next" as const },
   ];
-  if (n === 2) slots.pop();
-  return slots;
 });
 
 // Rank-coloured pills per Figma node 16:2591. Not tied to the player's
@@ -697,9 +704,10 @@ void t;
         >
           <img src="/figma/room/nav-chat.png" alt="" />
           <span
-            v-if="voice.isActive.value || voice.isConnecting.value || voice.lastError.value"
             class="voice-dot"
             :class="{
+              'voice-dot--idle': !voice.isActive.value && !voice.isConnecting.value && !voice.lastError.value,
+              'voice-dot--active': voice.isActive.value && !voice.isTransmitting.value,
               'voice-dot--transmit': voice.isTransmitting.value,
               'voice-dot--connect': voice.isConnecting.value,
               'voice-dot--err': !!voice.lastError.value,
@@ -1114,20 +1122,24 @@ void t;
 }
 .room-topbar__nav-btn:active { transform: scale(0.92); }
 /* Voice status dot — sits in the top-right of the voice nav button.
-   Default: red = joined but muted. Transmit: pulsing green. Connecting:
-   amber. Error: orange with gentle fade. */
+   Always rendered so the user has an affordance signaling the button is
+   the voice control: subtle grey (idle), red (joined+muted), pulsing
+   green (transmitting), amber (connecting), orange (error). */
 .voice-dot {
   position: absolute;
-  top: 4px;
-  right: 4px;
-  width: 14px;
-  height: 14px;
+  top: 2px;
+  right: 2px;
+  width: 18px;
+  height: 18px;
   border-radius: 50%;
-  background: #e84b3e;
-  border: 2px solid #fff;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+  background: #b3b3b3;
+  border: 3px solid #fff;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.4);
   pointer-events: none;
+  transition: background-color 180ms ease;
 }
+.voice-dot--idle { background: #b3b3b3; }
+.voice-dot--active { background: #e84b3e; }
 .voice-dot--transmit {
   background: #4ed636;
   animation: voice-dot-pulse 1s ease-in-out infinite;
