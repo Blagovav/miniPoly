@@ -135,9 +135,25 @@ watch(
   (p) => {
     const inActiveGame = !!p && p !== "lobby" && p !== "ended";
     setClosingConfirmation(inActiveGame);
+    // Toggle the figma-green body class so Telegram's safe-area strips
+    // above/below the board don't leak the parchment var(--bg). Same trick
+    // HomeView uses with home-figma-root.
+    const root = document.documentElement;
+    const body = document.body;
+    if (inActiveGame) {
+      root.classList.add("room-figma-root");
+      body.classList.add("room-figma-root");
+    } else {
+      root.classList.remove("room-figma-root");
+      body.classList.remove("room-figma-root");
+    }
   },
   { immediate: true },
 );
+onUnmounted(() => {
+  document.documentElement.classList.remove("room-figma-root");
+  document.body.classList.remove("room-figma-root");
+});
 
 const winner = computed(() =>
   game.room?.winnerId ? game.room.players.find((p) => p.id === game.room?.winnerId) ?? null : null,
@@ -1538,5 +1554,19 @@ void t;
   width: 32px;
   height: 32px;
   object-fit: contain;
+}
+</style>
+
+<style>
+/* Green edge-to-edge while a match is running — parent wrappers (#app,
+   .app-root, .app-main) default to var(--bg) parchment, so without this
+   the Telegram safe-area strips at top/bottom bleed cream behind the
+   board. Applied via `room-figma-root` body class from the phase watcher. */
+html.room-figma-root,
+body.room-figma-root,
+body.room-figma-root #app,
+body.room-figma-root .app-root,
+body.room-figma-root .app-main {
+  background: #9fe101 !important;
 }
 </style>
