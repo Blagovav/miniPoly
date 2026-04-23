@@ -1,11 +1,9 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from "vue";
+import { computed, onMounted, onUnmounted, ref } from "vue";
 import { useI18n } from "vue-i18n";
 import { useRouter } from "vue-router";
 import type { PublicRoomSummary } from "../../../shared/types";
 import { useTelegram } from "../composables/useTelegram";
-import Icon from "../components/Icon.vue";
-import Sigil from "../components/Sigil.vue";
 import { ORDERED_PLAYER_COLORS } from "../utils/palette";
 
 const { locale } = useI18n();
@@ -14,7 +12,7 @@ const { haptic } = useTelegram();
 
 const rooms = ref<PublicRoomSummary[]>([]);
 const loading = ref(false);
-const codeInput = ref("");
+// 0 = All, 1 = Friends (placeholder — no friend data yet), 2 = Free seats only.
 const activeFilter = ref(0);
 
 const API_URL = (import.meta.env.VITE_API_URL as string) || "";
@@ -23,26 +21,37 @@ const isRu = computed(() => locale.value === "ru");
 const L = computed(() => isRu.value
   ? {
       title: "Игры",
-      subtitle: (n: number) => `Открытых партий · ${n}`,
-      codePlaceholder: "Введите код…",
-      create: "Создать",
-      filters: ["Все", "Публичные", "Друзья", "Ставка"],
-      empty: "Пока нет открытых партий. Создай первую!",
-      host: "Хост",
-      stake: "ставка",
-      refresh: "Обновить",
+      openCount: (n: number) => n > 0 ? `Открытых партий ${n}` : "Открытых партий нет",
+      filters: ["Все игры", "Друзья", "Свободные"],
+      roomPrefix: "Комната",
+      freeSeats: (n: number) => `Свободных мест: ${n}`,
+      noFreeSeats: "Свободных мест нет",
+      enter: "ВОЙТИ",
+      create: "СОЗДАТЬ ПАРТИЮ",
+      emptyLine1: "Открытых партий нет.",
+      emptyLine2: "Но вы можете создать свою",
     }
   : {
       title: "Games",
-      subtitle: (n: number) => `Open matches · ${n}`,
-      codePlaceholder: "Enter code…",
-      create: "Create",
-      filters: ["All", "Public", "Friends", "Stakes"],
-      empty: "No open matches yet. Be the first!",
-      host: "Host",
-      stake: "stake",
-      refresh: "Refresh",
+      openCount: (n: number) => n > 0 ? `Open matches ${n}` : "No open matches",
+      filters: ["All", "Friends", "Open"],
+      roomPrefix: "Room",
+      freeSeats: (n: number) => `Free seats: ${n}`,
+      noFreeSeats: "No free seats",
+      enter: "JOIN",
+      create: "CREATE MATCH",
+      emptyLine1: "No open matches.",
+      emptyLine2: "But you can create your own",
     });
+
+const filteredRooms = computed(() => {
+  if (activeFilter.value === 2) {
+    return rooms.value.filter((r) => r.playerCount < r.maxPlayers);
+  }
+  // Filter 1 (Друзья) is a placeholder — no friend data on the server yet.
+  // Show the full list so the chip is clickable without breaking anything.
+  return rooms.value;
+});
 
 async function load() {
   loading.value = true;
@@ -55,15 +64,10 @@ async function load() {
   }
 }
 
-function join(id: string) {
+function join(id: string, disabled: boolean) {
+  if (disabled) return;
   haptic("medium");
   router.push({ name: "room", params: { id } });
-}
-
-function joinFromInput() {
-  const code = codeInput.value.trim().toUpperCase();
-  if (!code) return;
-  join(code);
 }
 
 function goBack() {
@@ -72,8 +76,14 @@ function goBack() {
 }
 
 function goCreate() {
-  haptic("light");
+  haptic("medium");
   router.push({ name: "create" });
+}
+
+function setFilter(i: number) {
+  if (activeFilter.value === i) return;
+  haptic("light");
+  activeFilter.value = i;
 }
 
 // Deterministic color for a host name so the sigil is stable across renders.
@@ -84,272 +94,456 @@ function colorFor(name: string): string {
   return ORDERED_PLAYER_COLORS[idx];
 }
 
-// Stable, tongue-in-cheek "stake" per room so the UI isn't empty. Does NOT hit the API.
-function stakeFor(id: string): number {
-  const stakes = [100, 250, 500, 1000];
-  let hash = 0;
-  for (let i = 0; i < id.length; i++) hash = (hash * 31 + id.charCodeAt(i)) | 0;
-  return stakes[Math.abs(hash) % stakes.length];
-}
-
-onMounted(load);
+onMounted(() => {
+  load();
+  // Paint html/body blue so Telegram safe-area strips stay blue instead of
+  // flashing the parchment #f0e4c8 from the global stylesheet.
+  document.documentElement.classList.add("rooms-figma-root");
+  document.body.classList.add("rooms-figma-root");
+});
+onUnmounted(() => {
+  document.documentElement.classList.remove("rooms-figma-root");
+  document.body.classList.remove("rooms-figma-root");
+});
 </script>
 
 <template>
-  <div class="app rooms">
-    <div class="topbar">
-      <button class="icon-btn" aria-label="back" @click="goBack">
-        <Icon name="back" :size="18"/>
-      </button>
-      <div class="title">
-        <h1>{{ L.title }}</h1>
-        <div class="sub">{{ L.subtitle(rooms.length) }}</div>
-      </div>
-      <button
-        class="icon-btn"
-        :aria-label="L.refresh"
-        :disabled="loading"
-        @click="load"
-      >
-        <span :class="{ spin: loading }" style="display: flex;">
-          <Icon name="search" :size="18"/>
-        </span>
-      </button>
-    </div>
-
-    <div class="content">
-      <!-- Search + Create row -->
-      <div class="row" style="gap: 8px; margin-bottom: 12px;">
-        <div class="card search-card">
-          <Icon name="search" :size="16" color="var(--ink-3)"/>
-          <input
-            v-model="codeInput"
-            class="search-input"
-            :placeholder="L.codePlaceholder"
-            maxlength="12"
-            @keydown.enter="joinFromInput"
-          />
-        </div>
-        <button class="btn btn-primary create-btn" @click="goCreate">
-          {{ L.create }}
+  <div class="app rooms-v2">
+    <div class="rooms-v2__header">
+      <div class="rooms-v2__navbar">
+        <button class="rooms-v2__back" :aria-label="'back'" @click="goBack">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" aria-hidden="true">
+            <path
+              d="M15 18l-6-6 6-6"
+              stroke="#0d68db"
+              stroke-width="2.4"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            />
+          </svg>
         </button>
+        <h1 class="rooms-v2__title">{{ L.title }}</h1>
+        <div class="rooms-v2__count-pill">{{ L.openCount(rooms.length) }}</div>
       </div>
 
-      <!-- Filter chips -->
-      <div class="filters" style="margin-bottom: 12px;">
+      <div class="rooms-v2__filters">
         <button
           v-for="(f, i) in L.filters"
           :key="i"
-          class="filter-chip"
-          :class="{ active: activeFilter === i }"
-          @click="activeFilter = i"
+          class="rooms-v2__chip"
+          :class="{ 'rooms-v2__chip--active': activeFilter === i }"
+          @click="setFilter(i)"
         >{{ f }}</button>
       </div>
+    </div>
 
-      <!-- Empty state -->
-      <div v-if="!loading && rooms.length === 0" class="card empty">
-        <div class="empty__icon">
-          <Icon name="tavern" :size="28" color="var(--ink-3)"/>
+    <div class="rooms-v2__scroll">
+      <div v-if="!loading && filteredRooms.length === 0" class="rooms-v2__empty">
+        <img
+          class="rooms-v2__empty-art"
+          src="/figma/rooms/char-empty.png"
+          alt=""
+        />
+        <div class="rooms-v2__empty-text">
+          <p>{{ L.emptyLine1 }}</p>
+          <p>{{ L.emptyLine2 }}</p>
         </div>
-        <p>{{ L.empty }}</p>
-        <button class="btn btn-primary" @click="goCreate">
-          <Icon name="plus" :size="14" color="#fff"/>
-          {{ L.create }}
-        </button>
       </div>
 
-      <!-- Rooms list -->
-      <div v-else class="rooms-list">
-        <button
-          v-for="r in rooms"
+      <div v-else class="rooms-v2__list">
+        <div
+          v-for="r in filteredRooms"
           :key="r.id"
-          class="room-row"
-          @click="join(r.id)"
+          class="rooms-v2__card"
         >
-          <Sigil :name="r.hostName" :color="colorFor(r.hostName)" :size="40"/>
-          <div class="room-row__body">
-            <div class="row" style="gap: 6px;">
-              <div class="room-row__code">{{ r.id }}</div>
-              <div v-if="r.playerCount >= r.maxPlayers" class="live-pill">LIVE</div>
+          <div class="rooms-v2__card-body">
+            <div class="rooms-v2__card-name">
+              {{ L.roomPrefix }} {{ r.id }}
             </div>
-            <div class="room-row__meta">
-              {{ L.host }} · {{ r.hostName }} · {{ stakeFor(r.id) }}◈ {{ L.stake }}
+            <div class="rooms-v2__card-host">
+              <span
+                class="rooms-v2__host-dot"
+                :style="{ background: `radial-gradient(circle at 30% 30%, ${colorFor(r.hostName)}aa, ${colorFor(r.hostName)})` }"
+              >{{ r.hostName[0]?.toUpperCase() || '?' }}</span>
+              <span class="rooms-v2__host-name">{{ r.hostName }}</span>
             </div>
-          </div>
-          <div class="room-row__right">
-            <div class="room-row__count">{{ r.playerCount }}/{{ r.maxPlayers }}</div>
-            <div class="seat-dots">
-              <div
-                v-for="i in r.maxPlayers"
-                :key="i"
-                class="seat-dot"
-                :class="{ filled: i <= r.playerCount }"
+            <div
+              class="rooms-v2__seat-pill"
+              :class="{ 'rooms-v2__seat-pill--full': r.playerCount >= r.maxPlayers }"
+            >
+              <span
+                v-if="r.playerCount < r.maxPlayers"
+                class="rooms-v2__seat-dot"
+                aria-hidden="true"
               />
+              <span class="rooms-v2__seat-text">
+                {{ r.playerCount < r.maxPlayers
+                  ? L.freeSeats(r.maxPlayers - r.playerCount)
+                  : L.noFreeSeats }}
+              </span>
             </div>
           </div>
-        </button>
+          <button
+            class="rooms-v2__enter"
+            :class="{ 'rooms-v2__enter--disabled': r.playerCount >= r.maxPlayers }"
+            :disabled="r.playerCount >= r.maxPlayers"
+            @click="join(r.id, r.playerCount >= r.maxPlayers)"
+          >{{ L.enter }}</button>
+        </div>
       </div>
+    </div>
+
+    <div class="rooms-v2__cta-wrap">
+      <button class="rooms-v2__cta" @click="goCreate">
+        <span class="rooms-v2__cta-text">{{ L.create }}</span>
+        <svg
+          class="rooms-v2__cta-deco"
+          viewBox="0 0 98 32.5"
+          preserveAspectRatio="none"
+          fill="none"
+          aria-hidden="true"
+        >
+          <path
+            opacity="0.2"
+            d="M98 9.5V32.5C98 32.5 97 6 89.5 4C82 2 0 0 0 0H88.5C96 0 98 3.5 98 9.5Z"
+            fill="white"
+          />
+        </svg>
+      </button>
     </div>
   </div>
 </template>
 
 <style scoped>
-.app {
+.rooms-v2 {
   position: relative;
   display: flex;
   flex-direction: column;
-  min-height: 100dvh;
-  background: var(--bg);
+  flex: 1;
+  min-height: 0;
+  background: transparent;
+  color: #fff;
+  overflow: hidden;
+  font-family: 'Golos Text', sans-serif;
 }
 
-/* Topbar back icon color alignment */
-.icon-btn :deep(svg) { color: var(--ink-2); }
-.spin { animation: spin 0.8s linear infinite; }
-@keyframes spin { to { transform: rotate(360deg); } }
-
-/* Search input card */
-.search-card {
-  flex: 1;
-  padding: 10px 12px;
+/* ── Sticky header (navbar + filter chips) ── */
+.rooms-v2__header {
+  position: relative;
+  z-index: 2;
+  flex-shrink: 0;
+  padding: 16px 24px 20px;
+  background: #0d68db;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.16);
+}
+.rooms-v2__navbar {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  min-height: 56px;
+  padding-top: 4px;
+}
+.rooms-v2__back {
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: #fff;
   display: flex;
   align-items: center;
-  gap: 8px;
+  justify-content: center;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: transform 120ms ease;
 }
-.search-input {
-  flex: 1;
-  background: transparent;
-  border: none;
-  outline: none;
-  font-size: 13px;
-  font-family: var(--font-body);
-  color: var(--ink);
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-  min-width: 0;
+.rooms-v2__back:active { transform: scale(0.92); }
+.rooms-v2__title {
+  margin: 0;
+  font-family: 'Unbounded', sans-serif;
+  font-weight: 900;
+  font-size: 18px;
+  line-height: 20px;
+  color: #fff;
+  text-shadow: 1px 1px 0 #000;
 }
-.search-input::placeholder {
-  color: var(--ink-3);
-  text-transform: none;
-  letter-spacing: normal;
-}
-.create-btn {
-  padding: 10px 16px;
+.rooms-v2__count-pill {
+  position: absolute;
+  left: 50%;
+  top: 30px;
+  transform: translateX(-50%);
+  padding: 3px 8px;
+  background: #fff;
+  border-radius: 999px;
+  font-family: 'Unbounded', sans-serif;
+  font-weight: 500;
+  font-size: 14px;
+  line-height: 16px;
+  color: #000;
   white-space: nowrap;
 }
 
-/* Filter chips */
-.filters {
+.rooms-v2__filters {
   display: flex;
-  gap: 6px;
-  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 16px;
 }
-.filter-chip {
-  padding: 6px 12px;
+.rooms-v2__chip {
+  padding: 8px 12px;
   background: transparent;
-  color: var(--ink-2);
-  border: 1px solid var(--line);
+  border: 1px solid rgba(255, 255, 255, 0.4);
   border-radius: 999px;
-  font-size: 12px;
-  font-family: var(--font-body);
-  font-weight: 500;
-  cursor: pointer;
-  line-height: 1.2;
-}
-.filter-chip.active {
-  background: var(--primary);
+  font-family: 'Unbounded', sans-serif;
+  font-weight: 700;
+  font-size: 14px;
+  line-height: 16px;
   color: #fff;
-  border-color: var(--primary);
+  text-shadow: 0.2px 0.2px 0 #000;
+  cursor: pointer;
+  transition: background 120ms ease, color 120ms ease;
+}
+.rooms-v2__chip--active {
+  background: #fff;
+  border-color: #fff;
+  color: #000;
+  text-shadow: none;
 }
 
-/* Rooms list */
-.rooms-list {
+/* ── Scroll area ── */
+.rooms-v2__scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 16px 24px 96px;
+  scrollbar-width: thin;
+}
+.rooms-v2__scroll::-webkit-scrollbar { width: 4px; }
+.rooms-v2__scroll::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.35);
+  border-radius: 2px;
+}
+
+/* ── Room cards ── */
+.rooms-v2__list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.rooms-v2__card {
+  background: #faf3e2;
+  border-radius: 18px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.rooms-v2__card-body {
   display: flex;
   flex-direction: column;
   gap: 10px;
 }
-.room-row {
-  background: var(--card);
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  padding: 12px 14px;
-  text-align: left;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  font-family: var(--font-body);
-  color: var(--ink);
-  transition: transform 80ms, border-color 160ms;
-}
-.room-row:active { transform: translateY(1px); }
-.room-row:hover { border-color: var(--line-strong); }
-
-.room-row__body { flex: 1; min-width: 0; }
-.room-row__code {
-  font-family: var(--font-display);
-  font-size: 16px;
-  color: var(--ink);
-  letter-spacing: 0.05em;
-}
-.room-row__meta {
-  font-size: 11px;
-  color: var(--ink-3);
-  margin-top: 2px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.room-row__right { text-align: right; flex-shrink: 0; }
-.room-row__count {
-  font-family: var(--font-display);
-  font-size: 15px;
-  color: var(--ink);
-}
-.seat-dots {
-  display: flex;
-  gap: 2px;
-  margin-top: 4px;
-  justify-content: flex-end;
-}
-.seat-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 2px;
-  background: var(--line-strong);
-}
-.seat-dot.filled { background: var(--emerald); }
-
-.live-pill {
-  padding: 2px 6px;
-  background: rgba(139, 26, 26, 0.12);
-  color: var(--accent);
-  font-size: 9px;
+.rooms-v2__card-name {
+  font-family: 'Unbounded', sans-serif;
   font-weight: 700;
-  letter-spacing: 0.1em;
-  border-radius: 3px;
-  line-height: 1.2;
+  font-size: 18px;
+  line-height: 20px;
+  color: #000;
 }
-
-/* Empty state */
-.empty {
-  padding: 32px 20px;
-  text-align: center;
+.rooms-v2__card-host {
   display: flex;
-  flex-direction: column;
-  gap: 14px;
   align-items: center;
+  gap: 8px;
 }
-.empty__icon {
-  width: 56px; height: 56px;
+.rooms-v2__host-dot {
+  width: 24px;
+  height: 24px;
   border-radius: 50%;
-  background: rgba(90, 58, 24, 0.06);
   display: flex;
   align-items: center;
   justify-content: center;
+  font-family: 'SF Pro Rounded', 'Golos Text', sans-serif;
+  font-weight: 700;
+  font-size: 10px;
+  line-height: 12px;
+  color: #fff;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.16);
+  flex-shrink: 0;
+  box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.25), inset 0 -1px 1px rgba(0, 0, 0, 0.2);
 }
-.empty p {
-  color: var(--ink-3);
-  margin: 0;
-  font-size: 13px;
+.rooms-v2__host-name {
+  flex: 1;
+  min-width: 0;
+  font-family: 'Unbounded', sans-serif;
+  font-weight: 700;
+  font-size: 14px;
+  line-height: 16px;
+  color: #000;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rooms-v2__seat-pill {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px 8px 8px;
+  background: #fff;
+  border: 1px solid rgba(0, 0, 0, 0.2);
+  border-radius: 100px;
+}
+.rooms-v2__seat-pill--full {
+  padding-left: 14px;
+}
+.rooms-v2__seat-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 30% 30%, #6de84d, #2eab1e);
+  box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.3), inset 0 -1px 1px rgba(0, 0, 0, 0.15);
+  flex-shrink: 0;
+}
+.rooms-v2__seat-text {
+  font-family: 'Unbounded', sans-serif;
+  font-weight: 700;
+  font-size: 14px;
+  line-height: 16px;
+  color: #000;
+  white-space: nowrap;
+}
+
+.rooms-v2__enter {
+  width: 100%;
+  height: 40px;
+  padding: 8px 10px;
+  border: 1px solid rgba(0, 0, 0, 0.2);
+  border-radius: 12px;
+  background: #4ed636;
+  color: #fff;
+  font-family: 'Golos Text', sans-serif;
+  font-weight: 900;
+  font-size: 18px;
+  line-height: 20px;
+  text-align: center;
+  text-shadow: 1px 1px 0 rgba(0, 0, 0, 0.8);
+  cursor: pointer;
+  transition: transform 80ms ease, filter 120ms ease;
+}
+.rooms-v2__enter:active { transform: translateY(1px); }
+.rooms-v2__enter--disabled {
+  background: #b5b5b5;
+  text-shadow: 1px 1px 0 rgba(0, 0, 0, 0.6);
+  cursor: not-allowed;
+}
+.rooms-v2__enter--disabled:active { transform: none; }
+
+/* ── Empty state ── */
+.rooms-v2__empty {
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 24px;
+  padding-bottom: 40px;
+}
+.rooms-v2__empty-art {
+  width: 240px;
+  height: 240px;
+  object-fit: contain;
+  pointer-events: none;
+}
+.rooms-v2__empty-text {
+  text-align: center;
+  font-family: 'Golos Text', sans-serif;
+  font-weight: 700;
+  font-size: 24px;
+  line-height: 30px;
+  color: #fff;
+  text-shadow: 1px 1px 0 #000;
+}
+.rooms-v2__empty-text p { margin: 0; }
+
+/* ── Bottom CTA ── */
+.rooms-v2__cta-wrap {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 12px 24px calc(16px + var(--sab, 0px));
+  background: linear-gradient(180deg, rgba(13, 104, 219, 0), #0d68db 35%);
+  pointer-events: none;
+}
+.rooms-v2__cta {
+  pointer-events: auto;
+  position: relative;
+  width: 100%;
+  height: 56px;
+  padding: 0 18px;
+  border: 2px solid #000;
+  border-radius: 18px;
+  background: #4ed636;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: inset 0 -6px 0 0 rgba(0, 0, 0, 0.22);
+  transition: transform 80ms ease, filter 120ms ease;
+}
+.rooms-v2__cta:active {
+  transform: translateY(2px);
+  box-shadow: inset 0 -2px 0 0 rgba(0, 0, 0, 0.22);
+}
+.rooms-v2__cta-text {
+  position: relative;
+  z-index: 1;
+  font-family: 'Golos Text', sans-serif;
+  font-weight: 900;
+  font-size: 24px;
+  line-height: 26px;
+  color: #fff;
+  text-shadow: 1px 1px 0 rgba(0, 0, 0, 0.6);
+  letter-spacing: 0.01em;
+}
+.rooms-v2__cta-deco {
+  position: absolute;
+  top: 4px;
+  right: 8px;
+  width: 98px;
+  height: 32.5px;
+  pointer-events: none;
+}
+
+@media (min-width: 900px) {
+  .rooms-v2__header { padding: 24px 40px 20px; }
+  .rooms-v2__scroll { padding: 20px 40px 96px; }
+  .rooms-v2__cta-wrap { padding-left: 40px; padding-right: 40px; }
+}
+</style>
+
+<style>
+/* Blue background + pattern painted onto <html>/<body> so Telegram safe-area
+   strips (top/bottom) stay blue instead of flashing the parchment #f0e4c8
+   from the global stylesheet. Mirrors the approach used by HomeView. */
+html.rooms-figma-root,
+body.rooms-figma-root {
+  background-color: #0d68db !important;
+  background-image:
+    linear-gradient(rgba(13, 104, 219, 0.55), rgba(13, 104, 219, 0.55)),
+    url('/figma/home/bg-pattern.png') !important;
+  background-size: auto, cover !important;
+  background-position: center, center !important;
+  background-repeat: no-repeat, no-repeat !important;
+  background-attachment: fixed, fixed !important;
+}
+body.rooms-figma-root #app,
+body.rooms-figma-root .app-root,
+body.rooms-figma-root .app-main,
+body.rooms-figma-root .rooms-v2 {
+  background: transparent !important;
 }
 </style>
