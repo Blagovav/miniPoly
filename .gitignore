@@ -8,3 +8,9 @@ dist/
 coverage/
 .idea/
 .vscode/
+
+# Stray .js shadows of .ts / .vue sources (emitted by an editor/tsc run,
+# never imported by Vite). Keep the tree clean.
+web/src/**/*.js
+web/src/**/*.vue.js
+shared/**/*.js
