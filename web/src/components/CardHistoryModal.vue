@@ -2,8 +2,9 @@
 import { computed, ref } from "vue";
 import { useI18n } from "vue-i18n";
 import { useGameStore } from "../stores/game";
-import type { DrawnCard, Locale } from "../../../shared/types";
-import Icon from "./Icon.vue";
+import type { DrawnCard, Locale, Player } from "../../../shared/types";
+import TokenArt, { type TokenArtId } from "./TokenArt.vue";
+import { tokenArtFor } from "../utils/palette";
 
 const props = defineProps<{ open: boolean; onClose: () => void }>();
 const { locale } = useI18n();
@@ -15,20 +16,22 @@ const filter = ref<Filter>("all");
 const isRu = computed(() => locale.value === "ru");
 const L = computed(() => isRu.value
   ? {
-      title: "История карточек",
-      tabAll: "Все",
-      tabMine: "Мои",
+      eyebrow: "Архив",
+      title: "Действия с карточкой",
+      tabAll: "Все игроки",
+      tabMine: "Только мои",
       emptyMine: "Ты ещё не тянул карт",
       emptyAll: "Никто ещё не тянул карт",
       deckChance: "Шанс",
-      deckChest: "Казна",
+      deckChest: "Сундук",
       ago: "назад",
       close: "Закрыть",
     }
   : {
-      title: "Card history",
-      tabAll: "All",
-      tabMine: "Mine",
+      eyebrow: "Archive",
+      title: "Card actions",
+      tabAll: "Everyone",
+      tabMine: "Mine only",
       emptyMine: "You haven't drawn any cards yet",
       emptyAll: "No cards have been drawn yet",
       deckChance: "Chance",
@@ -44,71 +47,103 @@ const cards = computed<DrawnCard[]>(() => {
   return [...filtered].reverse();
 });
 
+function playerFor(id: string): Player | null {
+  return game.room?.players.find((p) => p.id === id) ?? null;
+}
 function playerName(id: string): string {
-  return game.room?.players.find((p) => p.id === id)?.name ?? "—";
+  return playerFor(id)?.name ?? "—";
+}
+function playerColor(id: string): string {
+  return playerFor(id)?.color ?? "#484337";
+}
+function playerTokenId(id: string): TokenArtId {
+  return tokenArtFor(playerFor(id)?.token || "knight");
+}
+function deckLabel(deck: DrawnCard["deck"]): string {
+  return deck === "chance" ? L.value.deckChance : L.value.deckChest;
 }
 function timeAgo(ts: number): string {
   const sec = Math.floor((Date.now() - ts) / 1000);
-  if (sec < 60) return isRu.value ? `${sec}с` : `${sec}s`;
-  if (sec < 3600) return isRu.value ? `${Math.floor(sec / 60)}м` : `${Math.floor(sec / 60)}m`;
-  return isRu.value ? `${Math.floor(sec / 3600)}ч` : `${Math.floor(sec / 3600)}h`;
+  if (sec < 60) {
+    return isRu.value ? `${sec} сек. ${L.value.ago}` : `${sec}s ${L.value.ago}`;
+  }
+  if (sec < 3600) {
+    const m = Math.floor(sec / 60);
+    return isRu.value ? `${m} мин. ${L.value.ago}` : `${m}m ${L.value.ago}`;
+  }
+  const h = Math.floor(sec / 3600);
+  return isRu.value ? `${h} ч. ${L.value.ago}` : `${h}h ${L.value.ago}`;
 }
 </script>
 
 <template>
-  <transition name="fade">
-    <div v-if="props.open" class="modal-scrim" @click="props.onClose">
-      <div class="modal-card history-card" @click.stop>
-        <div class="grab-bar" />
-
-        <header class="history-head">
-          <div class="history-head__eyebrow">
-            {{ isRu ? "Архив" : "Archive" }}
+  <transition name="history-fade">
+    <div v-if="props.open" class="history-scrim" @click="props.onClose">
+      <div class="history-wrap" @click.stop>
+        <div class="history-card">
+          <!-- Header: "Архив" badge + title -->
+          <div class="history-head">
+            <span class="history-eyebrow">{{ L.eyebrow }}</span>
+            <h2 class="history-title">{{ L.title }}</h2>
           </div>
-          <div class="history-head__title">{{ L.title }}</div>
-          <button class="history-close" :aria-label="L.close" @click="props.onClose">
-            <Icon name="x" :size="14" color="var(--ink-2)" />
-          </button>
-        </header>
 
-        <div class="tabs">
-          <button
-            class="tab"
-            :class="{ 'tab--active': filter === 'all' }"
-            @click="filter = 'all'"
-          >{{ L.tabAll }}</button>
-          <button
-            class="tab"
-            :class="{ 'tab--active': filter === 'mine' }"
-            @click="filter = 'mine'"
-          >{{ L.tabMine }}</button>
-        </div>
-
-        <div v-if="cards.length === 0" class="empty">
-          <div class="empty__seal">
-            <span>❦</span>
+          <!-- Tab switcher (segmented pill) -->
+          <div class="history-tabs" role="tablist">
+            <button
+              class="history-tab"
+              :class="{ 'history-tab--active': filter === 'all' }"
+              role="tab"
+              :aria-selected="filter === 'all'"
+              @click="filter = 'all'"
+            >{{ L.tabAll }}</button>
+            <button
+              class="history-tab"
+              :class="{ 'history-tab--active': filter === 'mine' }"
+              role="tab"
+              :aria-selected="filter === 'mine'"
+              @click="filter = 'mine'"
+            >{{ L.tabMine }}</button>
           </div>
-          <p>{{ filter === "mine" ? L.emptyMine : L.emptyAll }}</p>
-        </div>
 
-        <div v-else class="list">
-          <div
-            v-for="(c, i) in cards"
-            :key="c.ts + '-' + i"
-            class="entry"
-            :class="`entry--${c.deck}`"
-          >
-            <div class="entry__seal">
-              <span>{{ c.deck === "chance" ? "?" : "⎔" }}</span>
-            </div>
-            <div class="entry__body">
-              <div class="entry__text">{{ c.text[locale as Locale] }}</div>
-              <div class="entry__meta">
-                <span class="entry__deck">{{ c.deck === "chance" ? L.deckChance : L.deckChest }}</span>
-                <span class="entry__sep">·</span>
-                <span class="entry__player">{{ playerName(c.by) }}</span>
-                <span class="entry__sep">·</span>
-                <span class="entry__time">{{ timeAgo(c.ts) }} {{ L.ago }}</span>
+          <!-- Empty state -->
+          <div v-if="cards.length === 0" class="history-empty">
+            {{ filter === "mine" ? L.emptyMine : L.emptyAll }}
+          </div>
+
+          <!-- List of card-task entries -->
+          <div v-else class="history-list">
+            <div
+              v-for="(c, i) in cards"
+              :key="c.ts + '-' + i"
+              class="card-task"
+              :style="{ '--player-color': playerColor(c.by) }"
+            >
+              <div class="card-task__icon">
+                <span>{{ c.deck === "chance" ? "?" : "⎔" }}</span>
+              </div>
+              <div class="card-task__body">
+                <div class="card-task__title">{{ c.text[locale as Locale] }}</div>
+                <div class="card-task__time">{{ timeAgo(c.ts) }}</div>
+                <div class="card-task__reward">
+                  <span class="card-task__deck">{{ deckLabel(c.deck) }}</span>
+                  <span class="card-task__player">
+                    <span
+                      class="card-task__player-token"
+                      :style="{ background: playerColor(c.by) }"
+                    >
+                      <TokenArt
+                        :id="playerTokenId(c.by)"
+                        :size="16"
+                        color="#fff"
+                        shadow="rgba(0,0,0,0.55)"
+                      />
+                    </span>
+                    <span
+                      class="card-task__player-name"
+                      :style="{ color: playerColor(c.by) }"
+                    >{{ playerName(c.by) }}</span>
+                  </span>
+                </div>
               </div>
             </div>
           </div>
@@ -119,223 +154,215 @@ function timeAgo(ts: number): string {
 </template>
 
 <style scoped>
-/* ── Scrim / card (parchment bottom-sheet) ── */
-.modal-scrim {
+/* ── Scrim: dark 40% overlay, bottom-sheet layout to match popup position in
+   Figma (43:4352). Tap outside dismisses. ── */
+.history-scrim {
   position: fixed;
   inset: 0;
-  background: rgba(26, 15, 5, 0.5);
-  backdrop-filter: blur(2px);
-  -webkit-backdrop-filter: blur(2px);
+  background: rgba(0, 0, 0, 0.4);
   z-index: 500;
   display: flex;
   align-items: flex-end;
   justify-content: center;
-  padding: 0;
+  padding: 16px;
+  padding-bottom: calc(76px + var(--csab, 0px));
 }
-.modal-card {
+.history-wrap {
   width: 100%;
-  max-width: 520px;
-  max-height: 85vh;
+  max-width: 345px;
+}
+.history-card {
+  width: 100%;
+  background: #faf3e2;
+  border-radius: 18px;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.16);
+  padding: 24px;
   display: flex;
   flex-direction: column;
-  background: var(--card-alt);
-  border-top: 3px solid var(--primary);
-  border-radius: 16px 16px 0 0;
-  padding: 14px 16px calc(20px + var(--tg-safe-area-inset-bottom, 0px));
-  animation: sheet-unfurl 320ms cubic-bezier(0.34, 1.56, 0.64, 1);
-  transform-origin: bottom;
-  box-shadow: 0 -8px 24px rgba(42, 29, 16, 0.25);
-}
-.grab-bar {
-  width: 40px;
-  height: 4px;
-  background: var(--line-strong);
-  border-radius: 2px;
-  margin: -2px auto 10px;
-  flex-shrink: 0;
+  gap: 16px;
+  max-height: calc(100vh - 76px - 32px - var(--csab, 0px));
+  overflow: hidden;
+  font-family: 'Unbounded', sans-serif;
+  color: #000;
 }
 
 /* ── Header ── */
 .history-head {
-  position: relative;
-  text-align: center;
-  padding-bottom: 10px;
-  border-bottom: 1px solid var(--divider);
-  margin-bottom: 10px;
-  flex-shrink: 0;
-}
-.history-head__eyebrow {
-  font-family: var(--font-title);
-  font-size: 10px;
-  letter-spacing: 0.2em;
-  color: var(--ink-3);
-  text-transform: uppercase;
-}
-.history-head__title {
-  font-family: var(--font-display);
-  font-size: 18px;
-  color: var(--ink);
-  margin-top: 2px;
-}
-.history-close {
-  position: absolute;
-  top: -2px;
-  right: 0;
-  width: 30px;
-  height: 30px;
-  border-radius: 8px;
-  background: transparent;
-  border: 1px solid var(--line);
-  cursor: pointer;
   display: flex;
+  flex-direction: column;
   align-items: center;
-  justify-content: center;
+  gap: 8px;
+  text-align: center;
 }
-.history-close:hover {
-  background: var(--card);
+.history-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 8px;
+  background: #484337;
+  border-radius: 999px;
+  font-family: 'Unbounded', sans-serif;
+  font-weight: 500;
+  font-size: 14px;
+  line-height: 16px;
+  color: #fff;
+}
+.history-title {
+  margin: 0;
+  font-family: 'Unbounded', sans-serif;
+  font-weight: 700;
+  font-size: 18px;
+  line-height: 26px;
+  color: #000;
 }
 
-/* ── Tabs ── */
-.tabs {
+/* ── Tab switcher: pill container with 2 equal halves ── */
+.history-tabs {
   display: flex;
-  gap: 6px;
-  margin-bottom: 10px;
-  flex-shrink: 0;
+  gap: 4px;
+  padding: 4px;
+  background: rgba(0, 0, 0, 0.1);
+  border-radius: 12px;
 }
-.tab {
-  padding: 6px 14px;
-  border-radius: 999px;
-  font-family: var(--font-body);
-  font-size: 12px;
-  font-weight: 600;
-  background: var(--card);
-  color: var(--ink-2);
-  border: 1px solid var(--line);
+.history-tab {
+  flex: 1;
+  padding: 10px;
+  border: none;
+  border-radius: 10px;
+  background: transparent;
+  font-family: 'Unbounded', sans-serif;
+  font-weight: 500;
+  font-size: 14px;
+  line-height: 16px;
+  color: #000;
   cursor: pointer;
-  transition: transform 80ms, background 120ms;
+  transition: background 120ms ease, transform 80ms ease;
 }
-.tab:active { transform: translateY(1px); }
-.tab--active {
-  background: linear-gradient(180deg, var(--primary-soft) 0%, var(--primary) 100%);
-  color: #fff;
-  border-color: var(--primary);
-  box-shadow: 0 2px 4px rgba(62, 34, 114, 0.25);
+.history-tab:active { transform: translateY(1px); }
+.history-tab--active {
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
 }
 
 /* ── Empty state ── */
-.empty {
-  padding: 36px 16px;
+.history-empty {
+  padding: 28px 8px;
   text-align: center;
-  color: var(--ink-3);
-}
-.empty__seal {
-  width: 56px;
-  height: 56px;
-  border-radius: 50%;
-  margin: 0 auto 10px;
-  background: radial-gradient(circle at 35% 30%, var(--bg-deep), var(--line));
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-family: var(--font-display);
-  font-size: 24px;
-  color: var(--ink-3);
-  box-shadow: inset 0 1px 2px rgba(255, 255, 255, 0.3), inset 0 -1px 2px rgba(0, 0, 0, 0.1);
-}
-.empty p {
-  margin: 0;
-  font-size: 13px;
-  font-family: var(--font-display);
+  font-family: 'Unbounded', sans-serif;
+  font-weight: 500;
+  font-size: 14px;
+  color: rgba(0, 0, 0, 0.5);
 }
 
 /* ── List ── */
-.list {
-  overflow-y: auto;
-  overflow-x: hidden;
+.history-list {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  padding-right: 2px;
+  overflow-y: auto;
   min-height: 0;
+  padding-right: 2px;
 }
-.entry {
+.history-list::-webkit-scrollbar { width: 4px; }
+.history-list::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.15);
+  border-radius: 2px;
+}
+
+/* ── card-task: Figma 43:4743 — white rounded card, right-edge player colour
+     bar via inset shadow. Content: round icon + title + time + reward row. ── */
+.card-task {
+  position: relative;
   display: flex;
-  gap: 10px;
-  padding: 10px 12px;
-  background: var(--card);
-  border: 1px solid var(--line);
-  border-radius: 10px;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  background: #fff;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  border-radius: 18px;
+  box-shadow: inset -4px 0 0 0 var(--player-color, #484337);
 }
-.entry--chance {
-  border-color: rgba(184, 137, 46, 0.4);
-  background: linear-gradient(145deg, rgba(212, 168, 74, 0.06), var(--card));
-}
-.entry--chest {
-  border-color: rgba(90, 58, 154, 0.3);
-  background: linear-gradient(145deg, rgba(138, 104, 208, 0.06), var(--card));
-}
-.entry__seal {
+.card-task__icon {
   width: 32px;
   height: 32px;
   border-radius: 50%;
-  flex-shrink: 0;
+  background: rgba(0, 0, 0, 0.1);
   display: flex;
   align-items: center;
   justify-content: center;
-  font-family: var(--font-display);
+  font-family: 'Unbounded', sans-serif;
+  font-weight: 700;
   font-size: 16px;
-  color: #fff;
-  box-shadow: inset 0 1px 2px rgba(255, 255, 255, 0.3), inset 0 -1px 2px rgba(0, 0, 0, 0.2);
+  color: rgba(0, 0, 0, 0.55);
+  flex-shrink: 0;
 }
-.entry--chance .entry__seal {
-  background: radial-gradient(circle at 35% 30%, var(--gold-soft), var(--gold));
-}
-.entry--chest .entry__seal {
-  background: radial-gradient(circle at 35% 30%, var(--primary-soft), var(--primary));
-}
-.entry__body {
+.card-task__body {
   flex: 1;
   min-width: 0;
-}
-.entry__text {
-  font-family: var(--font-display);
-  font-size: 13px;
-  color: var(--ink);
-  line-height: 1.4;
-  word-wrap: break-word;
-}
-.entry__meta {
-  margin-top: 4px;
-  font-size: 11px;
-  color: var(--ink-3);
   display: flex;
-  gap: 6px;
-  flex-wrap: wrap;
-  font-family: var(--font-body);
+  flex-direction: column;
+  gap: 4px;
 }
-.entry__deck {
-  font-family: var(--font-title);
-  font-weight: 600;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+.card-task__title {
+  font-family: 'Unbounded', sans-serif;
+  font-weight: 500;
+  font-size: 14px;
+  line-height: 16px;
+  color: #000;
+  word-break: break-word;
+}
+.card-task__time {
+  font-family: 'Unbounded', sans-serif;
+  font-weight: 500;
   font-size: 10px;
+  line-height: 12px;
+  color: rgba(0, 0, 0, 0.4);
 }
-.entry--chance .entry__deck { color: var(--gold); }
-.entry--chest .entry__deck { color: var(--primary); }
-.entry__player { color: var(--ink-2); }
-.entry__sep { opacity: 0.5; }
-.entry__time { font-family: var(--font-mono); }
+.card-task__reward {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+  font-family: 'Unbounded', sans-serif;
+  font-weight: 500;
+  font-size: 12px;
+  line-height: 14px;
+  color: #000;
+}
+.card-task__deck { color: #000; }
+.card-task__player {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+.card-task__player-token {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  box-shadow: inset 0 0.5px 0.5px rgba(255, 255, 255, 0.3),
+              inset 0 -0.5px 0.5px rgba(0, 0, 0, 0.25);
+}
+.card-task__player-token :deep(svg) {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+.card-task__player-name {
+  font-family: 'Unbounded', sans-serif;
+  font-weight: 700;
+  font-size: 12px;
+  line-height: 14px;
+}
 
-/* ── Animations ── */
-@keyframes sheet-unfurl {
-  0% { transform: translateY(100%); opacity: 0; }
-  100% { transform: translateY(0); opacity: 1; }
-}
-.fade-enter-active, .fade-leave-active { transition: opacity 0.2s; }
-.fade-enter-from, .fade-leave-to { opacity: 0; }
-.fade-enter-active .modal-card,
-.fade-leave-active .modal-card {
+/* ── Transitions ── */
+.history-fade-enter-active, .history-fade-leave-active { transition: opacity 0.2s ease; }
+.history-fade-enter-from, .history-fade-leave-to { opacity: 0; }
+.history-fade-enter-active .history-card,
+.history-fade-leave-active .history-card {
   transition: transform 0.22s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
-.fade-leave-to .modal-card { transform: translateY(20%); }
+.history-fade-enter-from .history-card,
+.history-fade-leave-to .history-card { transform: translateY(12%); }
 </style>

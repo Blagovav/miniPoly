@@ -4,6 +4,8 @@ import { useI18n } from "vue-i18n";
 import { BOARD, GROUP_COLORS, GROUP_SIZE } from "../../../shared/board";
 import type { ColorGroup, Locale, StreetTile } from "../../../shared/types";
 import { useGameStore } from "../stores/game";
+import TokenArt, { type TokenArtId } from "./TokenArt.vue";
+import { tokenArtFor } from "../utils/palette";
 
 const props = defineProps<{
   onBuildHouse?: (tileIndex: number) => void;
@@ -298,6 +300,10 @@ const mortgageButton = computed(() => {
   }
   return { label: isRu.value ? "Залог" : "Mortgage", cost: mortgageValue.value, enabled: canMortgage.value };
 });
+
+// Owner's token figure for the red "ВЛАДЕЛЕЦ" banner. Falls back to the
+// knight silhouette when the player never picked a shop token.
+const ownerTokenId = computed<TokenArtId>(() => tokenArtFor(owner.value?.token || "knight"));
 </script>
 
 <template>
@@ -305,6 +311,29 @@ const mortgageButton = computed(() => {
     <div v-if="tile" class="info-scrim" @click="close">
       <div class="info-wrap" @click.stop>
         <div class="info-card">
+          <!-- Decorative isometric house at top of the property card,
+               matching the Figma hero art (32:3273 / 61:615). -->
+          <div v-if="isProperty" class="info-hero" aria-hidden="true">
+            <svg viewBox="0 0 80 80" width="80" height="80">
+              <!-- Ground shadow -->
+              <ellipse cx="40" cy="68" rx="26" ry="4" fill="rgba(0,0,0,0.08)"/>
+              <!-- Right wall (shaded) -->
+              <path d="M40 26 L64 38 L64 60 L40 66 Z" fill="#c77a5a" stroke="#3a2418" stroke-width="1.6" stroke-linejoin="round"/>
+              <!-- Left wall -->
+              <path d="M40 26 L16 38 L16 60 L40 66 Z" fill="#e6a98a" stroke="#3a2418" stroke-width="1.6" stroke-linejoin="round"/>
+              <!-- Roof -->
+              <path d="M40 16 L68 30 L40 34 L12 30 Z" fill="#6a4030" stroke="#2a1808" stroke-width="1.6" stroke-linejoin="round"/>
+              <path d="M40 16 L40 34" stroke="#2a1808" stroke-width="1.4"/>
+              <!-- Windows (left) -->
+              <rect x="22" y="42" width="6" height="8" fill="#fff4c2" stroke="#3a2418" stroke-width="1"/>
+              <rect x="30" y="42" width="6" height="8" fill="#fff4c2" stroke="#3a2418" stroke-width="1"/>
+              <!-- Door (right face) -->
+              <path d="M46 48 L52 46 L52 62 L46 60 Z" fill="#3a2418"/>
+              <!-- Chimney -->
+              <rect x="52" y="18" width="5" height="8" fill="#c77a5a" stroke="#2a1808" stroke-width="1"/>
+            </svg>
+          </div>
+
           <!-- Header: group badge + title + cost -->
           <div class="info-head">
             <span
@@ -327,7 +356,9 @@ const mortgageButton = computed(() => {
           <div v-else-if="owner" class="info-owner">
             <div class="info-owner__label">{{ isRu ? "Владелец" : "Owner" }}</div>
             <div class="info-owner__row">
-              <span class="info-owner__dot" :style="{ background: owner.color }" />
+              <span class="info-owner__token" :style="{ background: owner.color }">
+                <TokenArt :id="ownerTokenId" :size="24" color="#fff" shadow="rgba(0,0,0,0.55)"/>
+              </span>
               <span class="info-owner__name">{{ owner.name }}</span>
               <span v-if="owned?.mortgaged" class="info-owner__chip">
                 {{ isRu ? "В залоге" : "Mortgaged" }}
@@ -464,6 +495,17 @@ const mortgageButton = computed(() => {
   color: #000;
 }
 
+/* ── Hero: isometric house above title (Figma popup-info art) ── */
+.info-hero {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: 80px;
+  height: 80px;
+  margin: 0 auto;
+  line-height: 0;
+}
+
 /* ── Header ── */
 .info-head {
   display: flex;
@@ -518,39 +560,57 @@ const mortgageButton = computed(() => {
   color: rgba(0, 0, 0, 0.6);
   text-align: center;
 }
+/* Owner banner — Figma "popup-info" owner state (61:615): red centered pill,
+   "ВЛАДЕЛЕЦ" label stacked above the token+name row. */
 .info-owner {
-  background: rgba(0, 0, 0, 0.04);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 10px;
+  background: #e2776e;
   border-radius: 12px;
-  padding: 10px 12px;
+  color: #fff;
+  text-shadow: 0.2px 0.2px 0 #000;
 }
 .info-owner__label {
   font-family: 'Unbounded', sans-serif;
-  font-weight: 500;
-  font-size: 11px;
-  letter-spacing: 0.1em;
+  font-weight: 700;
+  font-size: 12px;
+  line-height: 14px;
+  letter-spacing: 0.02em;
   text-transform: uppercase;
-  color: rgba(0, 0, 0, 0.5);
-  margin-bottom: 6px;
+  color: #fff;
 }
 .info-owner__row {
   display: flex;
   align-items: center;
-  gap: 10px;
+  justify-content: center;
+  gap: 4px;
+  flex-wrap: wrap;
 }
-.info-owner__dot {
-  width: 20px;
-  height: 20px;
+.info-owner__token {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
   border-radius: 50%;
   box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.3),
-              inset 0 -1px 1px rgba(0, 0, 0, 0.2);
+              inset 0 -1px 1px rgba(0, 0, 0, 0.25);
   flex-shrink: 0;
 }
+.info-owner__token :deep(svg) {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
 .info-owner__name {
-  flex: 1;
   font-family: 'Unbounded', sans-serif;
   font-weight: 700;
   font-size: 14px;
-  color: #000;
+  line-height: 16px;
+  color: #fff;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -558,15 +618,18 @@ const mortgageButton = computed(() => {
 .info-owner__chip {
   padding: 2px 10px;
   border-radius: 999px;
-  background: #f34822;
+  background: rgba(255, 255, 255, 0.18);
   color: #fff;
   font-family: 'Unbounded', sans-serif;
   font-weight: 500;
   font-size: 11px;
   white-space: nowrap;
+  text-shadow: none;
 }
 .info-owner__chip--ok {
   background: #4ed636;
+  color: #fff;
+  text-shadow: 0.2px 0.2px 0 rgba(0, 0, 0, 0.5);
 }
 
 /* ── Rent table ── */

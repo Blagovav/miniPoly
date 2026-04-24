@@ -4,6 +4,8 @@ import { useI18n } from "vue-i18n";
 import { BOARD, GROUP_COLORS } from "../../../shared/board";
 import type { Locale, StreetTile } from "../../../shared/types";
 import { useGameStore } from "../stores/game";
+import TokenArt, { type TokenArtId } from "./TokenArt.vue";
+import { tokenArtFor } from "../utils/palette";
 
 const props = defineProps<{
   onBid: (amount: number) => void;
@@ -88,6 +90,10 @@ function chipColor(playerId: string): string {
   if (idx < 0) return BIDDER_COLORS[0];
   return BIDDER_COLORS[idx % BIDDER_COLORS.length];
 }
+function chipTokenId(playerId: string): TokenArtId {
+  const p = game.room?.players.find((x) => x.id === playerId);
+  return tokenArtFor(p?.token || "knight");
+}
 
 /** Players who are still in the running (not passed, not bankrupt). */
 const activeBidders = computed(() => {
@@ -139,7 +145,8 @@ const visible = computed(() => open.value && !!tile.value && !!auction.value && 
           </div>
         </div>
 
-        <!-- Bidder chips (active players only) -->
+        <!-- Bidder chips (active players only) — Figma pill uses player
+             token silhouette inside a colour-matched circle. -->
         <div class="bidders">
           <span
             v-for="p in activeBidders"
@@ -147,7 +154,14 @@ const visible = computed(() => open.value && !!tile.value && !!auction.value && 
             class="bidder-chip"
             :style="{ background: chipColor(p.id) }"
           >
-            <span class="bidder-chip__dot" :style="{ background: p.color }" />
+            <span class="bidder-chip__token" :style="{ background: p.color }">
+              <TokenArt
+                :id="chipTokenId(p.id)"
+                :size="24"
+                color="#fff"
+                shadow="rgba(0,0,0,0.55)"
+              />
+            </span>
             {{ p.name }}
           </span>
         </div>
@@ -314,8 +328,10 @@ const visible = computed(() => open.value && !!tile.value && !!auction.value && 
 .bid-leading__label {
   font-family: 'Unbounded', sans-serif;
   font-weight: 700;
-  font-size: 14px;
-  line-height: 16px;
+  font-size: 12px;
+  line-height: 14px;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
 }
 .bid-leading__row {
   display: flex;
@@ -353,13 +369,21 @@ const visible = computed(() => open.value && !!tile.value && !!auction.value && 
   line-height: 16px;
   text-shadow: 0.2px 0.2px 0 #000;
 }
-.bidder-chip__dot {
-  width: 20px;
-  height: 20px;
+.bidder-chip__token {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
   border-radius: 50%;
   box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.3),
-              inset 0 -1px 1px rgba(0, 0, 0, 0.2);
+              inset 0 -1px 1px rgba(0, 0, 0, 0.25);
   flex-shrink: 0;
+}
+.bidder-chip__token :deep(svg) {
+  width: 100%;
+  height: 100%;
+  display: block;
 }
 
 /* ── Bid row ── */
