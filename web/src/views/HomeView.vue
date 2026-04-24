@@ -148,7 +148,9 @@ function go(name: string) { haptic("light"); router.push({ name }); }
       </transition>
 
       <div class="home-v2__hero">
-        <img class="home-v2__mascot" src="/figma/home/mascot.png" alt="" aria-hidden="true" />
+        <div class="home-v2__mascot-clip" aria-hidden="true">
+          <img class="home-v2__mascot" src="/figma/home/mascot.png" alt="" />
+        </div>
         <button
           class="home-v2__settings"
           :aria-label="L.settingsAria"
@@ -241,19 +243,34 @@ function go(name: string) { haptic("light"); router.push({ name }); }
   overflow-x: hidden;
 }
 
-/* ── Hero: mascot (left) + settings gear (top-right) ── */
+/* ── Hero: mascot clipped to its top portion (~chest level) + settings gear.
+   Matches Figma's img-placeholder-no_games node — a 190×190 box with
+   overflow:hidden, so the legs/feet are cropped and only the head, bowtie, and
+   raised arms show. The greeting then overlaps the empty lower area via a
+   negative margin (Figma puts the greeting 103px below the mascot box top). */
 .home-v2__hero {
   position: relative;
   height: 190px;
   margin-top: -16px;
-  margin-bottom: -14px;
+  margin-bottom: -87px;
 }
-.home-v2__mascot {
+.home-v2__mascot-clip {
   position: absolute;
   top: 0;
   left: calc(50% - 77.5px);
   width: 190px;
   height: 190px;
+  overflow: hidden;
+  pointer-events: none;
+  user-select: none;
+}
+.home-v2__mascot {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 280px;
+  height: 280px;
   object-fit: contain;
   pointer-events: none;
   user-select: none;
@@ -283,8 +300,9 @@ function go(name: string) { haptic("light"); router.push({ name }); }
 }
 .home-v2__settings:active { transform: scale(0.92); }
 
-/* ── Greeting ── */
+/* ── Greeting — overlaps the lower portion of the clipped mascot box ── */
 .home-v2__greeting {
+  position: relative;
   margin: 0;
   font-family: 'Golos Text', sans-serif;
   font-weight: 700;
@@ -292,6 +310,7 @@ function go(name: string) { haptic("light"); router.push({ name }); }
   line-height: 34px;
   color: #fff;
   text-shadow: 1px 1px 0 #000;
+  pointer-events: none;
 }
 
 /* ── Inline name edit ── */
