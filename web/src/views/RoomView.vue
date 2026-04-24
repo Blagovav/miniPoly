@@ -31,7 +31,8 @@ import TxnToast from "../components/TxnToast.vue";
 import Icon from "../components/Icon.vue";
 import LoadingScreen from "../components/LoadingScreen.vue";
 import CoronationModal from "../components/CoronationModal.vue";
-import { ORDERED_PLAYER_COLORS } from "../utils/palette";
+import { ORDERED_PLAYER_COLORS, tokenArtFor } from "../utils/palette";
+import TokenArt from "../components/TokenArt.vue";
 import { humanError } from "../utils/errors";
 import type { Player } from "../../../shared/types";
 import { BOARD } from "../../../shared/board";
@@ -77,6 +78,15 @@ onUnmounted(() => {
   // Снимаем подтверждение закрытия на выходе из комнаты — дома оно не нужно.
   setClosingConfirmation(false);
 });
+
+// Sticky-header scroll state: toggles .room-topbar--scrolled once the
+// player has scrolled past the top so the header gets a shadow +
+// rounded bottom corners and visually detaches from the content.
+const isScrolled = ref(false);
+function handleBodyScroll(e: Event) {
+  const el = e.currentTarget as HTMLElement;
+  isScrolled.value = el.scrollTop > 4;
+}
 
 // Join on mount AND on every WS reconnect. The server treats our new
 // socket as anonymous until it sees a `join` — without re-joining on
@@ -500,7 +510,7 @@ const currentTileInfo = computed<{ name: string; value: number | null } | null>(
 // so the numbers match across the screen.
 const leaderboard = computed(() => {
   const r = game.room;
-  if (!r) return [] as { id: string; name: string; cash: number; color: string }[];
+  if (!r) return [] as { id: string; name: string; cash: number; color: string; avatar?: string; token: string }[];
   const propValue = (pid: string): number => {
     let sum = 0;
     for (const op of Object.values(r.properties)) {
@@ -517,6 +527,8 @@ const leaderboard = computed(() => {
       id: p.id,
       name: p.name,
       cash: p.cash,
+      avatar: p.avatar,
+      token: p.token,
       worth: p.cash + propValue(p.id),
       seat,
     }))
@@ -525,6 +537,8 @@ const leaderboard = computed(() => {
       id: row.id,
       name: row.name,
       cash: row.cash,
+      avatar: row.avatar,
+      token: row.token,
       color: ORDERED_PLAYER_COLORS[row.seat % ORDERED_PLAYER_COLORS.length],
     }));
 });
@@ -684,7 +698,7 @@ void t;
     </div>
 
     <!-- ── In-game topbar (Figma) ── -->
-    <div v-else class="room-topbar">
+    <div v-else class="room-topbar" :class="{ 'room-topbar--scrolled': isScrolled }">
       <div class="room-topbar__title-block">
         <h1 class="room-topbar__title">
           {{ locale === 'ru' ? 'Комната' : 'Room' }} {{ id }}
@@ -773,7 +787,7 @@ void t;
       />
 
       <!-- Scrollable body (board + HUD overlays + carousel + leaderboard). -->
-      <div class="room-body">
+      <div class="room-body" @scroll.passive="handleBodyScroll">
         <!-- Board + center HUD overlay (dice + ВАШ ХОД! + timer + budget) -->
         <div class="board-stage">
           <Board :room="game.room" />
@@ -884,7 +898,21 @@ void t;
               :style="{ background: p.color }"
             >
               <div class="leaderboard__pill-left">
-                <img class="leaderboard__avatar" src="/figma/room/avatar-placeholder.png" alt="" />
+                <img
+                  v-if="p.avatar"
+                  class="leaderboard__avatar"
+                  :src="p.avatar"
+                  alt=""
+                  referrerpolicy="no-referrer"
+                />
+                <span v-else class="leaderboard__avatar leaderboard__avatar--token">
+                  <TokenArt
+                    :id="tokenArtFor(p.token || p.id)"
+                    :size="24"
+                    color="#fff"
+                    shadow="rgba(0,0,0,0.7)"
+                  />
+                </span>
                 <span class="leaderboard__name">{{ p.name }}</span>
               </div>
               <span class="leaderboard__cash">
@@ -1103,6 +1131,17 @@ void t;
   padding: 12px 16px 8px;
   gap: 12px;
   flex-shrink: 0;
+  transition: background-color 200ms ease, box-shadow 200ms ease, border-radius 200ms ease;
+}
+/* Scrolled state: header detaches from the body — solid green plate with
+   rounded bottom corners + drop shadow, matching Figma 67:1455. The
+   background is the same #9fe101 as the page, so the only visible change
+   is the shadow edge + corner cut-off against content underneath. */
+.room-topbar--scrolled {
+  background: #9fe101;
+  border-bottom-left-radius: 18px;
+  border-bottom-right-radius: 18px;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.16);
 }
 .room-topbar__title-block {
   min-width: 0;
@@ -1563,10 +1602,22 @@ void t;
 .leaderboard__avatar {
   width: 24px;
   height: 24px;
-  object-fit: contain;
+  object-fit: cover;
   flex-shrink: 0;
   border-radius: 50%;
 }
+/* Token fallback: SVG figurine on a soft disc so it reads at 24×24
+   against the coloured pill background (knight/dragon silhouettes
+   against bright pills would otherwise bleed). */
+.leaderboard__avatar--token {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.22);
+  padding: 0;
+  overflow: hidden;
+}
+.leaderboard__avatar--token svg { width: 22px; height: 22px; display: block; }
 .leaderboard__name {
   font-family: 'Unbounded', sans-serif;
   font-weight: 700;
