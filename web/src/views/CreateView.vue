@@ -1,34 +1,30 @@
 <script setup lang="ts">
-import { computed, ref, onUnmounted } from "vue";
+import { computed, ref, onMounted, onUnmounted } from "vue";
 import { useI18n } from "vue-i18n";
 import { useRouter } from "vue-router";
 import { useTelegram } from "../composables/useTelegram";
 import { useWs } from "../composables/useWs";
 import { useGameStore } from "../stores/game";
-import Icon from "../components/Icon.vue";
-import MapPickRow from "../components/MapPickRow.vue";
+import BoardPreview from "../components/BoardPreview.vue";
 import BoardSelectModal from "../components/BoardSelectModal.vue";
+import { findBoard } from "../utils/boards";
 
 const { locale } = useI18n();
 const router = useRouter();
 const { initData, userName, haptic } = useTelegram();
 
-// Access: design-ref uses `isPrivate`; we keep our existing `isPublic` wiring (negated in template).
 const isPublic = ref(true);
-const maxPlayers = ref(4);
+const maxPlayers = ref(3);
 const loading = ref(false);
-// Room name — display-only for now (server doesn't support room names yet).
-const realmName = ref("Моя игра");
-// Selected board (display-only for now — server doesn't pick boards yet).
+const realmName = ref("");
 const boardId = ref<string>("eldmark");
 const boardModalOpen = ref(false);
 
-// Rules — tap-to-cycle presets. Currently UI-only; server doesn't accept these yet.
 const CASH_PRESETS = [1000, 1500, 2000, 2500, 3000];
 const ENTRY_PRESETS = [0, 50, 100, 250, 500, 1000];
 const startingCash = ref(1500);
 const auctionsOn = ref(true);
-const paceIdx = ref(1);
+const fastPace = ref(false);
 const entryFee = ref(100);
 
 function cycle<T>(arr: readonly T[], current: T): T {
@@ -36,18 +32,16 @@ function cycle<T>(arr: readonly T[], current: T): T {
   return arr[(i + 1) % arr.length];
 }
 function cycleCash() { haptic("light"); startingCash.value = cycle(CASH_PRESETS, startingCash.value); }
-function toggleAuctions() { haptic("light"); auctionsOn.value = !auctionsOn.value; }
-function cyclePace() { haptic("light"); paceIdx.value = (paceIdx.value + 1) % 3; }
 function cycleEntry() { haptic("light"); entryFee.value = cycle(ENTRY_PRESETS, entryFee.value); }
+function toggleAuctions() { haptic("light"); auctionsOn.value = !auctionsOn.value; }
+function toggleFast() { haptic("light"); fastPace.value = !fastPace.value; }
+function togglePrivate() { haptic("light"); isPublic.value = !isPublic.value; }
+function pickPlayers(n: number) {
+  if (maxPlayers.value === n) return;
+  haptic("light");
+  maxPlayers.value = n;
+}
 
-const paceLabel = computed(() => {
-  const idx = paceIdx.value;
-  if (isRu.value) return ["Медленная", "Обычная", "Быстрая"][idx];
-  return ["Slow", "Normal", "Fast"][idx];
-});
-const auctionsLabel = computed(() => isRu.value
-  ? (auctionsOn.value ? "Вкл" : "Выкл")
-  : (auctionsOn.value ? "On" : "Off"));
 const fmtCash = (n: number) => n.toLocaleString("ru-RU").replace(/,/g, " ");
 
 const ws = useWs();
@@ -62,46 +56,39 @@ const off = ws.onMessage((m) => {
 onUnmounted(off);
 
 const isRu = computed(() => locale.value === "ru");
+const board = computed(() => findBoard(boardId.value));
+const boardName = computed(() => isRu.value ? board.value.ru : board.value.name);
+const boardDesc = computed(() => isRu.value ? board.value.desc.ru : board.value.desc.en);
+const placeholder = computed(() => userName.value || (isRu.value ? "Никита" : "Name"));
+
 const L = computed(() => isRu.value
   ? {
-      title: "Новая игра",
-      sub: "Настрой партию",
-      nameLabel: "Название",
-      access: "Доступ",
-      public: "Публичная",
-      private: "Приватная",
-      players: "Игроков",
-      playersHint: "От 2 до 6 игроков",
+      title: "Создание партии",
+      nameLabel: "Название комнаты",
+      boardLabel: "Поле",
+      generalLabel: "Общие настройки",
+      players: "Количество игроков",
+      privateLabel: "Приватная партия",
       rules: "Правила",
       ruleCash: "Стартовый капитал",
       ruleAuctions: "Аукционы",
-      ruleAuctionsVal: "Вкл",
-      rulePace: "Скорость",
-      rulePaceVal: "Обычная",
-      ruleEntry: "Ставка",
-      mapLabel: "Карта",
-      create: "Создать игру",
-      back: "Назад",
+      rulePace: "Быстрый темп",
+      ruleEntry: "Вход",
+      create: "СОЗДАТЬ ПАРТИЮ",
     }
   : {
-      title: "New Game",
-      sub: "Set up the match",
+      title: "New Match",
       nameLabel: "Room name",
-      access: "Access",
-      public: "Public",
-      private: "Private",
-      players: "Players",
-      playersHint: "From 2 to 6 players",
+      boardLabel: "Map",
+      generalLabel: "General",
+      players: "Player count",
+      privateLabel: "Private match",
       rules: "Rules",
       ruleCash: "Starting cash",
       ruleAuctions: "Auctions",
-      ruleAuctionsVal: "On",
-      rulePace: "Pace",
-      rulePaceVal: "Normal",
+      rulePace: "Fast pace",
       ruleEntry: "Entry",
-      mapLabel: "Map",
-      create: "Create game",
-      back: "Back",
+      create: "CREATE MATCH",
     });
 
 function createRoom() {
@@ -121,125 +108,165 @@ function goBack() {
   haptic("light");
   router.back();
 }
+
+const scrollEl = ref<HTMLElement | null>(null);
+const scrolled = ref(false);
+function onScroll() {
+  if (!scrollEl.value) return;
+  scrolled.value = scrollEl.value.scrollTop > 4;
+}
+
+onMounted(() => {
+  document.documentElement.classList.add("create-figma-root");
+  document.body.classList.add("create-figma-root");
+});
+onUnmounted(() => {
+  document.documentElement.classList.remove("create-figma-root");
+  document.body.classList.remove("create-figma-root");
+});
 </script>
 
 <template>
-  <div class="app create">
-    <div class="topbar">
-      <button class="icon-btn" aria-label="Back" @click="goBack">
-        <Icon name="back" :size="18"/>
+  <div class="app create-v2">
+    <div class="create-v2__header" :class="{ 'create-v2__header--stuck': scrolled }">
+      <button class="create-v2__back" :aria-label="'back'" @click="goBack">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" aria-hidden="true">
+          <path
+            d="M15 18l-6-6 6-6"
+            stroke="#000"
+            stroke-width="2.4"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          />
+        </svg>
       </button>
-      <div class="title">
-        <h1 :style="{ fontFamily: 'var(--font-title)', fontSize: '22px', letterSpacing: '0.08em' }">
-          {{ L.title }}
-        </h1>
-        <div class="sub">{{ L.sub }}</div>
-      </div>
-      <button class="icon-btn" aria-label="scroll">
-        <Icon name="scroll" :size="18"/>
-      </button>
+      <h1 class="create-v2__title">{{ L.title }}</h1>
     </div>
 
-    <div class="content">
-      <!-- Realm name (display-only for now) -->
-      <div class="field">
-        <label class="field__label">{{ L.nameLabel }}</label>
+    <div ref="scrollEl" class="create-v2__scroll" @scroll="onScroll">
+      <!-- Room name -->
+      <section class="create-v2__section">
+        <div class="create-v2__label">{{ L.nameLabel }}</div>
         <input
           v-model="realmName"
-          class="realm-input"
+          class="create-v2__input"
+          :placeholder="placeholder"
           maxlength="32"
         />
-      </div>
+      </section>
 
-      <!-- Access: Public / Private -->
-      <div class="field">
-        <label class="field__label">{{ L.access }}</label>
-        <div class="access-grid">
-          <button
-            type="button"
-            :class="['access-btn', isPublic && 'active']"
-            @click="isPublic = true"
-          >
-            <Icon name="unlock" :size="16" :color="isPublic ? '#fff' : 'var(--ink-2)'"/>
-            <span>{{ L.public }}</span>
-          </button>
-          <button
-            type="button"
-            :class="['access-btn', !isPublic && 'active']"
-            @click="isPublic = false"
-          >
-            <Icon name="lock" :size="16" :color="!isPublic ? '#fff' : 'var(--ink-2)'"/>
-            <span>{{ L.private }}</span>
-          </button>
-        </div>
-      </div>
+      <!-- Board pick -->
+      <section class="create-v2__section create-v2__section--card">
+        <div class="create-v2__label">{{ L.boardLabel }}</div>
+        <button type="button" class="create-v2__board" @click="boardModalOpen = true">
+          <div class="create-v2__board-art">
+            <BoardPreview :board="board" :size="56"/>
+          </div>
+          <div class="create-v2__board-body">
+            <div class="create-v2__board-name">{{ boardName }}</div>
+            <div class="create-v2__board-desc">{{ boardDesc }}</div>
+          </div>
+          <img class="create-v2__board-edit" src="/figma/create/edit-pencil.svg" alt="" aria-hidden="true"/>
+        </button>
+      </section>
 
-      <!-- Players -->
-      <div class="field">
-        <div class="row between">
-          <label class="field__label">{{ L.players }}</label>
-          <div class="players-count">{{ maxPlayers }}</div>
+      <!-- General settings -->
+      <section class="create-v2__section">
+        <div class="create-v2__label">{{ L.generalLabel }}</div>
+        <div class="create-v2__group">
+          <div class="create-v2__cell create-v2__cell--stack create-v2__cell--shaded">
+            <div class="create-v2__cell-caption">{{ L.players }}</div>
+            <div class="create-v2__players">
+              <button
+                v-for="n in [1, 2, 3, 4, 5, 6]"
+                :key="n"
+                type="button"
+                class="create-v2__pbtn"
+                :class="{ 'create-v2__pbtn--active': maxPlayers === n }"
+                @click="pickPlayers(n)"
+              >{{ n }}</button>
+            </div>
+          </div>
+          <div class="create-v2__cell">
+            <span class="create-v2__cell-text">{{ L.privateLabel }}</span>
+            <button
+              type="button"
+              class="create-v2__toggle"
+              :class="{ 'create-v2__toggle--on': !isPublic }"
+              role="switch"
+              :aria-checked="!isPublic"
+              @click="togglePrivate"
+            >
+              <span class="create-v2__toggle-dot"/>
+            </button>
+          </div>
         </div>
-        <div class="players-grid">
-          <button
-            v-for="n in [2, 3, 4, 5, 6]"
-            :key="n"
-            type="button"
-            :class="['player-btn', maxPlayers === n && 'active']"
-            @click="maxPlayers = n"
-          >
-            {{ n }}
+      </section>
+
+      <!-- Rules -->
+      <section class="create-v2__section">
+        <div class="create-v2__label">{{ L.rules }}</div>
+        <div class="create-v2__group">
+          <button type="button" class="create-v2__cell create-v2__cell--shaded" @click="cycleCash">
+            <span class="create-v2__cell-text">{{ L.ruleCash }}</span>
+            <span class="create-v2__cell-val">
+              <img class="create-v2__coin" src="/figma/create/money.png" alt="" aria-hidden="true"/>
+              {{ fmtCash(startingCash) }}
+            </span>
+          </button>
+          <div class="create-v2__cell">
+            <span class="create-v2__cell-text">{{ L.ruleAuctions }}</span>
+            <button
+              type="button"
+              class="create-v2__toggle"
+              :class="{ 'create-v2__toggle--on': auctionsOn }"
+              role="switch"
+              :aria-checked="auctionsOn"
+              @click="toggleAuctions"
+            >
+              <span class="create-v2__toggle-dot"/>
+            </button>
+          </div>
+          <div class="create-v2__cell create-v2__cell--shaded">
+            <span class="create-v2__cell-text">{{ L.rulePace }}</span>
+            <button
+              type="button"
+              class="create-v2__toggle"
+              :class="{ 'create-v2__toggle--on': fastPace }"
+              role="switch"
+              :aria-checked="fastPace"
+              @click="toggleFast"
+            >
+              <span class="create-v2__toggle-dot"/>
+            </button>
+          </div>
+          <button type="button" class="create-v2__cell" @click="cycleEntry">
+            <span class="create-v2__cell-text">{{ L.ruleEntry }}</span>
+            <span class="create-v2__cell-val">
+              <img class="create-v2__coin" src="/figma/create/money.png" alt="" aria-hidden="true"/>
+              {{ fmtCash(entryFee) }}
+            </span>
           </button>
         </div>
-        <div class="field__hint">
-          <Icon name="users" :size="12" color="var(--ink-3)"/>
-          <span>{{ L.playersHint }}</span>
-        </div>
-      </div>
+      </section>
+    </div>
 
-      <!-- Map picker -->
-      <div class="field">
-        <label class="field__label">{{ L.mapLabel }}</label>
-        <div style="margin-top: 6px;">
-          <MapPickRow
-            :board-id="boardId"
-            :editable="true"
-            :on-open="() => (boardModalOpen = true)"
+    <div class="create-v2__cta-wrap">
+      <button class="create-v2__cta" :disabled="loading" @click="createRoom">
+        <span class="create-v2__cta-text">{{ L.create }}</span>
+        <svg
+          class="create-v2__cta-deco"
+          viewBox="0 0 98 32.5"
+          preserveAspectRatio="none"
+          fill="none"
+          aria-hidden="true"
+        >
+          <path
+            opacity="0.2"
+            d="M98 9.5V32.5C98 32.5 97 6 89.5 4C82 2 0 0 0 0H88.5C96 0 98 3.5 98 9.5Z"
+            fill="white"
           />
-        </div>
-      </div>
-
-      <!-- Rules (tap to cycle) -->
-      <div class="field">
-        <label class="field__label">{{ L.rules }}</label>
-        <div class="card rules-card">
-          <button type="button" class="rule-row" @click="cycleCash">
-            <span>{{ L.ruleCash }}</span>
-            <span class="rule-val">◈ {{ fmtCash(startingCash) }}<span class="rule-caret">›</span></span>
-          </button>
-          <button type="button" class="rule-row" @click="toggleAuctions">
-            <span>{{ L.ruleAuctions }}</span>
-            <span class="rule-val">{{ auctionsLabel }}<span class="rule-caret">›</span></span>
-          </button>
-          <button type="button" class="rule-row" @click="cyclePace">
-            <span>{{ L.rulePace }}</span>
-            <span class="rule-val">{{ paceLabel }}<span class="rule-caret">›</span></span>
-          </button>
-          <button type="button" class="rule-row last" @click="cycleEntry">
-            <span>{{ L.ruleEntry }}</span>
-            <span class="rule-val">◈ {{ fmtCash(entryFee) }}<span class="rule-caret">›</span></span>
-          </button>
-        </div>
-      </div>
-
-      <!-- Primary action -->
-      <button
-        class="btn btn-primary create-btn"
-        :disabled="loading"
-        @click="createRoom"
-      >
-        <Icon name="check" :size="16" color="#fff"/>
-        {{ L.create }}
+        </svg>
       </button>
     </div>
 
@@ -254,154 +281,365 @@ function goBack() {
 </template>
 
 <style scoped>
-.app {
+.create-v2 {
   position: relative;
   display: flex;
   flex-direction: column;
+  flex: 1;
   min-height: 0;
-  background: var(--bg);
+  background: transparent;
+  color: #000;
+  overflow: hidden;
+  font-family: 'Golos Text', sans-serif;
 }
 
-.field {
-  margin-bottom: 14px;
-}
-.field__label {
-  font-size: 11px;
-  color: var(--ink-3);
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  font-weight: 500;
-}
-.field__hint {
+/* ── Header ── */
+.create-v2__header {
+  position: relative;
+  z-index: 3;
+  flex-shrink: 0;
   display: flex;
   align-items: center;
-  gap: 6px;
-  margin-top: 8px;
-  font-size: 11px;
-  color: var(--ink-3);
+  gap: 16px;
+  padding: 8px 24px 12px;
+  background: #faf3e2;
+  transition: box-shadow 160ms ease;
 }
-
-.realm-input {
-  width: 100%;
-  box-sizing: border-box;
-  padding: 12px 14px;
-  background: var(--card);
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  font-family: var(--font-display);
-  font-size: 17px;
-  color: var(--ink);
-  margin-top: 6px;
-  outline: none;
+.create-v2__header--stuck {
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.16);
+  border-bottom-left-radius: 18px;
+  border-bottom-right-radius: 18px;
 }
-.realm-input:focus { border-color: var(--primary); }
-
-.access-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 8px;
-  margin-top: 6px;
-}
-.access-btn {
-  padding: 12px;
-  background: var(--card);
-  color: var(--ink);
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  font-family: var(--font-body);
-  font-size: 13px;
-  font-weight: 500;
-  cursor: pointer;
+.create-v2__back {
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
-  transition: background 120ms, border-color 120ms, color 120ms;
-}
-.access-btn.active {
-  background: var(--primary);
-  color: #fff;
-  border-color: var(--primary);
-}
-
-.players-count {
-  font-family: var(--font-display);
-  font-size: 16px;
-  color: var(--primary);
-}
-.players-grid {
-  margin-top: 10px;
-  display: flex;
-  gap: 6px;
-  justify-content: space-between;
-}
-.player-btn {
-  flex: 1;
-  padding: 12px 0;
-  background: var(--card);
-  color: var(--ink);
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  font-family: var(--font-display);
-  font-size: 16px;
   cursor: pointer;
-  transition: background 120ms, border-color 120ms, color 120ms;
+  flex-shrink: 0;
+  transition: transform 120ms ease;
 }
-.player-btn.active {
-  background: var(--primary);
-  color: #fff;
-  border-color: var(--primary);
+.create-v2__back:active { transform: scale(0.92); }
+.create-v2__title {
+  margin: 0;
+  font-family: 'Unbounded', sans-serif;
+  font-weight: 900;
+  font-size: 18px;
+  line-height: 20px;
+  color: #000;
 }
 
-.rules-card {
-  margin-top: 6px;
-  padding: 0;
-  overflow: hidden;
+/* ── Scroll area ── */
+.create-v2__scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 16px 24px 96px;
+  scrollbar-width: thin;
 }
-.rule-row {
+.create-v2__scroll::-webkit-scrollbar { width: 4px; }
+.create-v2__scroll::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.15);
+  border-radius: 2px;
+}
+
+.create-v2__section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.create-v2__section + .create-v2__section {
+  margin-top: 20px;
+}
+.create-v2__section--card {
+  padding: 16px;
+  background: rgba(0, 0, 0, 0.04);
+  border-radius: 18px;
+}
+.create-v2__label {
+  font-family: 'Unbounded', sans-serif;
+  font-weight: 700;
+  font-size: 18px;
+  line-height: 26px;
+  color: #000;
+}
+
+/* ── Input ── */
+.create-v2__input {
   width: 100%;
-  padding: 12px 14px;
-  border: none;
-  border-bottom: 1px solid var(--divider);
-  background: transparent;
+  box-sizing: border-box;
+  height: 40px;
+  padding: 8px 12px;
+  background: #fff;
+  border: 1px solid rgba(0, 0, 0, 0.16);
+  border-radius: 12px;
+  font-family: 'Unbounded', sans-serif;
+  font-weight: 700;
+  font-size: 12px;
+  line-height: 14px;
+  color: #000;
+  outline: none;
+  transition: border-color 120ms ease;
+}
+.create-v2__input::placeholder {
+  color: #000;
+  opacity: 0.4;
+}
+.create-v2__input:focus {
+  border-color: rgba(0, 0, 0, 0.4);
+}
+
+/* ── Board pick ── */
+.create-v2__board {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  font-size: 13px;
-  color: var(--ink);
-  font-family: inherit;
+  gap: 12px;
+  width: 100%;
+  padding: 0;
+  background: transparent;
+  border: none;
   cursor: pointer;
-  transition: background 120ms;
   text-align: left;
 }
-.rule-row:hover { background: rgba(90, 58, 154, 0.04); }
-.rule-row:active { background: rgba(90, 58, 154, 0.08); }
-.rule-row.last {
-  border-bottom: none;
+.create-v2__board-art {
+  width: 56px;
+  height: 56px;
+  border-radius: 12px;
+  overflow: hidden;
+  background: #fff;
+  flex-shrink: 0;
+  line-height: 0;
 }
-.rule-val {
-  color: var(--ink-2);
+.create-v2__board-art :deep(svg) {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+.create-v2__board-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  color: #000;
+}
+.create-v2__board-name {
+  font-family: 'Golos Text', sans-serif;
+  font-weight: 700;
+  font-size: 16px;
+  line-height: 20px;
+}
+.create-v2__board-desc {
+  font-family: 'Golos Text', sans-serif;
   font-weight: 500;
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
+  font-size: 12px;
+  line-height: 16px;
+  opacity: 0.85;
 }
-.rule-caret {
-  color: var(--ink-4);
-  font-size: 18px;
-  line-height: 1;
-  font-family: var(--font-display);
-  transform: translateY(-1px);
+.create-v2__board-edit {
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
+  pointer-events: none;
 }
 
-.create-btn {
-  width: 100%;
-  padding: 14px 20px;
-  font-size: 15px;
-  margin-top: 4px;
+/* ── Grouped cells ── */
+.create-v2__group {
+  display: flex;
+  flex-direction: column;
+  border-radius: 12px;
+  overflow: hidden;
 }
-.create-btn[disabled] {
-  opacity: 0.6;
+.create-v2__cell {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px;
+  background: transparent;
+  border: none;
+  cursor: default;
+  text-align: left;
+  transition: background 120ms ease;
+}
+button.create-v2__cell { cursor: pointer; }
+button.create-v2__cell:active { background: rgba(0, 0, 0, 0.06); }
+.create-v2__cell--shaded { background: rgba(0, 0, 0, 0.04); }
+button.create-v2__cell.create-v2__cell--shaded:active { background: rgba(0, 0, 0, 0.08); }
+.create-v2__cell--stack {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 12px;
+}
+.create-v2__cell-caption {
+  font-family: 'Unbounded', sans-serif;
+  font-weight: 700;
+  font-size: 12px;
+  line-height: 14px;
+  color: #484337;
+}
+.create-v2__cell-text {
+  font-family: 'Unbounded', sans-serif;
+  font-weight: 700;
+  font-size: 12px;
+  line-height: 14px;
+  color: #484337;
+}
+.create-v2__cell-val {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: 'Unbounded', sans-serif;
+  font-weight: 700;
+  font-size: 12px;
+  line-height: 14px;
+  color: #484337;
+}
+.create-v2__coin {
+  width: 20px;
+  height: 20px;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+
+/* ── Players 1–6 ── */
+.create-v2__players {
+  display: flex;
+  gap: 10px;
+}
+.create-v2__pbtn {
+  flex: 1;
+  height: 40px;
+  padding: 0;
+  background: #fff;
+  border: 1px solid rgba(0, 0, 0, 0.16);
+  border-radius: 12px;
+  font-family: 'Unbounded', sans-serif;
+  font-weight: 700;
+  font-size: 14px;
+  line-height: 1;
+  color: #000;
+  cursor: pointer;
+  transition: background 120ms ease, color 120ms ease, border-color 120ms ease, transform 80ms ease;
+}
+.create-v2__pbtn:active { transform: translateY(1px); }
+.create-v2__pbtn--active {
+  background: #4ed636;
+  border-color: rgba(0, 0, 0, 0.2);
+  color: #fff;
+  text-shadow: 1px 1px 0 rgba(0, 0, 0, 0.3);
+}
+
+/* ── Toggle (44×24) ── */
+.create-v2__toggle {
+  position: relative;
+  width: 44px;
+  height: 24px;
+  padding: 0;
+  background: #8d8d8d;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 160ms ease;
+  flex-shrink: 0;
+}
+.create-v2__toggle--on { background: #37b73b; }
+.create-v2__toggle-dot {
+  position: absolute;
+  top: 50%;
+  left: 3px;
+  width: 18px;
+  height: 18px;
+  background: #fff;
+  border-radius: 6px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.16);
+  transform: translateY(-50%);
+  transition: left 160ms ease;
+}
+.create-v2__toggle--on .create-v2__toggle-dot { left: 23px; }
+
+/* ── Bottom CTA ── */
+.create-v2__cta-wrap {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 12px 24px calc(16px + var(--sab, 0px));
+  background: linear-gradient(180deg, rgba(250, 243, 226, 0), #faf3e2 40%);
+  pointer-events: none;
+}
+.create-v2__cta {
+  pointer-events: auto;
+  position: relative;
+  width: 100%;
+  height: 56px;
+  padding: 0 18px;
+  border: 2px solid #000;
+  border-radius: 18px;
+  background: #4ed636;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: inset 0 -6px 0 0 rgba(0, 0, 0, 0.22);
+  transition: transform 80ms ease, filter 120ms ease;
+}
+.create-v2__cta:active {
+  transform: translateY(2px);
+  box-shadow: inset 0 -2px 0 0 rgba(0, 0, 0, 0.22);
+}
+.create-v2__cta:disabled {
+  filter: grayscale(0.4) brightness(0.85);
   cursor: not-allowed;
+}
+.create-v2__cta-text {
+  position: relative;
+  z-index: 1;
+  font-family: 'Golos Text', sans-serif;
+  font-weight: 900;
+  font-size: 24px;
+  line-height: 26px;
+  color: #fff;
+  text-shadow: 1px 1px 0 rgba(0, 0, 0, 0.6);
+  letter-spacing: 0.01em;
+}
+.create-v2__cta-deco {
+  position: absolute;
+  top: 4px;
+  right: 8px;
+  width: 98px;
+  height: 32.5px;
+  pointer-events: none;
+}
+
+@media (min-width: 900px) {
+  .create-v2__header { padding: 16px 40px 16px; }
+  .create-v2__scroll { padding: 20px 40px 96px; }
+  .create-v2__cta-wrap { padding-left: 40px; padding-right: 40px; }
+}
+</style>
+
+<style>
+/* Paint html/body parchment so Telegram safe-area strips match the screen
+   instead of flashing the blue home/rooms background. Mirrors Rooms/Home. */
+html.create-figma-root,
+body.create-figma-root {
+  background-color: #faf3e2 !important;
+  background-image: none !important;
+}
+body.create-figma-root #app,
+body.create-figma-root .app-root,
+body.create-figma-root .app-main,
+body.create-figma-root .create-v2 {
+  background: transparent !important;
 }
 </style>
