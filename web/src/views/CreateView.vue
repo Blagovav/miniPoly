@@ -64,6 +64,7 @@ const placeholder = computed(() => userName.value || (isRu.value ? "Никита
 const L = computed(() => isRu.value
   ? {
       title: "Создание партии",
+      subtitle: "Настройки партии",
       nameLabel: "Название комнаты",
       boardLabel: "Поле",
       generalLabel: "Общие настройки",
@@ -78,6 +79,7 @@ const L = computed(() => isRu.value
     }
   : {
       title: "New Match",
+      subtitle: "Match settings",
       nameLabel: "Room name",
       boardLabel: "Map",
       generalLabel: "General",
@@ -140,7 +142,10 @@ onUnmounted(() => {
           />
         </svg>
       </button>
-      <h1 class="create-v2__title">{{ L.title }}</h1>
+      <div class="create-v2__title-col">
+        <h1 class="create-v2__title">{{ L.title }}</h1>
+        <p class="create-v2__subtitle">{{ L.subtitle }}</p>
+      </div>
     </div>
 
     <div ref="scrollEl" class="create-v2__scroll" @scroll="onScroll">
@@ -174,7 +179,7 @@ onUnmounted(() => {
       <section class="create-v2__section">
         <div class="create-v2__label">{{ L.generalLabel }}</div>
         <div class="create-v2__group">
-          <div class="create-v2__cell create-v2__cell--stack create-v2__cell--shaded">
+          <div class="create-v2__cell create-v2__cell--stack">
             <div class="create-v2__cell-caption">{{ L.players }}</div>
             <div class="create-v2__players">
               <button
@@ -326,6 +331,12 @@ onUnmounted(() => {
   transition: transform 120ms ease;
 }
 .create-v2__back:active { transform: scale(0.92); }
+.create-v2__title-col {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
 .create-v2__title {
   margin: 0;
   font-family: 'Unbounded', sans-serif;
@@ -333,6 +344,15 @@ onUnmounted(() => {
   font-size: 18px;
   line-height: 20px;
   color: #000;
+}
+.create-v2__subtitle {
+  margin: 0;
+  font-family: 'Unbounded', sans-serif;
+  font-weight: 500;
+  font-size: 14px;
+  line-height: 16px;
+  color: #000;
+  opacity: 0.4;
 }
 
 /* ── Scroll area ── */
@@ -360,7 +380,8 @@ onUnmounted(() => {
 }
 .create-v2__section--card {
   padding: 16px;
-  background: rgba(0, 0, 0, 0.04);
+  background: #fff;
+  border: 1px solid rgba(0, 0, 0, 0.1);
   border-radius: 18px;
 }
 .create-v2__label {
@@ -454,8 +475,13 @@ onUnmounted(() => {
 .create-v2__group {
   display: flex;
   flex-direction: column;
+  background: #fff;
+  border: 1px solid rgba(0, 0, 0, 0.1);
   border-radius: 12px;
   overflow: hidden;
+}
+.create-v2__group > .create-v2__cell + .create-v2__cell {
+  border-top: 1px solid rgba(0, 0, 0, 0.06);
 }
 .create-v2__cell {
   width: 100%;
@@ -532,7 +558,7 @@ button.create-v2__cell.create-v2__cell--shaded:active { background: rgba(0, 0, 0
 }
 .create-v2__pbtn:active { transform: translateY(1px); }
 .create-v2__pbtn--active {
-  background: #4ed636;
+  background: #43c22d;
   border-color: rgba(0, 0, 0, 0.2);
   color: #fff;
   text-shadow: 1px 1px 0 rgba(0, 0, 0, 0.3);
@@ -551,7 +577,7 @@ button.create-v2__cell.create-v2__cell--shaded:active { background: rgba(0, 0, 0
   transition: background 160ms ease;
   flex-shrink: 0;
 }
-.create-v2__toggle--on { background: #37b73b; }
+.create-v2__toggle--on { background: #43c22d; }
 .create-v2__toggle-dot {
   position: absolute;
   top: 50%;
@@ -584,7 +610,7 @@ button.create-v2__cell.create-v2__cell--shaded:active { background: rgba(0, 0, 0
   padding: 0 18px;
   border: 2px solid #000;
   border-radius: 18px;
-  background: #4ed636;
+  background: #43c22d;
   overflow: hidden;
   display: flex;
   align-items: center;

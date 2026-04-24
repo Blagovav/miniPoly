@@ -67,9 +67,9 @@ export default {
     authFailed: "Ошибка авторизации",
   },
   chat: {
-    title: "Чат",
-    empty: "Будь первым — напиши что-нибудь!",
-    placeholder: "Сообщение…",
+    title: "Чат партии",
+    empty: "Сообщений пока нет",
+    placeholder: "Введите сообщение",
     send: "Отправить",
   },
   voice: {

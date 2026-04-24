@@ -67,9 +67,9 @@ export default {
     authFailed: "Authentication failed",
   },
   chat: {
-    title: "Chat",
-    empty: "Be the first — send a message!",
-    placeholder: "Message…",
+    title: "Party chat",
+    empty: "No messages yet",
+    placeholder: "Type a message",
     send: "Send",
   },
   voice: {

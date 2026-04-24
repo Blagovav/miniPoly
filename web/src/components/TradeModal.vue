@@ -87,8 +87,6 @@ interface HoldingRow {
   index: number;
   name: string;
   band: string;
-  houses: number;
-  hotel: boolean;
   mortgaged: boolean;
   price: number;
 }
@@ -104,8 +102,6 @@ function holdingsOf(playerId: string): HoldingRow[] {
       index: prop.tileIndex,
       name: t.name[loc.value],
       band: t.kind === "street" ? GROUP_COLORS[(t as StreetTile).group] : "var(--ink-3)",
-      houses: prop.houses,
-      hotel: prop.hotel,
       mortgaged: prop.mortgaged,
       price: (t as { price?: number }).price ?? 0,
     });
@@ -177,487 +173,510 @@ function submit() {
 
 const L = computed(() => isRu.value
   ? {
+      eyebrow: "Отправка гонца",
       title: "Предложение обмена",
-      subtitle: "В свой ход — отправь гонца",
-      pick: "Кому предложить",
+      addressee: "Адресат",
       noCandidates: "Нет игроков для обмена",
       mine: "Я отдаю",
       theirs: "Я получаю",
-      cash: "Монет",
-      jail: "Карточек «Выйти из тюрьмы»",
-      empty: "— нет улиц —",
-      selectTarget: "Сначала выбери игрока",
-      send: "Отправить",
-      cancel: "Отмена",
-      notYourTurn: "Обмен — только в свой ход",
-      mortgaged: "в залоге",
-      tileLabel: (n: string) => n,
+      selectTarget: "Выбери игрока",
+      empty: "Нет улиц",
+      confirm: "ПОДТВЕРДИТЬ",
+      notYourTurn: "Обмен только в свой ход",
     }
   : {
-      title: "Propose a trade",
-      subtitle: "On your turn — send a messenger",
-      pick: "Propose to",
+      eyebrow: "Send messenger",
+      title: "Trade offer",
+      addressee: "To",
       noCandidates: "No players to trade with",
       mine: "I give",
       theirs: "I receive",
-      cash: "Coin",
-      jail: "Jail cards",
-      empty: "— no streets —",
-      selectTarget: "Pick a player first",
-      send: "Send",
-      cancel: "Cancel",
+      selectTarget: "Pick a player",
+      empty: "No streets",
+      confirm: "CONFIRM",
       notYourTurn: "Trade only on your turn",
-      mortgaged: "mortgaged",
-      tileLabel: (n: string) => n,
     });
 </script>
 
 <template>
-  <transition name="fade">
-    <div v-if="open" class="modal-scrim" @click="onClose">
-      <div class="modal-card" @click.stop>
-        <div class="grab-handle" />
-
-        <div class="head">
-          <div>
-            <div class="head__eyebrow">{{ L.subtitle }}</div>
-            <div class="head__title">{{ L.title }}</div>
+  <transition name="trade-fade">
+    <div v-if="open" class="trade-scrim" role="dialog" aria-modal="true" @click.self="onClose">
+      <div class="trade-stack">
+        <div class="trade-card">
+          <!-- Header: "Отправка гонца" eyebrow + "Предложение обмена" title -->
+          <div class="trade-head">
+            <span class="trade-eyebrow">{{ L.eyebrow }}</span>
+            <h2 class="trade-title">{{ L.title }}</h2>
           </div>
-          <button class="icon-btn head__close" :aria-label="'close'" @click="onClose">
-            <Icon name="x" :size="16" color="var(--ink-2)" />
-          </button>
-        </div>
 
-        <div v-if="!game.isMyTurn" class="hint hint--warn">{{ L.notYourTurn }}</div>
+          <div v-if="!game.isMyTurn" class="trade-warn">{{ L.notYourTurn }}</div>
 
-        <!-- Target picker -->
-        <div class="section">
-          <div class="section__label">{{ L.pick }}</div>
-          <div v-if="candidates.length === 0" class="empty">{{ L.noCandidates }}</div>
-          <div v-else class="target-grid">
-            <button
-              v-for="p in candidates"
-              :key="p.id"
-              type="button"
-              class="target"
-              :class="{ 'target--active': targetId === p.id }"
-              @click="targetId = p.id"
-            >
-              <Sigil :name="p.name" :color="playerColor(p)" :size="28" />
-              <div class="target__body">
-                <div class="target__name">{{ p.name }}</div>
-                <div class="target__cash">◈ {{ p.cash }}</div>
-              </div>
-            </button>
-          </div>
-        </div>
-
-        <!-- Two-column bargain -->
-        <div class="columns">
-          <!-- My side -->
-          <div class="col">
-            <div class="col__head col__head--mine">{{ L.mine }}</div>
-
-            <div v-if="myHoldings.length === 0" class="empty small">{{ L.empty }}</div>
-            <div v-else class="chips">
+          <!-- Addressee picker (white card with pills) -->
+          <div class="trade-addressee">
+            <div class="trade-addressee__label">{{ L.addressee }}</div>
+            <div v-if="candidates.length === 0" class="trade-empty">{{ L.noCandidates }}</div>
+            <div v-else class="trade-addressee__row">
               <button
-                v-for="h in myHoldings"
-                :key="h.index"
+                v-for="p in candidates"
+                :key="p.id"
                 type="button"
-                class="chip"
-                :class="{ 'chip--active': giveTiles.has(h.index), 'chip--locked': h.mortgaged }"
-                :disabled="h.mortgaged"
-                @click="toggleGive(h.index, h.mortgaged)"
+                class="trade-pill"
+                :class="{ 'trade-pill--active': targetId === p.id }"
+                :style="{ background: playerColor(p) }"
+                @click="targetId = p.id"
               >
-                <span class="chip__band" :style="{ background: h.band }" />
-                <span class="chip__name">{{ h.name }}</span>
-                <span class="chip__extras">
-                  <span v-if="h.hotel" class="chip__glyph">♖</span>
-                  <span v-else-if="h.houses > 0" class="chip__glyph">{{ '⌂'.repeat(h.houses) }}</span>
-                  <Icon v-if="h.mortgaged" name="lock" :size="10" color="var(--accent)" />
+                <Sigil
+                  class="trade-pill__sigil"
+                  :name="p.name"
+                  :color="playerColor(p)"
+                  :size="24"
+                />
+                <span class="trade-pill__body">
+                  <span class="trade-pill__name">{{ p.name }}</span>
+                  <span class="trade-pill__cash">
+                    <span aria-hidden="true">💰</span>
+                    {{ p.cash }}
+                  </span>
                 </span>
               </button>
             </div>
+          </div>
 
-            <label class="num-field">
-              <span class="num-field__label">{{ L.cash }}</span>
-              <div class="num-field__wrap">
-                <span class="num-field__glyph">◈</span>
+          <!-- Two columns: mine / theirs -->
+          <div class="trade-cols">
+            <!-- My side -->
+            <div class="trade-col">
+              <div class="trade-col__label">{{ L.mine }}</div>
+
+              <div v-if="myHoldings.length === 0" class="trade-col__empty">{{ L.empty }}</div>
+              <div v-else class="trade-col__list">
+                <button
+                  v-for="h in myHoldings"
+                  :key="h.index"
+                  type="button"
+                  class="trade-row"
+                  :class="{ 'trade-row--active': giveTiles.has(h.index), 'trade-row--locked': h.mortgaged }"
+                  :disabled="h.mortgaged"
+                  @click="toggleGive(h.index, h.mortgaged)"
+                >
+                  <span class="trade-row__dot" :style="{ background: h.band }" />
+                  <span class="trade-row__name">{{ h.name }}</span>
+                </button>
+              </div>
+
+              <div class="trade-input">
+                <span class="trade-input__icon" aria-hidden="true">💰</span>
                 <input
                   v-model.number="giveCash"
                   type="number"
                   min="0"
                   :max="myCashMax"
-                  class="num-field__input"
+                  inputmode="numeric"
+                  class="trade-input__field"
                 />
+                <span class="trade-input__max">/{{ myCashMax }}</span>
               </div>
-              <span class="num-field__max">/ {{ myCashMax }}</span>
-            </label>
 
-            <label v-if="myJailMax > 0" class="num-field">
-              <span class="num-field__label">{{ L.jail }}</span>
-              <div class="num-field__wrap">
-                <span class="num-field__glyph">⛓</span>
+              <div v-if="myJailMax > 0" class="trade-input">
+                <span class="trade-input__icon" aria-hidden="true">🎴</span>
                 <input
                   v-model.number="giveJail"
                   type="number"
                   min="0"
                   :max="myJailMax"
-                  class="num-field__input"
+                  inputmode="numeric"
+                  class="trade-input__field"
                 />
+                <span class="trade-input__max">/{{ myJailMax }}</span>
               </div>
-              <span class="num-field__max">/ {{ myJailMax }}</span>
-            </label>
-          </div>
+            </div>
 
-          <!-- Their side -->
-          <div class="col">
-            <div class="col__head col__head--theirs">{{ L.theirs }}</div>
+            <!-- Their side -->
+            <div class="trade-col">
+              <div class="trade-col__label">{{ L.theirs }}</div>
 
-            <div v-if="!target" class="empty small">{{ L.selectTarget }}</div>
-            <template v-else>
-              <div v-if="theirHoldings.length === 0" class="empty small">{{ L.empty }}</div>
-              <div v-else class="chips">
-                <button
-                  v-for="h in theirHoldings"
-                  :key="h.index"
-                  type="button"
-                  class="chip"
-                  :class="{ 'chip--active': takeTiles.has(h.index), 'chip--locked': h.mortgaged }"
-                  :disabled="h.mortgaged"
-                  @click="toggleTake(h.index, h.mortgaged)"
-                >
-                  <span class="chip__band" :style="{ background: h.band }" />
-                  <span class="chip__name">{{ h.name }}</span>
-                  <span class="chip__extras">
-                    <span v-if="h.hotel" class="chip__glyph">♖</span>
-                    <span v-else-if="h.houses > 0" class="chip__glyph">{{ '⌂'.repeat(h.houses) }}</span>
-                    <Icon v-if="h.mortgaged" name="lock" :size="10" color="var(--accent)" />
-                  </span>
-                </button>
-              </div>
+              <div v-if="!target" class="trade-col__empty">{{ L.selectTarget }}</div>
+              <template v-else>
+                <div v-if="theirHoldings.length === 0" class="trade-col__empty">{{ L.empty }}</div>
+                <div v-else class="trade-col__list">
+                  <button
+                    v-for="h in theirHoldings"
+                    :key="h.index"
+                    type="button"
+                    class="trade-row"
+                    :class="{ 'trade-row--active': takeTiles.has(h.index), 'trade-row--locked': h.mortgaged }"
+                    :disabled="h.mortgaged"
+                    @click="toggleTake(h.index, h.mortgaged)"
+                  >
+                    <span class="trade-row__dot" :style="{ background: h.band }" />
+                    <span class="trade-row__name">{{ h.name }}</span>
+                  </button>
+                </div>
 
-              <label class="num-field">
-                <span class="num-field__label">{{ L.cash }}</span>
-                <div class="num-field__wrap">
-                  <span class="num-field__glyph">◈</span>
+                <div class="trade-input">
+                  <span class="trade-input__icon" aria-hidden="true">💰</span>
                   <input
                     v-model.number="takeCash"
                     type="number"
                     min="0"
                     :max="theirCashMax"
-                    class="num-field__input"
+                    inputmode="numeric"
+                    class="trade-input__field"
                   />
+                  <span class="trade-input__max">/{{ theirCashMax }}</span>
                 </div>
-                <span class="num-field__max">/ {{ theirCashMax }}</span>
-              </label>
 
-              <label v-if="theirJailMax > 0" class="num-field">
-                <span class="num-field__label">{{ L.jail }}</span>
-                <div class="num-field__wrap">
-                  <span class="num-field__glyph">⛓</span>
+                <div v-if="theirJailMax > 0" class="trade-input">
+                  <span class="trade-input__icon" aria-hidden="true">🎴</span>
                   <input
                     v-model.number="takeJail"
                     type="number"
                     min="0"
                     :max="theirJailMax"
-                    class="num-field__input"
+                    inputmode="numeric"
+                    class="trade-input__field"
                   />
+                  <span class="trade-input__max">/{{ theirJailMax }}</span>
                 </div>
-                <span class="num-field__max">/ {{ theirJailMax }}</span>
-              </label>
-            </template>
+              </template>
+            </div>
           </div>
-        </div>
 
-        <div class="actions">
-          <button class="btn btn-ghost" @click="onClose">{{ L.cancel }}</button>
-          <button class="btn btn-primary" :disabled="!canSubmit" @click="submit">
-            <Icon name="send" :size="14" color="#fff" />
-            {{ L.send }}
+          <button
+            class="trade-cta"
+            :disabled="!canSubmit"
+            @click="submit"
+          >
+            {{ L.confirm }}
           </button>
         </div>
+
+        <button class="trade-close" @click="onClose" aria-label="close">
+          <Icon name="x" :size="20" color="#000"/>
+        </button>
       </div>
     </div>
   </transition>
 </template>
 
 <style scoped>
-.modal-scrim {
+.trade-scrim {
   position: fixed;
   inset: 0;
-  background: rgba(26, 15, 5, 0.5);
-  backdrop-filter: blur(2px);
-  -webkit-backdrop-filter: blur(2px);
   z-index: 510;
+  background: rgba(0, 0, 0, 0.4);
   display: flex;
-  align-items: flex-end;
-  justify-content: center;
+  flex-direction: column;
+  justify-content: flex-end;
+  padding: 0 24px calc(16px + var(--sab, 0px) + var(--csab, 0px));
 }
-.modal-card {
+
+.trade-fade-enter-active,
+.trade-fade-leave-active { transition: opacity 0.2s ease; }
+.trade-fade-enter-from,
+.trade-fade-leave-to { opacity: 0; }
+
+.trade-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: stretch;
   width: 100%;
-  max-width: 520px;
-  max-height: 92vh;
-  overflow-y: auto;
-  background: var(--card-alt);
-  border-top: 3px solid var(--primary);
-  border-radius: 16px 16px 0 0;
-  padding: 14px 16px calc(20px + var(--tg-safe-area-inset-bottom, 0px));
-  animation: sheet-unfurl 320ms cubic-bezier(0.34, 1.56, 0.64, 1);
-  transform-origin: bottom;
-  box-shadow: 0 -8px 24px rgba(42, 29, 16, 0.25);
-  position: relative;
-}
-.grab-handle {
-  width: 40px;
-  height: 4px;
-  background: var(--line-strong);
-  border-radius: 2px;
-  margin: -4px auto 10px;
+  max-width: 345px;
+  margin: 0 auto;
 }
 
-.head {
+.trade-card {
+  background: var(--card-alt);
+  border-radius: 18px;
+  padding: 16px;
   display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px;
-  padding-bottom: 10px;
-  border-bottom: 1px solid var(--divider);
-  margin-bottom: 12px;
+  flex-direction: column;
+  gap: 16px;
+  max-height: calc(100vh - 120px);
+  overflow-y: auto;
 }
-.head__eyebrow {
-  font-size: 10px;
-  color: var(--ink-3);
-  text-transform: uppercase;
-  letter-spacing: 0.15em;
+.trade-card::-webkit-scrollbar { width: 3px; }
+.trade-card::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.4);
+  border-radius: 100px;
 }
-.head__title {
-  font-family: var(--font-display);
+
+/* ── Header ── */
+.trade-head {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+.trade-eyebrow {
+  display: inline-flex;
+  padding: 4px 12px;
+  background: #484337;
+  border-radius: 100px;
+  font-family: 'Unbounded', sans-serif;
+  font-weight: 500;
+  font-size: 14px;
+  line-height: 16px;
+  color: #fff;
+}
+.trade-title {
+  margin: 0;
+  font-family: 'Unbounded', sans-serif;
+  font-weight: 700;
   font-size: 18px;
-  color: var(--ink);
-  margin-top: 2px;
-}
-.head__close {
-  width: 32px; height: 32px;
+  line-height: 26px;
+  color: #000;
 }
 
-.section { margin-bottom: 12px; }
-.section__label {
-  font-size: 10px;
-  color: var(--ink-3);
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  margin-bottom: 6px;
-}
-.target-grid {
-  display: flex;
-  gap: 6px;
-  overflow-x: auto;
-  padding-bottom: 2px;
-}
-.target {
-  flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 6px 10px;
-  background: var(--card);
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  cursor: pointer;
-}
-.target--active {
-  border-color: var(--primary);
-  box-shadow: 0 0 0 2px rgba(90, 58, 154, 0.15);
-}
-.target__body {
-  text-align: left;
-}
-.target__name {
-  font-family: var(--font-display);
-  font-size: 13px;
-  color: var(--ink);
-}
-.target__cash {
-  font-family: var(--font-mono);
-  font-size: 11px;
-  color: var(--gold);
-}
-
-.columns {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 10px;
-  margin-bottom: 12px;
-}
-.col {
-  background: var(--card);
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  padding: 10px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  min-width: 0;
-}
-.col__head {
-  font-family: var(--font-title);
-  font-size: 11px;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  padding-bottom: 6px;
-  border-bottom: 1px solid var(--divider);
-}
-.col__head--mine { color: var(--emerald); }
-.col__head--theirs { color: var(--primary); }
-
-.chips {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  max-height: 180px;
-  overflow-y: auto;
-}
-.chip {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 8px;
-  background: var(--card-alt);
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  cursor: pointer;
-  min-width: 0;
-  text-align: left;
-}
-.chip--active {
-  border-color: var(--gold);
-  background: rgba(212, 168, 74, 0.1);
-}
-.chip--locked {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-.chip__band {
-  width: 3px;
-  height: 18px;
-  border-radius: 2px;
-  flex-shrink: 0;
-}
-.chip__name {
-  flex: 1;
-  min-width: 0;
-  font-family: var(--font-display);
+.trade-warn {
+  padding: 8px 12px;
+  background: rgba(220, 38, 38, 0.1);
+  border: 1px solid rgba(220, 38, 38, 0.35);
+  border-radius: 12px;
+  text-align: center;
+  font-family: 'Unbounded', sans-serif;
+  font-weight: 500;
   font-size: 12px;
-  color: var(--ink);
+  line-height: 14px;
+  color: #8b1a1a;
+}
+
+/* ── Addressee card ── */
+.trade-addressee {
+  background: #fff;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  border-radius: 18px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.trade-addressee__label {
+  font-family: 'Unbounded', sans-serif;
+  font-weight: 700;
+  font-size: 16px;
+  line-height: 20px;
+  color: #000;
+}
+.trade-addressee__row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.trade-pill {
+  flex: 1 1 120px;
+  min-width: 120px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px 6px 6px;
+  border: 2px solid transparent;
+  border-radius: 14px;
+  cursor: pointer;
+  box-shadow: inset 0 -3px 0 0 rgba(0, 0, 0, 0.2);
+  transition: transform 80ms ease, border-color 120ms ease;
+}
+.trade-pill--active { border-color: #000; }
+.trade-pill:active { transform: translateY(1px); }
+.trade-pill__sigil { flex-shrink: 0; }
+.trade-pill__body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  text-align: left;
+}
+.trade-pill__name {
+  font-family: 'Unbounded', sans-serif;
+  font-weight: 700;
+  font-size: 13px;
+  line-height: 15px;
+  color: #fff;
+  text-shadow: 0.3px 0.3px 0 rgba(0, 0, 0, 0.6);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.chip__extras {
-  display: flex;
+.trade-pill__cash {
+  display: inline-flex;
   align-items: center;
-  gap: 4px;
-  flex-shrink: 0;
-  font-family: var(--font-display);
+  gap: 3px;
+  font-family: 'Unbounded', sans-serif;
+  font-weight: 700;
   font-size: 11px;
-  color: var(--ink-2);
+  line-height: 13px;
+  color: rgba(255, 255, 255, 0.95);
+  text-shadow: 0.3px 0.3px 0 rgba(0, 0, 0, 0.5);
 }
-.chip__glyph { letter-spacing: 0.05em; }
 
-.num-field {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 10px;
-  color: var(--ink-3);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
+/* ── Empty / warning strip ── */
+.trade-empty {
+  padding: 8px 0;
+  text-align: center;
+  font-family: 'Unbounded', sans-serif;
+  font-weight: 500;
+  font-size: 13px;
+  color: rgba(0, 0, 0, 0.55);
 }
-.num-field__label {
-  flex: 1;
+
+/* ── Two-column bargain ── */
+.trade-cols {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.trade-col {
+  background: #fff;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  border-radius: 18px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
   min-width: 0;
 }
-.num-field__wrap {
+.trade-col__label {
+  font-family: 'Unbounded', sans-serif;
+  font-weight: 700;
+  font-size: 14px;
+  line-height: 16px;
+  color: #000;
+}
+.trade-col__empty {
+  padding: 6px 0;
+  font-family: 'Unbounded', sans-serif;
+  font-weight: 500;
+  font-size: 11px;
+  color: rgba(0, 0, 0, 0.55);
+}
+.trade-col__list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+/* Property row (clickable chip). Active = soft tint; locked = 45% opacity. */
+.trade-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 4px;
+  background: transparent;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  text-align: left;
+  transition: background 120ms ease;
+}
+.trade-row:hover { background: rgba(0, 0, 0, 0.04); }
+.trade-row--active { background: rgba(67, 194, 45, 0.18); }
+.trade-row--locked { opacity: 0.45; cursor: not-allowed; }
+.trade-row__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.trade-row__name {
+  font-family: 'Unbounded', sans-serif;
+  font-weight: 500;
+  font-size: 11px;
+  line-height: 13px;
+  color: #000;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ── Cash / jail number inputs ── */
+.trade-input {
   display: flex;
   align-items: center;
   gap: 4px;
-  padding: 4px 8px;
-  background: var(--card-alt);
-  border: 1px solid var(--line);
-  border-radius: 6px;
-  flex-shrink: 0;
-  max-width: 84px;
+  margin-top: 2px;
 }
-.num-field__wrap:focus-within {
-  border-color: var(--primary);
-}
-.num-field__glyph {
-  color: var(--gold);
-  font-family: var(--font-mono);
-  font-size: 12px;
-}
-.num-field__input {
-  background: transparent;
-  border: none;
-  color: var(--ink);
-  font-family: var(--font-mono);
-  font-size: 13px;
-  font-weight: 700;
-  outline: none;
-  padding: 0;
-  width: 48px;
-  text-align: right;
-}
-.num-field__max {
-  font-family: var(--font-mono);
-  color: var(--ink-3);
-  font-size: 10px;
+.trade-input__icon {
+  font-size: 16px;
+  line-height: 1;
   flex-shrink: 0;
 }
-
-.empty {
-  color: var(--ink-3);
-  font-style: italic;
-  text-align: center;
-  font-size: 12px;
-  padding: 8px 0;
-}
-.empty.small { padding: 4px 0; font-size: 11px; }
-
-.hint {
-  padding: 8px 10px;
+.trade-input__field {
+  flex: 1;
+  min-width: 0;
+  height: 32px;
+  padding: 0 8px;
+  background: #fff;
+  border: 1px solid rgba(0, 0, 0, 0.18);
   border-radius: 8px;
+  font-family: 'Unbounded', sans-serif;
+  font-weight: 700;
   font-size: 12px;
-  margin-bottom: 10px;
+  line-height: 14px;
+  color: #000;
   text-align: center;
+  outline: none;
+  -moz-appearance: textfield;
 }
-.hint--warn {
-  background: rgba(139, 26, 26, 0.08);
-  border: 1px solid rgba(139, 26, 26, 0.3);
-  color: var(--accent);
+.trade-input__field::-webkit-outer-spin-button,
+.trade-input__field::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+.trade-input__field:focus { border-color: rgba(0, 0, 0, 0.4); }
+.trade-input__max {
+  font-family: 'Unbounded', sans-serif;
+  font-weight: 500;
+  font-size: 11px;
+  color: rgba(0, 0, 0, 0.55);
+  flex-shrink: 0;
 }
 
-.actions {
+/* ── CTA + close ── */
+.trade-cta {
+  width: 100%;
+  height: 56px;
+  padding: 0 18px;
+  border: 2px solid #000;
+  border-radius: 18px;
+  background: #43c22d;
   display: flex;
-  gap: 8px;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: inset 0 -6px 0 0 rgba(0, 0, 0, 0.22);
+  transition: transform 80ms ease, filter 120ms ease;
+  font-family: 'Golos Text', 'Unbounded', sans-serif;
+  font-weight: 900;
+  font-size: 20px;
+  line-height: 22px;
+  color: #fff;
+  text-shadow: 1px 1px 0 rgba(0, 0, 0, 0.5);
+  letter-spacing: 0.02em;
+}
+.trade-cta:active:not(:disabled) {
+  transform: translateY(2px);
+  box-shadow: inset 0 -2px 0 0 rgba(0, 0, 0, 0.22);
+}
+.trade-cta:disabled {
+  filter: grayscale(0.5) brightness(0.8);
+  cursor: not-allowed;
+}
+
+.trade-close {
+  width: 44px;
+  height: 44px;
+  align-self: center;
+  background: #fff;
+  border: 4.125px solid #000;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: transform 0.1s ease;
+  padding: 0;
   margin-top: 4px;
 }
-.actions .btn {
-  flex: 1;
-  padding: 12px;
-  justify-content: center;
-}
-
-@keyframes sheet-unfurl {
-  0% { transform: translateY(100%); opacity: 0; }
-  100% { transform: translateY(0); opacity: 1; }
-}
-.fade-enter-active, .fade-leave-active { transition: opacity 0.2s ease; }
-.fade-enter-from, .fade-leave-to { opacity: 0; }
-.fade-enter-active .modal-card,
-.fade-leave-active .modal-card {
-  transition: transform 0.22s cubic-bezier(0.34, 1.56, 0.64, 1);
-}
-.fade-leave-to .modal-card { transform: translateY(20%); }
+.trade-close:active { transform: scale(0.94); }
 </style>

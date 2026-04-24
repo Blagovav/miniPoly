@@ -423,12 +423,12 @@ function voiceHoldEnd() {
   }
 }
 
-// Player-count subtitle (russian-aware pluralisation).
+// Player-count subtitle (lobby). In-game topbar uses the same value via a
+// pill so the format stays compact for both places.
 const subtitle = computed(() => {
   if (!game.room) return locale.value === "ru" ? "Подключение…" : "Connecting…";
   const n = playerCount.value;
-  if (locale.value === "ru") return `${n} ${n === 1 ? "игрок" : n < 5 ? "игрока" : "игроков"}`;
-  return `${n} ${n === 1 ? "player" : "players"}`;
+  return locale.value === "ru" ? `Игроков: ${n}` : `Players: ${n}`;
 });
 
 // ── Redesign derived state ─────────────────────────────
@@ -696,16 +696,29 @@ void t;
          cross the #app viewport boundary). -->
 
     <!-- ── Topbar ── -->
-    <div v-if="isLobby" class="topbar">
-      <button class="icon-btn" :aria-label="t('actions.back')" @click="leaveRoom">
-        <Icon name="back" :size="18" />
+    <div v-if="isLobby" class="topbar topbar--figma">
+      <button class="topbar__back" :aria-label="t('actions.back')" @click="leaveRoom">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" aria-hidden="true">
+          <path
+            d="M15 18l-6-6 6-6"
+            stroke="#000"
+            stroke-width="2.4"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          />
+        </svg>
       </button>
       <div class="title">
-        <h1>{{ locale === 'ru' ? 'Комната' : 'Room' }} · {{ id }}</h1>
+        <h1>{{ locale === 'ru' ? 'Комната' : 'Room' }} {{ id }}</h1>
         <div class="sub">{{ subtitle }}</div>
       </div>
-      <button class="icon-btn" aria-label="menu" @click="handleMenu">
-        <Icon :name="isHostMe && game.room?.phase === 'lobby' ? 'x' : 'menu'" :size="18" />
+      <button
+        v-if="isHostMe && game.room?.phase === 'lobby'"
+        class="topbar__menu"
+        :aria-label="t('actions.back')"
+        @click="handleMenu"
+      >
+        <Icon name="x" :size="18" color="#000" />
       </button>
     </div>
 
@@ -1068,23 +1081,55 @@ void t;
   -webkit-overflow-scrolling: touch;
 }
 
-/* Topbar title styling override — room-specific compact look. */
-.topbar .title h1 {
-  font-family: var(--font-display);
-  font-size: 18px;
-  letter-spacing: 0.02em;
-  color: var(--ink);
-  margin: 0;
-  line-height: 1.1;
-  font-weight: 400;
+/* ── Lobby topbar (Figma 73:3483). Cream bg matches the new Lobby page
+      styling so the header feels like part of the screen, not a stripe.
+      Back button is a 44×44 white circle with soft shadow; title is
+      Unbounded Black 18px with a 40%-opaque Unbounded Medium subtitle. ── */
+.topbar--figma {
+  gap: 16px;
+  padding: 8px 24px 12px;
+  background: #faf3e2;
+  transition: box-shadow 160ms ease;
 }
-.topbar .title .sub {
-  font-size: 11px;
-  color: var(--ink-3);
-  letter-spacing: 0.05em;
-  margin-top: 2px;
-  text-transform: uppercase;
+.topbar--figma .topbar__back,
+.topbar--figma .topbar__menu {
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: transform 120ms ease;
+}
+.topbar--figma .topbar__back:active,
+.topbar--figma .topbar__menu:active { transform: scale(0.92); }
+
+.topbar--figma .title { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.topbar--figma .title h1 {
+  font-family: 'Unbounded', sans-serif;
+  font-weight: 900;
+  font-size: 18px;
+  line-height: 20px;
+  color: #000;
+  margin: 0;
+  letter-spacing: 0;
+}
+.topbar--figma .title .sub {
+  font-family: 'Unbounded', sans-serif;
   font-weight: 500;
+  font-size: 14px;
+  line-height: 16px;
+  color: #000;
+  opacity: 0.4;
+  margin: 0;
+  text-transform: none;
+  letter-spacing: 0;
 }
 
 /* ── Error strip (wax red) ── */
@@ -1660,12 +1705,12 @@ void t;
       points — tracked for a follow-up. ── */
 .room--figma .hud-overflow { display: none; }
 
-/* ── Floating voice + chat toggles are replaced by the header icons
-      in the Figma redesign. Hide them so nothing overlaps the primary
-      bar; the Chat PANEL (.chat__panel) still opens via window event,
-      and the voice client stays mounted for audio I/O. ── */
-.room--figma :deep(.vb-wrap),
-.room--figma :deep(.chat__toggle) {
+/* ── Floating voice toggle is replaced by the header icon in the
+      Figma redesign. Hide it so nothing overlaps the primary bar;
+      the voice client stays mounted for audio I/O. Chat has no FAB
+      in the redesigned component — the header icon opens it via the
+      `toggle-chat` window event. ── */
+.room--figma :deep(.vb-wrap) {
   display: none !important;
 }
 

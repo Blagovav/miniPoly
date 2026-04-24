@@ -1,13 +1,11 @@
 <script setup lang="ts">
-import { computed, ref, watch } from "vue";
+import { computed } from "vue";
 import { useI18n } from "vue-i18n";
 import { BOARD, GROUP_COLORS } from "../../../shared/board";
 import type { Locale, Player, StreetTile } from "../../../shared/types";
 import { useGameStore } from "../stores/game";
-import { computeRank, nextRank } from "../utils/rank";
 import Icon from "./Icon.vue";
 import Sigil from "./Sigil.vue";
-import Fleuron from "./Fleuron.vue";
 
 const props = defineProps<{
   player: Player | null;
@@ -20,26 +18,6 @@ const loc = computed<Locale>(() => (locale.value === "ru" ? "ru" : "en"));
 const isRu = computed(() => locale.value === "ru");
 const game = useGameStore();
 
-const serverStats = ref<{ gamesPlayed: number; gamesWon: number; totalEarned: number } | null>(null);
-const rank = computed(() => computeRank(serverStats.value?.gamesWon ?? 0));
-const nextR = computed(() => nextRank(serverStats.value?.gamesWon ?? 0));
-watch(
-  () => props.player?.tgUserId,
-  async (id) => {
-    serverStats.value = null;
-    if (!id) return;
-    try {
-      const base = (import.meta.env.VITE_API_URL as string) || "";
-      const res = await fetch(`${base}/api/users/${id}`);
-      if (res.ok) {
-        const data = await res.json();
-        serverStats.value = data.profile;
-      }
-    } catch {}
-  },
-  { immediate: true },
-);
-
 const ownedList = computed(() => {
   if (!props.player || !game.room) return [];
   const id = props.player.id;
@@ -47,9 +25,6 @@ const ownedList = computed(() => {
     .filter((x) => x.ownerId === id)
     .map((prop) => ({
       tile: BOARD[prop.tileIndex],
-      houses: prop.houses,
-      hotel: prop.hotel,
-      mortgaged: prop.mortgaged,
     }))
     .sort((a, b) => a.tile.index - b.tile.index);
 });
@@ -73,176 +48,140 @@ const totalWorth = computed(() => {
 
 function bandColor(tileIndex: number): string {
   const t = BOARD[tileIndex];
-  if (t.kind !== "street") return "var(--ink-3)";
+  if (t.kind !== "street") return "#484337";
   return GROUP_COLORS[t.group];
 }
 
-const winrate = computed(() => {
-  const s = serverStats.value;
-  if (!s || s.gamesPlayed === 0) return 0;
-  return Math.round((s.gamesWon / s.gamesPlayed) * 100);
-});
+// Player hex → Russian / English colour name for the chip under the sigil.
+// Uses approximate hue buckets so it works for both the legacy medieval hues
+// and the bot-auction palette, without hardcoding every seat colour.
+function colourName(hex: string): string {
+  const h = hex.replace("#", "").toLowerCase();
+  if (h.length !== 6) return isRu.value ? "Игрок" : "Player";
+  const r = parseInt(h.slice(0, 2), 16);
+  const g = parseInt(h.slice(2, 4), 16);
+  const b = parseInt(h.slice(4, 6), 16);
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  const l = (max + min) / 2;
+  const s = max === min ? 0 : (max - min) / (255 - Math.abs(2 * l - 255));
+  if (s < 0.12) return isRu.value ? "Серый" : "Gray";
+  let hue = 0;
+  const d = max - min || 1;
+  if (max === r) hue = ((g - b) / d) % 6;
+  else if (max === g) hue = (b - r) / d + 2;
+  else hue = (r - g) / d + 4;
+  hue = hue * 60;
+  if (hue < 0) hue += 360;
+  if (hue < 15 || hue >= 345) return isRu.value ? "Красный" : "Red";
+  if (hue < 45) return isRu.value ? "Оранжевый" : "Orange";
+  if (hue < 70) return isRu.value ? "Жёлтый" : "Yellow";
+  if (hue < 170) return isRu.value ? "Зелёный" : "Green";
+  if (hue < 200) return isRu.value ? "Бирюзовый" : "Teal";
+  if (hue < 255) return isRu.value ? "Синий" : "Blue";
+  if (hue < 290) return isRu.value ? "Фиолетовый" : "Purple";
+  return isRu.value ? "Розовый" : "Pink";
+}
 
 const L = computed(() => isRu.value
   ? {
-      online: "в игре",
-      offline: "не в сети",
-      bankrupt: "Банкрот",
       cash: "Монеты",
       worth: "Состояние",
       holdings: "Владения",
-      games: "Игр",
-      wins: "Побед",
-      winrate: "Винрейт",
-      lifetime: "Послужной список",
-      empty: "— владений нет —",
-      trade: "Отправить гонца",
-      nextRank: (r: string, n: number) => `До «${r}»: ещё ${n}`,
-      highestRank: "Высший ранг ✦",
+      ownedTitle: "Владения игрока",
+      empty: "У игрока нет владений",
+      trade: "ОТПРАВИТЬ ГОНЦА",
     }
   : {
-      online: "online",
-      offline: "offline",
-      bankrupt: "Bankrupt",
       cash: "Coin",
       worth: "Worth",
       holdings: "Holdings",
-      games: "Games",
-      wins: "Wins",
-      winrate: "Winrate",
-      lifetime: "Chronicle",
-      empty: "— no holdings —",
-      trade: "Send messenger",
-      nextRank: (r: string, n: number) => `To «${r}»: ${n} more wins`,
-      highestRank: "Highest rank ✦",
+      ownedTitle: "Player holdings",
+      empty: "Player owns nothing yet",
+      trade: "SEND MESSENGER",
     });
 </script>
 
 <template>
-  <transition name="fade">
-    <div v-if="player" class="modal-scrim" @click="onClose">
-      <div class="modal-card profile" @click.stop>
-        <div class="grab-bar" />
-
-        <!-- Header: sigil + name + rank -->
-        <div class="profile-head">
-          <Sigil :name="player.name" :color="player.color" :size="56" />
-          <div class="profile-head__body">
-            <div class="profile-head__name">{{ player.name }}</div>
-            <div class="profile-head__eyebrow">
-              <template v-if="serverStats">
-                <span class="rank-inline" :style="{ color: rank.color }">
-                  <span class="rank-inline__icon">{{ rank.icon }}</span>
-                  {{ rank.label }}
-                </span>
-                <span v-if="serverStats.gamesWon > 0" class="rank-inline__sub">
-                  · {{ serverStats.gamesWon }} {{ isRu ? "побед" : "wins" }}
-                </span>
-              </template>
-              <template v-else>
-                <span class="muted-eyebrow">
-                  {{ isRu ? "Игрок за столом" : "Player at the table" }}
-                </span>
-              </template>
+  <transition name="profile-fade">
+    <div v-if="player" class="profile-scrim" role="dialog" aria-modal="true" @click.self="onClose">
+      <div class="profile-stack">
+        <div class="profile-card">
+          <!-- Head: big avatar + name + colour chip -->
+          <div class="profile-head">
+            <div
+              class="profile-avatar"
+              :style="{ background: player.color }"
+            >
+              <Sigil :name="player.name" :color="player.color" :size="80"/>
             </div>
-            <div class="profile-head__status">
-              <span v-if="player.bankrupt" class="status-chip status-chip--bankrupt">
-                <Icon name="x" :size="10" color="var(--accent)" />
-                {{ L.bankrupt }}
-              </span>
-              <span v-else-if="!player.connected" class="status-chip status-chip--offline">
-                {{ L.offline }}
-              </span>
-              <span v-else class="status-chip status-chip--online">
-                {{ L.online }}
-              </span>
+            <div class="profile-head__body">
+              <div class="profile-name">{{ player.name }}</div>
+              <span
+                class="profile-color"
+                :style="{ background: player.color }"
+              >{{ colourName(player.color) }}</span>
             </div>
           </div>
-          <button class="profile-close" :aria-label="'close'" @click="onClose">
-            <Icon name="x" :size="14" color="var(--ink-2)" />
+
+          <!-- 3 green stat cards -->
+          <div class="profile-stats">
+            <div class="profile-stat">
+              <div class="profile-stat__label">{{ L.cash }}</div>
+              <div class="profile-stat__val">
+                <span class="profile-stat__coin" aria-hidden="true">💰</span>
+                {{ player.cash }}
+              </div>
+            </div>
+            <div class="profile-stat">
+              <div class="profile-stat__label">{{ L.worth }}</div>
+              <div class="profile-stat__val">
+                <span class="profile-stat__coin" aria-hidden="true">💰</span>
+                {{ totalWorth }}
+              </div>
+            </div>
+            <div class="profile-stat">
+              <div class="profile-stat__label">{{ L.holdings }}</div>
+              <div class="profile-stat__val">
+                <span class="profile-stat__coin" aria-hidden="true">👍</span>
+                {{ ownedList.length }}
+              </div>
+            </div>
+          </div>
+
+          <!-- Holdings list card -->
+          <div class="profile-owned">
+            <div class="profile-owned__label">{{ L.ownedTitle }}</div>
+            <div v-if="ownedList.length === 0" class="profile-owned__empty">
+              {{ L.empty }}
+            </div>
+            <div v-else class="profile-owned__list">
+              <div
+                v-for="item in ownedList"
+                :key="item.tile.index"
+                class="profile-owned__row"
+              >
+                <span
+                  class="profile-owned__dot"
+                  :style="{ background: bandColor(item.tile.index) }"
+                />
+                <span class="profile-owned__name">{{ item.tile.name[loc] }}</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- CTA -->
+          <button
+            v-if="onOfferTrade && !player.bankrupt"
+            class="profile-cta"
+            @click="onOfferTrade(player.id)"
+          >
+            {{ L.trade }}
           </button>
         </div>
 
-        <!-- Shield stats (cash / worth / holdings) -->
-        <div class="stats-grid">
-          <div class="stat">
-            <div class="stat__label">{{ L.cash }}</div>
-            <div class="stat__val stat__val--gold">◈ {{ player.cash }}</div>
-          </div>
-          <div class="stat">
-            <div class="stat__label">{{ L.worth }}</div>
-            <div class="stat__val stat__val--gold">◈ {{ totalWorth }}</div>
-          </div>
-          <div class="stat">
-            <div class="stat__label">{{ L.holdings }}</div>
-            <div class="stat__val">{{ ownedList.length }}</div>
-          </div>
-        </div>
-
-        <!-- Next rank hint (progress) -->
-        <div v-if="serverStats" class="rank-progress" :style="{ '--rank-clr': rank.color }">
-          <div class="rank-progress__badge">
-            <span class="rank-progress__icon">{{ rank.icon }}</span>
-          </div>
-          <div class="rank-progress__body">
-            <div class="rank-progress__title">{{ rank.label }}</div>
-            <div v-if="nextR" class="rank-progress__next">
-              {{ L.nextRank(nextR.label, nextR.minWins - serverStats.gamesWon) }}
-            </div>
-            <div v-else class="rank-progress__next rank-progress__next--top">
-              {{ L.highestRank }}
-            </div>
-          </div>
-        </div>
-
-        <!-- Lifetime stats -->
-        <template v-if="serverStats">
-          <Fleuron :text="L.lifetime" />
-          <div class="stats-grid stats-grid--lifetime">
-            <div class="stat">
-              <div class="stat__label">{{ L.games }}</div>
-              <div class="stat__val">{{ serverStats.gamesPlayed }}</div>
-            </div>
-            <div class="stat">
-              <div class="stat__label">{{ L.wins }}</div>
-              <div class="stat__val stat__val--emerald">
-                <Icon name="trophy" :size="12" color="var(--emerald)" />
-                {{ serverStats.gamesWon }}
-              </div>
-            </div>
-            <div class="stat">
-              <div class="stat__label">{{ L.winrate }}</div>
-              <div class="stat__val stat__val--gold">{{ winrate }}%</div>
-            </div>
-          </div>
-        </template>
-
-        <!-- Holdings -->
-        <Fleuron :text="L.holdings" />
-        <div v-if="ownedList.length === 0" class="empty">{{ L.empty }}</div>
-        <div v-else class="holdings">
-          <div v-for="item in ownedList" :key="item.tile.index" class="holding">
-            <div class="holding__band" :style="{ background: bandColor(item.tile.index) }" />
-            <div class="holding__name">{{ item.tile.name[loc] }}</div>
-            <div class="holding__extras">
-              <span v-if="item.hotel" class="holding__icon">♖</span>
-              <span v-else-if="item.houses > 0" class="holding__houses">
-                <span v-for="n in item.houses" :key="n">⌂</span>
-              </span>
-              <span v-if="item.mortgaged" class="holding__mortgage" :aria-label="isRu ? 'в залоге' : 'mortgaged'">
-                <Icon name="lock" :size="12" color="var(--accent)" />
-              </span>
-            </div>
-          </div>
-        </div>
-
-        <button
-          v-if="onOfferTrade && !player.bankrupt"
-          class="btn btn-primary profile-trade"
-          @click="onOfferTrade(player.id)"
-        >
-          <Icon name="send" :size="14" color="#fff" />
-          {{ L.trade }}
+        <button class="profile-close" @click="onClose" aria-label="close">
+          <Icon name="x" :size="20" color="#000"/>
         </button>
       </div>
     </div>
@@ -250,295 +189,241 @@ const L = computed(() => isRu.value
 </template>
 
 <style scoped>
-/* ── Scrim / card base ── */
-.modal-scrim {
+.profile-scrim {
   position: fixed;
   inset: 0;
-  background: rgba(26, 15, 5, 0.5);
-  backdrop-filter: blur(2px);
-  -webkit-backdrop-filter: blur(2px);
   z-index: 500;
+  background: rgba(0, 0, 0, 0.4);
   display: flex;
-  align-items: flex-end;
-  justify-content: center;
-  padding: 0;
-}
-.modal-card {
-  width: 100%;
-  max-width: 460px;
-  max-height: 90vh;
-  overflow-y: auto;
-  background: var(--card-alt);
-  border-top: 3px solid var(--primary);
-  border-radius: 16px 16px 0 0;
-  padding: 14px 16px calc(20px + var(--tg-safe-area-inset-bottom, 0px));
-  animation: sheet-unfurl 320ms cubic-bezier(0.34, 1.56, 0.64, 1);
-  transform-origin: bottom;
-  box-shadow: 0 -8px 24px rgba(42, 29, 16, 0.25);
-}
-.grab-bar {
-  width: 40px;
-  height: 4px;
-  background: var(--line-strong);
-  border-radius: 2px;
-  margin: -2px auto 12px;
+  flex-direction: column;
+  justify-content: flex-end;
+  padding: 0 24px calc(16px + var(--sab, 0px) + var(--csab, 0px));
 }
 
-/* ── Head ── */
+.profile-fade-enter-active,
+.profile-fade-leave-active { transition: opacity 0.2s ease; }
+.profile-fade-enter-from,
+.profile-fade-leave-to { opacity: 0; }
+
+.profile-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: stretch;
+  width: 100%;
+  max-width: 345px;
+  margin: 0 auto;
+}
+
+.profile-card {
+  background: var(--card-alt);
+  border-radius: 18px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  max-height: calc(100vh - 120px);
+  overflow-y: auto;
+}
+.profile-card::-webkit-scrollbar { width: 3px; }
+.profile-card::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.4);
+  border-radius: 100px;
+}
+
+/* ── Head: 80px avatar + name + colour chip ── */
 .profile-head {
   display: flex;
-  align-items: center;
   gap: 12px;
-  margin-bottom: 12px;
-  position: relative;
-  padding-right: 36px;
+  align-items: center;
+}
+.profile-avatar {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  box-shadow: inset 0 2px 2px rgba(255, 255, 255, 0.3),
+              inset 0 -2px 2px rgba(0, 0, 0, 0.2);
+}
+.profile-avatar :deep(.sigil) {
+  width: 80px !important;
+  height: 80px !important;
+  font-size: 36px !important;
+  background: transparent !important;
+  box-shadow: none !important;
 }
 .profile-head__body {
-  flex: 1;
-  min-width: 0;
-}
-.profile-head__name {
-  font-family: var(--font-display);
-  font-size: 20px;
-  color: var(--ink);
-  line-height: 1.15;
-}
-.profile-head__eyebrow {
-  margin-top: 2px;
-  font-size: 11px;
-  letter-spacing: 0.05em;
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  flex-wrap: wrap;
-}
-.rank-inline {
-  font-family: var(--font-title);
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  display: inline-flex;
-  gap: 4px;
-  align-items: center;
-}
-.rank-inline__icon { font-size: 13px; }
-.rank-inline__sub { color: var(--ink-3); }
-.muted-eyebrow {
-  color: var(--ink-3);
-  font-family: var(--font-title);
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  font-size: 10px;
-}
-.profile-head__status {
-  margin-top: 6px;
-}
-.status-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 2px 10px;
-  font-family: var(--font-body);
-  font-size: 10px;
-  font-weight: 600;
-  letter-spacing: 0.05em;
-  border-radius: 999px;
-  border: 1px solid var(--line);
-  background: var(--card);
-}
-.status-chip--online {
-  color: var(--emerald);
-  border-color: var(--emerald);
-  background: rgba(45, 122, 79, 0.08);
-}
-.status-chip--offline {
-  color: var(--ink-3);
-  border-color: var(--line-strong);
-}
-.status-chip--bankrupt {
-  color: var(--accent);
-  border-color: rgba(139, 26, 26, 0.4);
-  background: rgba(139, 26, 26, 0.08);
-}
-
-.profile-close {
-  position: absolute;
-  top: 0;
-  right: 0;
-  width: 30px;
-  height: 30px;
-  border-radius: 8px;
-  background: transparent;
-  border: 1px solid var(--line);
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.profile-close:hover { background: var(--card); }
-
-/* ── Stats grid ── */
-.stats-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 8px;
-  margin-bottom: 12px;
-}
-.stats-grid--lifetime { margin-top: 4px; margin-bottom: 12px; }
-.stat {
-  padding: 10px 6px;
-  background: var(--card);
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  text-align: center;
-}
-.stat__label {
-  font-size: 9px;
-  color: var(--ink-3);
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  font-family: var(--font-title);
-  font-weight: 600;
-}
-.stat__val {
-  margin-top: 4px;
-  font-family: var(--font-display);
-  font-size: 16px;
-  font-weight: 600;
-  color: var(--ink);
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-}
-.stat__val--gold {
-  font-family: var(--font-mono);
-  color: var(--gold);
-  font-weight: 700;
-}
-.stat__val--emerald { color: var(--emerald); }
-
-/* ── Rank progress ── */
-.rank-progress {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 10px 12px;
-  background: linear-gradient(90deg, color-mix(in srgb, var(--rank-clr, var(--ink-3)) 20%, transparent), transparent);
-  border: 1px solid var(--line);
-  border-left: 3px solid var(--rank-clr, var(--ink-3));
-  border-radius: 8px;
-  margin-bottom: 12px;
-}
-.rank-progress__badge {
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
-  background: var(--rank-clr, var(--ink-3));
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: #fff;
-  box-shadow: inset 0 1px 2px rgba(255, 255, 255, 0.3), inset 0 -1px 2px rgba(0, 0, 0, 0.2);
-  flex-shrink: 0;
-}
-.rank-progress__icon { font-size: 18px; }
-.rank-progress__body { flex: 1; min-width: 0; }
-.rank-progress__title {
-  font-family: var(--font-display);
-  font-size: 15px;
-  color: var(--ink);
-}
-.rank-progress__next {
-  font-size: 11px;
-  color: var(--ink-3);
-  margin-top: 2px;
-  font-family: var(--font-body);
-}
-.rank-progress__next--top {
-  color: var(--gold);
-  font-family: var(--font-title);
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  font-weight: 600;
-}
-
-/* ── Empty state ── */
-.empty {
-  color: var(--ink-3);
-  font-family: var(--font-display);
-  font-size: 13px;
-  text-align: center;
-  padding: 14px 0;
-  font-style: italic;
-}
-
-/* ── Holdings list ── */
-.holdings {
   display: flex;
   flex-direction: column;
   gap: 6px;
+  min-width: 0;
+  flex: 1;
 }
-.holding {
+.profile-name {
+  font-family: 'Unbounded', sans-serif;
+  font-weight: 700;
+  font-size: 18px;
+  line-height: 22px;
+  color: #000;
+}
+.profile-color {
+  display: inline-flex;
+  align-items: center;
+  align-self: flex-start;
+  padding: 6px 14px;
+  border-radius: 100px;
+  color: #fff;
+  font-family: 'Unbounded', sans-serif;
+  font-weight: 700;
+  font-size: 12px;
+  line-height: 14px;
+  text-shadow: 0.2px 0.2px 0 rgba(0, 0, 0, 0.5);
+  border: 1px solid rgba(0, 0, 0, 0.15);
+}
+
+/* ── 3 green stat cards ── */
+.profile-stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+.profile-stat {
+  background: #43c22d;
+  border: 1.5px solid rgba(0, 0, 0, 0.18);
+  border-radius: 14px;
+  padding: 8px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  box-shadow: inset 0 -4px 0 0 rgba(0, 0, 0, 0.18);
+}
+.profile-stat__label {
+  font-family: 'Unbounded', sans-serif;
+  font-weight: 700;
+  font-size: 11px;
+  line-height: 13px;
+  color: #fff;
+  text-shadow: 0.5px 0.5px 0 rgba(0, 0, 0, 0.5);
+}
+.profile-stat__val {
+  font-family: 'Unbounded', sans-serif;
+  font-weight: 800;
+  font-size: 14px;
+  line-height: 16px;
+  color: #fff;
+  text-shadow: 0.5px 0.5px 0 rgba(0, 0, 0, 0.6);
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.profile-stat__coin {
+  font-size: 14px;
+  line-height: 1;
+  filter: saturate(0.9);
+}
+
+/* ── Holdings card (white rounded) ── */
+.profile-owned {
+  background: #fff;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  border-radius: 18px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.profile-owned__label {
+  font-family: 'Unbounded', sans-serif;
+  font-weight: 700;
+  font-size: 16px;
+  line-height: 20px;
+  color: #000;
+}
+.profile-owned__empty {
+  padding: 8px 0 4px;
+  font-family: 'Unbounded', sans-serif;
+  font-weight: 500;
+  font-size: 13px;
+  line-height: 16px;
+  color: rgba(0, 0, 0, 0.55);
+  text-align: center;
+}
+.profile-owned__list {
+  display: flex;
+  flex-direction: column;
+}
+.profile-owned__row {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 8px 10px;
-  background: var(--card);
-  border: 1px solid var(--line);
-  border-radius: 8px;
+  gap: 8px;
+  padding: 10px 0;
+  border-top: 1px solid rgba(0, 0, 0, 0.06);
 }
-.holding__band {
-  width: 3px;
-  height: 20px;
-  border-radius: 2px;
+.profile-owned__row:first-child { border-top: none; padding-top: 4px; }
+.profile-owned__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
   flex-shrink: 0;
 }
-.holding__name {
-  flex: 1;
-  min-width: 0;
-  font-family: var(--font-display);
-  font-size: 13px;
-  color: var(--ink);
+.profile-owned__name {
+  font-family: 'Unbounded', sans-serif;
+  font-weight: 500;
+  font-size: 14px;
+  line-height: 16px;
+  color: #000;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.holding__extras {
+
+/* ── CTA (same style as CreateView) ── */
+.profile-cta {
+  width: 100%;
+  height: 56px;
+  padding: 0 18px;
+  border: 2px solid #000;
+  border-radius: 18px;
+  background: #43c22d;
   display: flex;
   align-items: center;
-  gap: 6px;
-  flex-shrink: 0;
-  font-family: var(--font-display);
-  color: var(--ink-2);
-  font-size: 14px;
-  line-height: 1;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: inset 0 -6px 0 0 rgba(0, 0, 0, 0.22);
+  transition: transform 80ms ease;
+  font-family: 'Golos Text', 'Unbounded', sans-serif;
+  font-weight: 900;
+  font-size: 20px;
+  line-height: 22px;
+  color: #fff;
+  text-shadow: 1px 1px 0 rgba(0, 0, 0, 0.5);
+  letter-spacing: 0.02em;
 }
-.holding__icon { color: var(--gold); }
-.holding__houses { letter-spacing: 0.05em; }
-.holding__mortgage {
-  display: inline-flex;
+.profile-cta:active {
+  transform: translateY(2px);
+  box-shadow: inset 0 -2px 0 0 rgba(0, 0, 0, 0.22);
+}
+
+/* ── Close button (44×44 circle under the popup) ── */
+.profile-close {
+  width: 44px;
+  height: 44px;
+  align-self: center;
+  background: #fff;
+  border: 4.125px solid #000;
+  border-radius: 50%;
+  display: flex;
   align-items: center;
-  opacity: 0.75;
+  justify-content: center;
+  cursor: pointer;
+  transition: transform 0.1s ease;
+  padding: 0;
+  margin-top: 4px;
 }
-
-/* ── Trade CTA ── */
-.profile-trade {
-  width: 100%;
-  margin-top: 14px;
-  padding: 12px;
-  font-size: 14px;
-}
-
-/* ── Animations ── */
-@keyframes sheet-unfurl {
-  0% { transform: translateY(100%); opacity: 0; }
-  100% { transform: translateY(0); opacity: 1; }
-}
-.fade-enter-active, .fade-leave-active { transition: opacity 0.2s ease; }
-.fade-enter-from, .fade-leave-to { opacity: 0; }
-.fade-enter-active .modal-card,
-.fade-leave-active .modal-card {
-  transition: transform 0.22s cubic-bezier(0.34, 1.56, 0.64, 1);
-}
-.fade-leave-to .modal-card { transform: translateY(20%); }
+.profile-close:active { transform: scale(0.94); }
 </style>

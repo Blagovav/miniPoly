@@ -13,7 +13,7 @@ const { haptic, notify, userName, setUserName, tg } = useTelegram();
 const isRu = computed(() => locale.value === "ru");
 const L = computed(() => isRu.value
   ? {
-      greeting: "С возвращением,",
+      greeting: "Добро пожаловать!",
       createT: "Создать партию",
       createS: "Ваши правила и ваш список участников",
       joinT:   "Войти в партию",
@@ -31,7 +31,7 @@ const L = computed(() => isRu.value
       saveName: "Сохранить",
     }
   : {
-      greeting: "Welcome back,",
+      greeting: "Welcome!",
       createT: "Create match",
       createS: "Your rules, your guest list",
       joinT:   "Join a match",
@@ -48,8 +48,6 @@ const L = computed(() => isRu.value
       rejoinForget: "Forget",
       saveName: "Save",
     });
-
-const displayName = computed(() => userName.value || L.value.playerFallback);
 
 // ── Daily bonus toast (unchanged from prior design) ──
 const bonusAmount = ref(0);
@@ -149,11 +147,8 @@ function go(name: string) { haptic("light"); router.push({ name }); }
         </div>
       </transition>
 
-      <div class="home-v2__greeting-row">
-        <h1 class="home-v2__greeting">
-          <span>{{ L.greeting }}</span>
-          <span>{{ displayName }}</span>
-        </h1>
+      <div class="home-v2__hero">
+        <img class="home-v2__mascot" src="/figma/home/mascot.png" alt="" aria-hidden="true" />
         <button
           class="home-v2__settings"
           :aria-label="L.settingsAria"
@@ -162,6 +157,7 @@ function go(name: string) { haptic("light"); router.push({ name }); }
           <img src="/figma/home/settings.png" alt="" />
         </button>
       </div>
+      <h1 class="home-v2__greeting">{{ L.greeting }}</h1>
 
       <div v-if="!tg && editingName" class="home-v2__name-edit">
         <input
@@ -245,35 +241,35 @@ function go(name: string) { haptic("light"); router.push({ name }); }
   overflow-x: hidden;
 }
 
-/* ── Greeting row ── */
-.home-v2__greeting-row {
-  display: flex;
-  align-items: flex-start;
-  gap: 16px;
-}
-.home-v2__greeting {
-  flex: 1;
-  min-width: 0;
-  margin: 0;
-  font-family: 'Golos Text', sans-serif;
-  font-weight: 700;
-  font-size: 28px;
-  line-height: 34px;
-  color: #fff;
-  text-shadow: 1px 1px 0 #000;
-  word-break: break-word;
-}
-.home-v2__greeting span { display: block; }
-
-.home-v2__settings {
+/* ── Hero: mascot (left) + settings gear (top-right) ── */
+.home-v2__hero {
   position: relative;
-  width: 48px; height: 48px;
+  height: 190px;
+  margin-top: -16px;
+  margin-bottom: -14px;
+}
+.home-v2__mascot {
+  position: absolute;
+  top: 0;
+  left: calc(50% - 77.5px);
+  width: 190px;
+  height: 190px;
+  object-fit: contain;
+  pointer-events: none;
+  user-select: none;
+}
+.home-v2__settings {
+  position: absolute;
+  top: 47px;
+  right: 0;
+  width: 48px;
+  height: 48px;
   padding: 0;
   background: transparent;
   border: none;
   cursor: pointer;
-  flex-shrink: 0;
   transition: transform 120ms ease;
+  z-index: 1;
 }
 .home-v2__settings img {
   position: absolute;
@@ -286,6 +282,17 @@ function go(name: string) { haptic("light"); router.push({ name }); }
   pointer-events: none;
 }
 .home-v2__settings:active { transform: scale(0.92); }
+
+/* ── Greeting ── */
+.home-v2__greeting {
+  margin: 0;
+  font-family: 'Golos Text', sans-serif;
+  font-weight: 700;
+  font-size: 28px;
+  line-height: 34px;
+  color: #fff;
+  text-shadow: 1px 1px 0 #000;
+}
 
 /* ── Inline name edit ── */
 .home-v2__name-edit {

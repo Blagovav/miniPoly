@@ -2,8 +2,6 @@
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { useGameStore } from "../stores/game";
-import { useInventoryStore } from "../stores/inventory";
-import { SHOP_ITEMS } from "../shop/items";
 import { useTelegram } from "../composables/useTelegram";
 import Icon from "./Icon.vue";
 import Sigil from "./Sigil.vue";
@@ -13,8 +11,11 @@ const props = defineProps<{ onSend: (text: string) => void }>();
 
 const { t } = useI18n();
 const game = useGameStore();
-const inv = useInventoryStore();
 const { haptic } = useTelegram();
+
+const open = ref(false);
+const draft = ref("");
+const list = ref<HTMLDivElement | null>(null);
 
 function playerIndex(id: string): number {
   return game.room?.players.findIndex((p) => p.id === id) ?? -1;
@@ -27,22 +28,31 @@ function playerColor(id: string): string {
 function isMine(id: string): boolean {
   return !!game.me && id === game.me.id;
 }
+function formatTime(ts: number): string {
+  const d = new Date(ts);
+  const h = d.getHours();
+  const m = d.getMinutes().toString().padStart(2, "0");
+  const suffix = h >= 12 ? "PM" : "AM";
+  const h12 = h % 12 || 12;
+  return `${h12}:${m} ${suffix}`;
+}
 
-const open = ref(false);
-const draft = ref("");
-const list = ref<HTMLDivElement | null>(null);
+const hasMessages = computed(() => game.chat.length > 0);
 
-const ownedEmotes = computed(() =>
-  SHOP_ITEMS.filter((i) => i.kind === "emote" && inv.owned.has(i.id)),
-);
-
-function toggle() {
-  open.value = !open.value;
-  if (open.value) {
-    game.markChatRead();
-    scrollToBottom();
-  }
+function openChat() {
+  if (open.value) return;
+  open.value = true;
+  game.markChatRead();
+  scrollToBottom();
   haptic("light");
+}
+function close() {
+  if (!open.value) return;
+  open.value = false;
+  haptic("light");
+}
+function toggle() {
+  open.value ? close() : openChat();
 }
 
 function send() {
@@ -50,11 +60,6 @@ function send() {
   if (!text) return;
   props.onSend(text);
   draft.value = "";
-}
-
-function sendEmote(icon: string) {
-  props.onSend(icon);
-  haptic("light");
 }
 
 async function scrollToBottom() {
@@ -72,9 +77,7 @@ watch(
   },
 );
 
-// External trigger — RoomView's header has a chat icon that dispatches
-// this event. Keeps Chat self-contained (no prop drilling) and mirrors
-// the open-tour pattern already in App.vue.
+// External trigger — RoomView's header chat icon dispatches this event.
 function handleExternalToggle() { toggle(); }
 onMounted(() => {
   if (typeof window !== "undefined") {
@@ -89,57 +92,63 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div :class="['chat', open && 'chat--open']">
-    <button class="chat__toggle" @click="toggle" aria-label="chat">
-      <Icon name="chat" :size="22" color="#f7eeda"/>
-      <span v-if="!open && game.unreadChat > 0" class="chat__badge">
-        {{ game.unreadChat }}
-      </span>
-    </button>
-
-    <transition name="chat-slide">
-      <div v-if="open" class="chat__panel card">
-        <div class="chat__header">
-          <div class="chat__header-text">
-            <div class="chat__eyebrow">Pigeon roost</div>
-            <div class="chat__title">{{ t("chat.title") }}</div>
+  <transition name="chat-fade">
+    <div v-if="open" class="chat" role="dialog" aria-modal="true" @click.self="close">
+      <div class="chat__stack">
+        <div class="chat__panel" :class="{ 'chat__panel--empty': !hasMessages }">
+          <div class="chat__header">
+            <h2 class="chat__title">{{ t("chat.title") }}</h2>
           </div>
-          <button class="chat__close" @click="toggle" aria-label="close">
-            <Icon name="x" :size="14" color="var(--ink-3)"/>
-          </button>
-        </div>
 
-        <div ref="list" class="chat__list">
-          <div v-if="game.chat.length === 0" class="chat__empty">
-            {{ t("chat.empty") }}
-          </div>
-          <div
-            v-for="m in game.chat"
-            :key="m.id"
-            class="chat__msg"
-            :class="{ 'chat__msg--me': isMine(m.fromId) }"
-          >
-            <Sigil
-              :name="m.from"
-              :color="playerColor(m.fromId)"
-              :size="26"
-            />
-            <div class="chat__bubble" :class="{ 'chat__bubble--me': isMine(m.fromId) }">
-              <div v-if="!isMine(m.fromId)" class="chat__from">{{ m.from }}</div>
-              <div class="chat__text">{{ m.text }}</div>
+          <div ref="list" class="chat__list">
+            <div v-if="!hasMessages" class="chat__empty">
+              {{ t("chat.empty") }}
             </div>
-          </div>
-        </div>
 
-        <div v-if="ownedEmotes.length > 0" class="chat__emotes rail">
-          <button
-            v-for="e in ownedEmotes"
-            :key="e.id"
-            class="chat__emote"
-            @click="sendEmote(e.icon)"
-          >
-            {{ e.icon }}
-          </button>
+            <template v-else>
+              <div
+                v-for="m in game.chat"
+                :key="m.id"
+                class="chat__msg"
+                :class="{ 'chat__msg--me': isMine(m.fromId) }"
+              >
+                <Sigil
+                  v-if="!isMine(m.fromId)"
+                  class="chat__avatar"
+                  :name="m.from"
+                  :color="playerColor(m.fromId)"
+                  :size="40"
+                />
+
+                <div
+                  v-if="isMine(m.fromId)"
+                  class="chat__bubble chat__bubble--me"
+                >
+                  <p class="chat__text chat__text--me">{{ m.text }}</p>
+                  <span class="chat__time chat__time--me">{{ formatTime(m.ts) }}</span>
+                </div>
+
+                <div
+                  v-else
+                  class="chat__bubble"
+                  :style="{ boxShadow: `inset -4px 0 0 0 ${playerColor(m.fromId)}` }"
+                >
+                  <div class="chat__bubble-top">
+                    <span class="chat__name-pill" :style="{ background: playerColor(m.fromId) }">
+                      <Sigil
+                        :name="m.from"
+                        :color="playerColor(m.fromId)"
+                        :size="16"
+                      />
+                      <span class="chat__name">{{ m.from }}</span>
+                    </span>
+                    <p class="chat__text">{{ m.text }}</p>
+                  </div>
+                  <span class="chat__time">{{ formatTime(m.ts) }}</span>
+                </div>
+              </div>
+            </template>
+          </div>
         </div>
 
         <div class="chat__input-row">
@@ -147,234 +156,265 @@ onUnmounted(() => {
             v-model="draft"
             :placeholder="t('chat.placeholder')"
             maxlength="200"
+            class="chat__input"
             @keydown.enter="send"
           />
           <button
-            class="btn btn-primary chat__send"
+            class="chat__send"
             :disabled="!draft.trim()"
             @click="send"
             aria-label="send"
           >
-            <Icon name="send" :size="15" color="#fff"/>
+            <Icon name="send" :size="18" color="#fff"/>
           </button>
         </div>
+
+        <button class="chat__close-btn" @click="close" aria-label="close">
+          <Icon name="x" :size="20" color="#000"/>
+        </button>
       </div>
-    </transition>
-  </div>
+    </div>
+  </transition>
 </template>
 
 <style scoped>
+/* ── Overlay (scrim) ── */
 .chat {
   position: fixed;
-  /* Отодвигаем от нижнего края с учётом safe-area (notch / home bar)
-     и Telegram bottom bar (v8+). iOS/Android не обрезает кнопку. */
-  bottom: calc(16px + var(--tg-safe-area-inset-bottom, 0px) + var(--tg-content-safe-area-inset-bottom, 0px));
-  right: 16px;
-  z-index: 80;
-}
-
-/* ─── Floating bubble ─── */
-.chat__toggle {
-  width: 52px;
-  height: 52px;
-  border-radius: 50%;
-  background: linear-gradient(180deg, var(--primary-soft) 0%, var(--primary) 60%, var(--primary-deep) 100%);
-  color: #f7eeda;
-  display: grid;
-  place-items: center;
-  box-shadow:
-    0 4px 12px rgba(62, 34, 114, 0.35),
-    inset 0 1px 0 rgba(255, 255, 255, 0.2);
-  border: 1px solid var(--primary-deep);
-  position: relative;
-  transition: transform 0.12s ease, filter 0.12s ease;
-}
-.chat__toggle:hover { filter: brightness(1.05); }
-.chat__toggle:active { transform: scale(0.94); }
-
-.chat__badge {
-  position: absolute;
-  top: -2px;
-  right: -2px;
-  background: var(--accent);
-  color: #f7eeda;
-  font-size: 10px;
-  font-family: var(--font-mono);
-  font-weight: 600;
-  padding: 2px 6px;
-  border-radius: 10px;
-  min-width: 18px;
-  text-align: center;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
-  border: 1px solid var(--accent);
-}
-
-/* ─── Drawer panel ─── */
-.chat__panel {
-  position: fixed;
-  right: 16px;
-  /* 80px = 16 (margin от края) + 52 (высота кнопки) + 12 (зазор до панели).
-     Добавляем safe-area, чтобы панель не залезала под Telegram bottom bar. */
-  bottom: calc(80px + var(--tg-safe-area-inset-bottom, 0px) + var(--tg-content-safe-area-inset-bottom, 0px));
-  width: min(340px, calc(100vw - 32px));
-  height: min(440px, calc(100vh - 180px));
+  inset: 0;
+  z-index: 120;
+  background: rgba(0, 0, 0, 0.4);
   display: flex;
   flex-direction: column;
-  padding: 12px;
-  background: var(--card-alt);
-  border: 1px solid var(--line);
-  box-shadow: 0 12px 32px rgba(42, 29, 16, 0.18);
-  overflow: hidden;
+  justify-content: flex-end;
+  padding: 0 24px calc(16px + var(--sab) + var(--csab));
 }
+
+.chat-fade-enter-active,
+.chat-fade-leave-active { transition: opacity 0.2s ease; }
+.chat-fade-enter-from,
+.chat-fade-leave-to { opacity: 0; }
+
+.chat__stack {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+  max-width: 345px;
+  margin: 0 auto;
+}
+
+/* ── Popup card ── */
+.chat__panel {
+  background: var(--card-alt);
+  border-radius: 18px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  max-height: min(530px, calc(100vh - 220px));
+  min-height: 116px;
+}
+.chat__panel--empty { min-height: 0; }
 
 .chat__header {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  padding-bottom: 10px;
-  border-bottom: 1px solid var(--divider);
-  margin-bottom: 10px;
-}
-.chat__header-text { text-align: left; }
-.chat__eyebrow {
-  font-size: 10px;
-  letter-spacing: 0.15em;
-  color: var(--ink-3);
-  text-transform: uppercase;
+  flex-shrink: 0;
+  background: var(--card-alt);
+  padding: 16px;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.16);
+  border-radius: 0 0 18px 18px;
+  z-index: 2;
 }
 .chat__title {
-  font-family: var(--font-display);
-  font-size: 16px;
-  color: var(--ink);
-  margin-top: 1px;
+  margin: 0;
+  font-family: 'Unbounded', var(--font-display);
+  font-weight: 700;
+  font-size: 18px;
+  line-height: 26px;
+  color: #000;
 }
-.chat__close {
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
-  background: var(--card);
-  border: 1px solid var(--line);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--ink-3);
-  flex-shrink: 0;
-}
-.chat__close:hover { background: var(--bg); }
 
-/* ─── Messages ─── */
 .chat__list {
   flex: 1;
+  min-height: 0;
   overflow-y: auto;
+  padding: 16px;
   display: flex;
   flex-direction: column;
   gap: 8px;
-  padding-right: 2px;
   scrollbar-width: thin;
+  scrollbar-color: rgba(0, 0, 0, 0.4) rgba(0, 0, 0, 0.16);
 }
-.chat__empty {
-  text-align: center;
-  color: var(--ink-3);
-  font-size: 12px;
-  margin: auto;
-  padding: 20px;
-  font-family: var(--font-display);
-  font-style: italic;
+.chat__list::-webkit-scrollbar { width: 3px; }
+.chat__list::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.16);
+  border-radius: 100px;
+}
+.chat__list::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.4);
+  border-radius: 100px;
 }
 
+/* ── Empty state pill ── */
+.chat__empty {
+  margin: 8px 0;
+  padding: 10px;
+  border: 1.4px dashed rgba(0, 0, 0, 0.4);
+  border-radius: 12px;
+  text-align: center;
+  font-family: 'Unbounded', var(--font-display);
+  font-weight: 700;
+  font-size: 14px;
+  line-height: 16px;
+  color: rgba(0, 0, 0, 0.6);
+}
+
+/* ── Message rows ── */
 .chat__msg {
   display: flex;
-  align-items: flex-start;
   gap: 8px;
+  align-items: flex-end;
 }
-.chat__msg--me { flex-direction: row-reverse; }
+.chat__msg--me { justify-content: flex-end; }
 
-.chat__bubble {
-  max-width: 72%;
-  padding: 7px 11px;
-  background: var(--card);
-  color: var(--ink);
-  border: 1px solid var(--line);
-  border-radius: 10px 10px 10px 3px;
-  font-size: 13px;
-  line-height: 1.4;
-  word-break: break-word;
-  font-family: var(--font-body);
-}
-.chat__bubble--me {
-  background: var(--primary);
-  color: #f7eeda;
-  border: none;
-  border-radius: 10px 10px 3px 10px;
-  box-shadow: 0 1px 2px rgba(62, 34, 114, 0.25);
-}
-
-.chat__from {
-  font-family: var(--font-display);
-  font-size: 10px;
-  color: var(--ink-3);
-  font-weight: 600;
-  margin-bottom: 2px;
-  letter-spacing: 0.02em;
-}
-.chat__text { font-family: var(--font-body); }
-
-/* ─── Emotes ─── */
-.chat__emotes {
-  padding: 8px 0;
-  border-top: 1px solid var(--divider);
-}
-.chat__emote {
-  width: 34px;
-  height: 34px;
+.chat__avatar {
   flex-shrink: 0;
-  background: var(--card);
-  border: 1px solid var(--line);
-  border-radius: 6px;
-  font-size: 16px;
-  font-family: var(--font-display);
-  color: var(--ink);
+  width: 40px !important;
+  height: 40px !important;
+}
+
+/* Other-player bubble: white card with colored right stripe */
+.chat__bubble {
+  flex: 1;
+  min-width: 0;
+  background: #fff;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  border-radius: 12px;
+  padding: 8px 12px 8px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: flex-end;
+}
+.chat__bubble-top {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: flex-start;
+  width: 100%;
+}
+
+.chat__name-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px 4px 4px;
+  border-radius: 100px;
+  color: #fff;
+}
+.chat__name-pill :deep(.sigil) {
+  /* Darken the pill's sigil so the gradient reads on a same-color pill */
+  filter: brightness(0.85) contrast(1.1);
+}
+.chat__name {
+  font-family: 'Unbounded', var(--font-display);
+  font-weight: 700;
+  font-size: 12px;
+  line-height: 14px;
+  text-shadow: 0.2px 0.2px 0 rgba(0, 0, 0, 0.6);
+}
+
+.chat__text {
+  margin: 0;
+  font-family: var(--font-body);
+  font-weight: 500;
+  font-size: 14px;
+  line-height: 16px;
+  color: #000;
+  word-break: break-word;
+  align-self: stretch;
+}
+.chat__text--me { color: #fff; }
+
+.chat__time {
+  font-family: var(--font-body);
+  font-weight: 500;
+  font-size: 10px;
+  line-height: 12px;
+  color: rgba(0, 0, 0, 0.6);
+}
+.chat__time--me { color: rgba(255, 255, 255, 0.6); }
+
+/* Own bubble: solid blue, pointing to the right */
+.chat__bubble--me {
+  flex: 0 0 auto;
+  max-width: 75%;
+  background: #3477da;
+  border: none;
+  border-radius: 16px 16px 0 16px;
+  padding: 8px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: flex-end;
+  text-align: right;
+}
+
+/* ── Input row (below popup) ── */
+.chat__input-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.chat__input {
+  flex: 1;
+  min-width: 0;
+  height: 40px;
+  padding: 8px 12px;
+  background: #fff;
+  border: 1px solid rgba(0, 0, 0, 0.16);
+  border-radius: 12px;
+  font-family: var(--font-body);
+  font-weight: 500;
+  font-size: 14px;
+  line-height: 16px;
+  color: #000;
+  outline: none;
+}
+.chat__input::placeholder { color: rgba(0, 0, 0, 0.4); }
+.chat__input:focus { border-color: rgba(0, 0, 0, 0.4); }
+
+.chat__send {
+  width: 40px;
+  height: 40px;
+  flex-shrink: 0;
+  background: #2283f3;
+  border: 1px solid #000;
+  border-radius: 100px;
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: transform 0.1s, border-color 0.15s;
+  cursor: pointer;
+  transition: transform 0.1s ease, filter 0.1s ease;
 }
-.chat__emote:hover { border-color: var(--primary); }
-.chat__emote:active { transform: scale(0.92); }
+.chat__send:disabled { opacity: 0.45; cursor: default; }
+.chat__send:not(:disabled):hover { filter: brightness(1.05); }
+.chat__send:not(:disabled):active { transform: scale(0.94); }
 
-/* ─── Input ─── */
-.chat__input-row {
-  display: flex;
-  gap: 6px;
-  padding-top: 10px;
-  border-top: 1px solid var(--divider);
-}
-.chat__input-row input {
-  flex: 1;
-  padding: 10px 12px;
-  background: var(--card);
-  border: 1px solid var(--line);
-  border-radius: var(--r-md);
-  font-size: 13px;
-  color: var(--ink);
-  font-family: var(--font-body);
-  outline: none;
-}
-.chat__input-row input:focus { border-color: var(--primary); }
-.chat__input-row input::placeholder { color: var(--ink-3); }
-
-.chat__send {
+/* ── Close button ── */
+.chat__close-btn {
   width: 44px;
+  height: 44px;
+  background: #fff;
+  border: 4.125px solid #000;
+  border-radius: 50%;
+  align-self: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: transform 0.1s ease;
+  margin-top: 4px;
   padding: 0;
 }
-.chat__send:disabled { opacity: 0.45; }
-
-/* ─── Slide transition ─── */
-.chat-slide-enter-active, .chat-slide-leave-active {
-  transition: transform 0.25s cubic-bezier(0.3, 1.2, 0.4, 1), opacity 0.2s ease;
-}
-.chat-slide-enter-from, .chat-slide-leave-to {
-  transform: translateY(20px) scale(0.96);
-  opacity: 0;
-}
+.chat__close-btn:active { transform: scale(0.94); }
 </style>

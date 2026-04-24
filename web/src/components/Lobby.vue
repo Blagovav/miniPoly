@@ -12,8 +12,9 @@ import { useTelegram } from "../composables/useTelegram";
 import Icon from "./Icon.vue";
 import Sigil from "./Sigil.vue";
 import TokenArt from "./TokenArt.vue";
-import MapPickRow from "./MapPickRow.vue";
+import BoardPreview from "./BoardPreview.vue";
 import BoardSelectModal from "./BoardSelectModal.vue";
+import { findBoard } from "../utils/boards";
 import { ORDERED_PLAYER_COLORS, lighten, tokenArtFor } from "../utils/palette";
 
 const props = defineProps<{
@@ -35,6 +36,9 @@ void t;
 // Lobby-only board pick (display-only — server doesn't pick boards yet).
 const boardId = ref<string>("eldmark");
 const boardModalOpen = ref(false);
+const board = computed(() => findBoard(boardId.value));
+const boardName = computed(() => isRu.value ? board.value.ru : board.value.name);
+const boardDesc = computed(() => isRu.value ? board.value.desc.ru : board.value.desc.en);
 
 // Available tokens = free set + anything the player owns from the shop.
 const availableTokens = computed(() => {
@@ -200,24 +204,45 @@ const L = computed(() => isRu.value
 
 <template>
   <div class="content lobby">
-    <!-- ── Room-code card ────────────────────────────────────── -->
-    <div class="card lobby-code">
-      <div class="lobby-code__label">{{ L.roomCode }}</div>
-      <div class="lobby-code__value">{{ room.id }}</div>
-      <button class="lobby-code__copy" @click="share">
-        <Icon v-if="copied" name="check" :size="12" color="var(--primary)" />
-        {{ copied ? L.copied : L.copyLink }}
+    <!-- ── Room code (Figma 73:3483) ─────────────────────────── -->
+    <div class="lobby-section">
+      <div class="lobby-section__label">{{ L.roomCode }}</div>
+      <button class="lobby-code2" @click="share" :title="copied ? L.copied : L.copyLink">
+        <span class="lobby-code2__value">{{ room.id }}</span>
+        <span class="lobby-code2__icon" aria-hidden="true">
+          <Icon v-if="copied" name="check" :size="14" color="#43c22d" />
+          <svg v-else viewBox="0 0 24 24" width="16" height="16" fill="none">
+            <rect x="8" y="8" width="12" height="12" rx="2.5" stroke="#000" stroke-width="1.6"/>
+            <path d="M4 16V6.5A2.5 2.5 0 0 1 6.5 4H16" stroke="#000" stroke-width="1.6" stroke-linecap="round"/>
+          </svg>
+        </span>
       </button>
     </div>
 
-    <!-- ── Map (host can change) ───────────────────────────── -->
-    <div class="section-label">{{ isRu ? "Карта" : "Map" }}</div>
-    <div class="lobby-map">
-      <MapPickRow
-        :board-id="boardId"
-        :editable="isHost"
-        :on-open="() => (boardModalOpen = true)"
-      />
+    <!-- ── Поле card (Figma 73:3591) ─────────────────────────── -->
+    <div class="lobby-section lobby-section--card">
+      <div class="lobby-section__label">{{ isRu ? "Поле" : "Map" }}</div>
+      <button
+        type="button"
+        class="lobby-board"
+        :disabled="!isHost"
+        @click="isHost ? (boardModalOpen = true) : null"
+      >
+        <div class="lobby-board__art">
+          <BoardPreview :board="board" :size="56"/>
+        </div>
+        <div class="lobby-board__body">
+          <div class="lobby-board__name">{{ boardName }}</div>
+          <div class="lobby-board__desc">{{ boardDesc }}</div>
+        </div>
+        <img
+          v-if="isHost"
+          class="lobby-board__edit"
+          src="/figma/create/edit-pencil.svg"
+          alt=""
+          aria-hidden="true"
+        />
+      </button>
     </div>
 
     <!-- ── Players section ─────────────────────────────────── -->
@@ -364,8 +389,8 @@ const L = computed(() => isRu.value
 .lobby {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  padding: 8px 14px 12px;
+  gap: 16px;
+  padding: 16px 24px 12px;
   flex: 1;
   min-height: 0;
   overflow-y: auto;
@@ -377,58 +402,127 @@ const L = computed(() => isRu.value
    crushed when total content exceeds the viewport. */
 .lobby > * { flex-shrink: 0; }
 
-.lobby-map {
-  margin-bottom: 2px;
-}
-
-/* ── Room-code card ── */
-.lobby-code {
-  text-align: center;
-  padding: 10px 14px;
+/* ── Figma section labels + cards (73:3483) ── */
+.lobby-section {
   display: flex;
   flex-direction: column;
-  align-items: center;
-  gap: 2px;
+  gap: 12px;
 }
-.lobby-code__label {
-  font-size: 10px;
-  color: var(--ink-3);
-  letter-spacing: 0.15em;
-  text-transform: uppercase;
-  margin-bottom: 2px;
+.lobby-section--card {
+  padding: 16px;
+  background: #fff;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  border-radius: 18px;
 }
-.lobby-code__value {
-  font-family: var(--font-display);
-  font-size: 22px;
-  letter-spacing: 0.22em;
-  color: var(--ink);
-  line-height: 1.1;
+.lobby-section__label {
+  font-family: 'Unbounded', sans-serif;
+  font-weight: 700;
+  font-size: 18px;
+  line-height: 26px;
+  color: #000;
+  margin: 0;
 }
-.lobby-code__copy {
-  margin-top: 8px;
-  padding: 6px 12px;
-  font-size: 11px;
-  background: transparent;
-  color: var(--primary);
-  border: 1px solid var(--primary);
-  border-radius: 999px;
-  font-family: var(--font-body);
-  font-weight: 600;
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-}
-.lobby-code__copy:hover { background: rgba(90, 58, 154, 0.06); }
-.lobby-code__copy:active { transform: translateY(1px); }
 
-/* ── Section label ── */
+/* Room code card — big Golos Medium value + copy button on the right. */
+.lobby-code2 {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  width: 100%;
+  padding: 16px;
+  background: #fff;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  border-radius: 18px;
+  cursor: pointer;
+  text-align: left;
+  transition: background 120ms ease;
+}
+.lobby-code2:hover { background: #fafafa; }
+.lobby-code2:active { transform: scale(0.99); }
+.lobby-code2__value {
+  flex: 1;
+  min-width: 0;
+  font-family: 'Golos Text', sans-serif;
+  font-weight: 500;
+  font-size: 32px;
+  line-height: 34px;
+  color: #000;
+  letter-spacing: 0;
+  word-break: break-all;
+}
+.lobby-code2__icon {
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0.8;
+}
+
+/* Field card — mirror of CreateView's board picker. */
+.lobby-board {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 0;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+}
+.lobby-board:disabled { cursor: default; }
+.lobby-board__art {
+  width: 56px;
+  height: 56px;
+  border-radius: 12px;
+  overflow: hidden;
+  background: #f0e9d9;
+  flex-shrink: 0;
+  line-height: 0;
+}
+.lobby-board__art :deep(svg) {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+.lobby-board__body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.lobby-board__name {
+  font-family: 'Golos Text', sans-serif;
+  font-weight: 700;
+  font-size: 16px;
+  line-height: 20px;
+  color: #000;
+}
+.lobby-board__desc {
+  font-family: 'Golos Text', sans-serif;
+  font-weight: 500;
+  font-size: 12px;
+  line-height: 16px;
+  color: #000;
+  opacity: 0.85;
+}
+.lobby-board__edit {
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
+  pointer-events: none;
+}
+/* ── Section label (Игроки / Твоя фишка below the Figma sections) ── */
 .section-label {
-  font-size: 11px;
-  color: var(--ink-3);
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  margin-bottom: -4px;
+  font-family: 'Unbounded', sans-serif;
+  font-weight: 700;
+  font-size: 18px;
+  line-height: 26px;
+  color: #000;
+  margin: 0;
 }
 
 /* ── Players list ── */
