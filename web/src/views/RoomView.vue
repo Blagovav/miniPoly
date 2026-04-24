@@ -31,8 +31,20 @@ import TxnToast from "../components/TxnToast.vue";
 import Icon from "../components/Icon.vue";
 import LoadingScreen from "../components/LoadingScreen.vue";
 import CoronationModal from "../components/CoronationModal.vue";
-import { ORDERED_PLAYER_COLORS, tokenArtFor } from "../utils/palette";
-import TokenArt from "../components/TokenArt.vue";
+import { ORDERED_PLAYER_COLORS } from "../utils/palette";
+import { SHOP_ITEMS } from "../shop/items";
+
+// Map shop token id → its emoji icon. Leaderboard + avatar fallbacks
+// render the actual token the player picked ("за какую фишку играет"),
+// not a generic silhouette. Default to a knight piece if the player
+// hasn't chosen anything yet.
+const TOKEN_ICON_BY_ID: Record<string, string> = Object.fromEntries(
+  SHOP_ITEMS.filter((it) => it.kind === "token").map((it) => [it.id, it.icon ?? "♟️"]),
+);
+function shopTokenIcon(tokenId: string | undefined): string {
+  if (tokenId && TOKEN_ICON_BY_ID[tokenId]) return TOKEN_ICON_BY_ID[tokenId];
+  return "♟️";
+}
 import { humanError } from "../utils/errors";
 import type { Player } from "../../../shared/types";
 import { BOARD } from "../../../shared/board";
@@ -706,20 +718,11 @@ void t;
         <div class="room-topbar__pill">{{ subtitle }}</div>
       </div>
       <div class="room-topbar__actions">
-        <!-- Speech-bubble PNG (from Figma imgImage28) → text chat toggle.
-             nav-home.png/nav-chat.png were mis-named on download; the
-             bubble file is on disk under nav-home.png. -->
-        <button
-          class="room-topbar__nav-btn"
-          :aria-label="locale === 'ru' ? 'Чат' : 'Chat'"
-          @click="toggleChat"
-        >
-          <img src="/figma/room/nav-home.png" alt="" />
-        </button>
-        <!-- House PNG (from Figma imgImage29) → voice-chat toggle per
-             designer. Tap = join + toggle PTT, long-press = fully leave
-             voice. Status dot in corner: red = joined/muted, pulsing green
-             = transmitting, orange = error. -->
+        <!-- Per Figma 67:1455 the nav order is voice → chat → menu.
+             Voice PNG (imgImage29) = 3D headphones; tap toggles join/PTT,
+             long-press fully leaves. Status dot in corner: grey (idle),
+             red (joined+muted), pulsing green (transmitting), amber
+             (connecting), orange (error). -->
         <button
           class="room-topbar__nav-btn"
           :aria-label="locale === 'ru' ? 'Голос' : 'Voice'"
@@ -743,6 +746,16 @@ void t;
             }"
             aria-hidden="true"
           />
+        </button>
+        <!-- Speech-bubble PNG (imgImage28) → text chat toggle. nav-home.png
+             /nav-chat.png were mis-named on download; the bubble file is
+             on disk under nav-home.png. -->
+        <button
+          class="room-topbar__nav-btn"
+          :aria-label="locale === 'ru' ? 'Чат' : 'Chat'"
+          @click="toggleChat"
+        >
+          <img src="/figma/room/nav-home.png" alt="" />
         </button>
         <button class="room-topbar__menu-btn" aria-label="menu" @click="handleMenu">
           <span class="room-topbar__menu-bar" />
@@ -905,13 +918,8 @@ void t;
                   alt=""
                   referrerpolicy="no-referrer"
                 />
-                <span v-else class="leaderboard__avatar leaderboard__avatar--token">
-                  <TokenArt
-                    :id="tokenArtFor(p.token || p.id)"
-                    :size="24"
-                    color="#fff"
-                    shadow="rgba(0,0,0,0.7)"
-                  />
+                <span v-else class="leaderboard__avatar leaderboard__avatar--token" aria-hidden="true">
+                  {{ shopTokenIcon(p.token) }}
                 </span>
                 <span class="leaderboard__name">{{ p.name }}</span>
               </div>
@@ -1133,12 +1141,11 @@ void t;
   flex-shrink: 0;
   transition: background-color 200ms ease, box-shadow 200ms ease, border-radius 200ms ease;
 }
-/* Scrolled state: header detaches from the body — solid green plate with
-   rounded bottom corners + drop shadow, matching Figma 67:1455. The
-   background is the same #9fe101 as the page, so the only visible change
-   is the shadow edge + corner cut-off against content underneath. */
+/* Scrolled state: header detaches from the body via shadow + rounded
+   bottom corners only (Figma 67:1455). No background override — the
+   body's #9fe101 + pattern overlay already shows through, so painting
+   a flat #9fe101 would kill the pattern and shift the hue. */
 .room-topbar--scrolled {
-  background: #9fe101;
   border-bottom-left-radius: 18px;
   border-bottom-right-radius: 18px;
   box-shadow: 0 4px 8px rgba(0, 0, 0, 0.16);
@@ -1606,18 +1613,18 @@ void t;
   flex-shrink: 0;
   border-radius: 50%;
 }
-/* Token fallback: SVG figurine on a soft disc so it reads at 24×24
-   against the coloured pill background (knight/dragon silhouettes
-   against bright pills would otherwise bleed). */
+/* Token fallback: shop-item emoji on a dark disc (so colour emojis
+   like 🏎️/🐕/🎩 read against the bright pill background). Matches
+   Figma 32:2037 where each player's chosen shop token is the medallion. */
 .leaderboard__avatar--token {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  background: rgba(0, 0, 0, 0.22);
-  padding: 0;
+  background: rgba(0, 0, 0, 0.28);
+  font-size: 16px;
+  line-height: 1;
   overflow: hidden;
 }
-.leaderboard__avatar--token svg { width: 22px; height: 22px; display: block; }
 .leaderboard__name {
   font-family: 'Unbounded', sans-serif;
   font-weight: 700;
