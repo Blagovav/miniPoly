@@ -243,21 +243,23 @@ function go(name: string) { haptic("light"); router.push({ name }); }
   overflow-x: hidden;
 }
 
-/* ── Hero: mascot clipped to its top portion (~chest level) + settings gear.
-   Matches Figma's img-placeholder-no_games node — a 190×190 box with
-   overflow:hidden, so the legs/feet are cropped and only the head, bowtie, and
-   raised arms show. The greeting then overlaps the empty lower area via a
-   negative margin (Figma puts the greeting 103px below the mascot box top). */
+/* ── Hero: mascot + settings gear. Matches Figma main-menu (node 13:2077):
+   mascot box is 190×190 at viewport (24, 69) — left-aligned at the content
+   edge. Inside the box the character is rendered at 190×190 and offset by
+   (-18, -6) to match Figma's mask-position, which puts the bow-tie center
+   at ~(113, 140) in viewport coords (verified pixel-for-pixel vs Figma).
+   The greeting then sits 103px below the box top and overlaps the lower
+   portion of the character just like in the Figma screenshot. */
 .home-v2__hero {
   position: relative;
   height: 190px;
-  margin-top: -16px;
+  margin-top: 45px;
   margin-bottom: -87px;
 }
 .home-v2__mascot-clip {
   position: absolute;
   top: 0;
-  left: calc(50% - 77.5px);
+  left: 0;
   width: 190px;
   height: 190px;
   overflow: hidden;
@@ -266,11 +268,10 @@ function go(name: string) { haptic("light"); router.push({ name }); }
 }
 .home-v2__mascot {
   position: absolute;
-  top: 0;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 280px;
-  height: 280px;
+  left: -18px;
+  top: -6px;
+  width: 190px;
+  height: 190px;
   object-fit: contain;
   pointer-events: none;
   user-select: none;
@@ -417,7 +418,7 @@ function go(name: string) { haptic("light"); router.push({ name }); }
   display: flex;
   flex-direction: column;
   gap: 24px;
-  margin-top: 32px;
+  margin-top: 40px;
 }
 .home-v2__card {
   position: relative;
