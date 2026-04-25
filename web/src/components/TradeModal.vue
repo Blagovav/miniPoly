@@ -389,7 +389,7 @@ const L = computed(() => isRu.value
 .trade-card {
   background: var(--card-alt);
   border-radius: 18px;
-  padding: 16px;
+  padding: 24px;
   display: flex;
   flex-direction: column;
   gap: 16px;
@@ -465,14 +465,13 @@ const L = computed(() => isRu.value
   gap: 8px;
 }
 .trade-pill {
-  flex: 1 1 120px;
-  min-width: 120px;
+  flex: 0 0 auto;
   display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 6px 10px 6px 6px;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 8px 12px 8px 8px;
   border: 2px solid transparent;
-  border-radius: 14px;
+  border-radius: 16px;
   cursor: pointer;
   box-shadow: inset 0 -3px 0 0 rgba(0, 0, 0, 0.2);
   transition: transform 80ms ease, border-color 120ms ease;
@@ -483,17 +482,18 @@ const L = computed(() => isRu.value
 .trade-pill__body {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 6px;
+  justify-content: center;
   min-width: 0;
   text-align: left;
 }
 .trade-pill__name {
   font-family: 'Unbounded', sans-serif;
   font-weight: 700;
-  font-size: 13px;
-  line-height: 15px;
+  font-size: 14px;
+  line-height: 16px;
   color: #fff;
-  text-shadow: 0.3px 0.3px 0 rgba(0, 0, 0, 0.6);
+  text-shadow: 0.2px 0.2px 0 rgba(0, 0, 0, 0.6);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -501,13 +501,13 @@ const L = computed(() => isRu.value
 .trade-pill__cash {
   display: inline-flex;
   align-items: center;
-  gap: 3px;
+  gap: 6px;
   font-family: 'Unbounded', sans-serif;
   font-weight: 700;
-  font-size: 11px;
-  line-height: 13px;
-  color: rgba(255, 255, 255, 0.95);
-  text-shadow: 0.3px 0.3px 0 rgba(0, 0, 0, 0.5);
+  font-size: 12px;
+  line-height: 14px;
+  color: #fff;
+  text-shadow: 0.2px 0.2px 0 rgba(0, 0, 0, 0.5);
 }
 
 /* ── Empty / warning strip ── */
@@ -530,10 +530,10 @@ const L = computed(() => isRu.value
   background: #fff;
   border: 1px solid rgba(0, 0, 0, 0.1);
   border-radius: 18px;
-  padding: 12px;
+  padding: 16px 8px;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 12px;
   min-width: 0;
 }
 .trade-col__label {
@@ -542,9 +542,10 @@ const L = computed(() => isRu.value
   font-size: 14px;
   line-height: 16px;
   color: #000;
+  padding: 0 4px;
 }
 .trade-col__empty {
-  padding: 6px 0;
+  padding: 6px 4px;
   font-family: 'Unbounded', sans-serif;
   font-weight: 500;
   font-size: 11px;
@@ -553,37 +554,42 @@ const L = computed(() => isRu.value
 .trade-col__list {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 4px;
 }
 
-/* Property row (clickable chip). Active = soft tint; locked = 45% opacity. */
+/* Property row — per-row white card with border. Active = green tint, locked = 45%. */
 .trade-row {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 6px 4px;
-  background: transparent;
-  border: none;
+  gap: 4px;
+  padding: 8px;
+  background: #fff;
+  border: 1px solid rgba(0, 0, 0, 0.1);
   border-radius: 8px;
   cursor: pointer;
   text-align: left;
-  transition: background 120ms ease;
+  transition: background 120ms ease, border-color 120ms ease;
 }
 .trade-row:hover { background: rgba(0, 0, 0, 0.04); }
-.trade-row--active { background: rgba(67, 194, 45, 0.18); }
+.trade-row--active {
+  background: rgba(67, 194, 45, 0.18);
+  border-color: rgba(67, 194, 45, 0.6);
+}
 .trade-row--locked { opacity: 0.45; cursor: not-allowed; }
 .trade-row__dot {
-  width: 8px;
-  height: 8px;
+  width: 6px;
+  height: 6px;
   border-radius: 50%;
   flex-shrink: 0;
 }
 .trade-row__name {
-  font-family: 'Unbounded', sans-serif;
-  font-weight: 500;
-  font-size: 11px;
-  line-height: 13px;
-  color: #000;
+  flex: 1 1 0;
+  min-width: 0;
+  font-family: 'Golos UI', 'Unbounded', sans-serif;
+  font-weight: 700;
+  font-size: 12px;
+  line-height: 14px;
+  color: #484337;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -594,27 +600,28 @@ const L = computed(() => isRu.value
   display: flex;
   align-items: center;
   gap: 4px;
-  margin-top: 2px;
 }
 .trade-input__icon {
-  font-size: 16px;
+  font-size: 22px;
   line-height: 1;
   flex-shrink: 0;
+  width: 24px;
+  text-align: center;
 }
 .trade-input__field {
   flex: 1;
   min-width: 0;
   height: 32px;
-  padding: 0 8px;
+  padding: 0 12px;
   background: #fff;
-  border: 1px solid rgba(0, 0, 0, 0.18);
-  border-radius: 8px;
+  border: 1px solid rgba(0, 0, 0, 0.16);
+  border-radius: 12px;
   font-family: 'Unbounded', sans-serif;
-  font-weight: 700;
-  font-size: 12px;
-  line-height: 14px;
+  font-weight: 500;
+  font-size: 14px;
+  line-height: 16px;
   color: #000;
-  text-align: center;
+  text-align: right;
   outline: none;
   -moz-appearance: textfield;
 }
@@ -624,11 +631,12 @@ const L = computed(() => isRu.value
   margin: 0;
 }
 .trade-input__field:focus { border-color: rgba(0, 0, 0, 0.4); }
+.trade-input__field::placeholder { opacity: 0.4; }
 .trade-input__max {
   font-family: 'Unbounded', sans-serif;
   font-weight: 500;
-  font-size: 11px;
-  color: rgba(0, 0, 0, 0.55);
+  font-size: 12px;
+  color: #000;
   flex-shrink: 0;
 }
 
@@ -648,11 +656,11 @@ const L = computed(() => isRu.value
   transition: transform 80ms ease, filter 120ms ease;
   font-family: 'Golos Text', 'Unbounded', sans-serif;
   font-weight: 900;
-  font-size: 20px;
-  line-height: 22px;
+  font-size: 22px;
+  line-height: 26px;
   color: #fff;
-  text-shadow: 1px 1px 0 rgba(0, 0, 0, 0.5);
-  letter-spacing: 0.02em;
+  text-shadow: 1px 1px 0 rgba(0, 0, 0, 0.6);
+  letter-spacing: 0.01em;
 }
 .trade-cta:active:not(:disabled) {
   transform: translateY(2px);

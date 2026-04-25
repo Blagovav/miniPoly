@@ -107,13 +107,13 @@ const L = computed(() => isRu.value
     <div v-if="player" class="profile-scrim" role="dialog" aria-modal="true" @click.self="onClose">
       <div class="profile-stack">
         <div class="profile-card">
-          <!-- Head: big avatar + name + colour chip -->
+          <!-- Head: avatar + name + colour chip -->
           <div class="profile-head">
             <div
               class="profile-avatar"
               :style="{ background: player.color }"
             >
-              <Sigil :name="player.name" :color="player.color" :size="80"/>
+              <Sigil :name="player.name" :color="player.color" :size="48"/>
             </div>
             <div class="profile-head__body">
               <div class="profile-name">{{ player.name }}</div>
@@ -130,32 +130,29 @@ const L = computed(() => isRu.value
               <div class="profile-stat__label">{{ L.cash }}</div>
               <div class="profile-stat__val">
                 <span class="profile-stat__coin" aria-hidden="true">💰</span>
-                {{ player.cash }}
+                <span class="profile-stat__num">{{ player.cash }}</span>
               </div>
             </div>
             <div class="profile-stat">
               <div class="profile-stat__label">{{ L.worth }}</div>
               <div class="profile-stat__val">
                 <span class="profile-stat__coin" aria-hidden="true">💰</span>
-                {{ totalWorth }}
+                <span class="profile-stat__num">{{ totalWorth }}</span>
               </div>
             </div>
             <div class="profile-stat">
               <div class="profile-stat__label">{{ L.holdings }}</div>
               <div class="profile-stat__val">
-                <span class="profile-stat__coin" aria-hidden="true">👍</span>
-                {{ ownedList.length }}
+                <Icon name="bag" :size="20" color="#fff"/>
+                <span class="profile-stat__num">{{ ownedList.length }}</span>
               </div>
             </div>
           </div>
 
-          <!-- Holdings list card -->
-          <div class="profile-owned">
+          <!-- Holdings list card (when player owns at least one) -->
+          <div v-if="ownedList.length > 0" class="profile-owned">
             <div class="profile-owned__label">{{ L.ownedTitle }}</div>
-            <div v-if="ownedList.length === 0" class="profile-owned__empty">
-              {{ L.empty }}
-            </div>
-            <div v-else class="profile-owned__list">
+            <div class="profile-owned__list">
               <div
                 v-for="item in ownedList"
                 :key="item.tile.index"
@@ -168,6 +165,10 @@ const L = computed(() => isRu.value
                 <span class="profile-owned__name">{{ item.tile.name[loc] }}</span>
               </div>
             </div>
+          </div>
+          <!-- Empty state: dashed placeholder instead of the white card -->
+          <div v-else class="profile-owned__empty">
+            {{ L.empty }}
           </div>
 
           <!-- CTA -->
@@ -218,7 +219,7 @@ const L = computed(() => isRu.value
 .profile-card {
   background: var(--card-alt);
   border-radius: 18px;
-  padding: 16px;
+  padding: 24px;
   display: flex;
   flex-direction: column;
   gap: 16px;
@@ -231,15 +232,15 @@ const L = computed(() => isRu.value
   border-radius: 100px;
 }
 
-/* ── Head: 80px avatar + name + colour chip ── */
+/* ── Head: 56px avatar + name + colour chip ── */
 .profile-head {
   display: flex;
-  gap: 12px;
+  gap: 8px;
   align-items: center;
 }
 .profile-avatar {
-  width: 80px;
-  height: 80px;
+  width: 56px;
+  height: 56px;
   border-radius: 50%;
   flex-shrink: 0;
   display: grid;
@@ -249,9 +250,9 @@ const L = computed(() => isRu.value
               inset 0 -2px 2px rgba(0, 0, 0, 0.2);
 }
 .profile-avatar :deep(.sigil) {
-  width: 80px !important;
-  height: 80px !important;
-  font-size: 36px !important;
+  width: 48px !important;
+  height: 48px !important;
+  font-size: 22px !important;
   background: transparent !important;
   box-shadow: none !important;
 }
@@ -265,66 +266,69 @@ const L = computed(() => isRu.value
 .profile-name {
   font-family: 'Unbounded', sans-serif;
   font-weight: 700;
-  font-size: 18px;
-  line-height: 22px;
+  font-size: 16px;
+  line-height: 18px;
   color: #000;
+  text-shadow: 0.2px 0.2px 0 rgba(0, 0, 0, 0.4);
 }
 .profile-color {
   display: inline-flex;
   align-items: center;
   align-self: flex-start;
-  padding: 6px 14px;
+  padding: 4px 12px;
   border-radius: 100px;
   color: #fff;
   font-family: 'Unbounded', sans-serif;
   font-weight: 700;
-  font-size: 12px;
-  line-height: 14px;
+  font-size: 14px;
+  line-height: 16px;
   text-shadow: 0.2px 0.2px 0 rgba(0, 0, 0, 0.5);
-  border: 1px solid rgba(0, 0, 0, 0.15);
 }
 
 /* ── 3 green stat cards ── */
 .profile-stats {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 8px;
+  gap: 4px;
 }
 .profile-stat {
   background: #43c22d;
-  border: 1.5px solid rgba(0, 0, 0, 0.18);
-  border-radius: 14px;
-  padding: 8px;
-  text-align: center;
+  border: 1px solid rgba(0, 0, 0, 0.2);
+  border-radius: 12px;
+  padding: 6px 10px;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 4px;
+  justify-content: center;
+  gap: 2px;
   box-shadow: inset 0 -4px 0 0 rgba(0, 0, 0, 0.18);
+  min-width: 0;
 }
 .profile-stat__label {
   font-family: 'Unbounded', sans-serif;
   font-weight: 700;
-  font-size: 11px;
-  line-height: 13px;
+  font-size: 12px;
+  line-height: 14px;
   color: #fff;
-  text-shadow: 0.5px 0.5px 0 rgba(0, 0, 0, 0.5);
+  text-shadow: 0.4px 0.4px 0 rgba(0, 0, 0, 0.5);
 }
 .profile-stat__val {
-  font-family: 'Unbounded', sans-serif;
-  font-weight: 800;
-  font-size: 14px;
-  line-height: 16px;
-  color: #fff;
-  text-shadow: 0.5px 0.5px 0 rgba(0, 0, 0, 0.6);
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: 2px;
 }
 .profile-stat__coin {
-  font-size: 14px;
+  font-size: 18px;
   line-height: 1;
   filter: saturate(0.9);
+}
+.profile-stat__num {
+  font-family: 'Golos Text', 'Unbounded', sans-serif;
+  font-weight: 900;
+  font-size: 18px;
+  line-height: 20px;
+  color: #fff;
+  text-shadow: 1px 1px 0 rgba(0, 0, 0, 0.6);
 }
 
 /* ── Holdings card (white rounded) ── */
@@ -340,43 +344,51 @@ const L = computed(() => isRu.value
 .profile-owned__label {
   font-family: 'Unbounded', sans-serif;
   font-weight: 700;
-  font-size: 16px;
-  line-height: 20px;
+  font-size: 14px;
+  line-height: 16px;
   color: #000;
 }
 .profile-owned__empty {
-  padding: 8px 0 4px;
-  font-family: 'Unbounded', sans-serif;
-  font-weight: 500;
-  font-size: 13px;
-  line-height: 16px;
-  color: rgba(0, 0, 0, 0.55);
-  text-align: center;
-}
-.profile-owned__list {
-  display: flex;
-  flex-direction: column;
-}
-.profile-owned__row {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 10px 0;
-  border-top: 1px solid rgba(0, 0, 0, 0.06);
-}
-.profile-owned__row:first-child { border-top: none; padding-top: 4px; }
-.profile-owned__dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  flex-shrink: 0;
-}
-.profile-owned__name {
+  justify-content: center;
+  padding: 10px;
+  border: 1.4px dashed rgba(0, 0, 0, 0.4);
+  border-radius: 12px;
   font-family: 'Unbounded', sans-serif;
   font-weight: 500;
   font-size: 14px;
   line-height: 16px;
-  color: #000;
+  color: rgba(0, 0, 0, 0.6);
+}
+.profile-owned__list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.profile-owned__row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 8px;
+  background: #fff;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  border-radius: 8px;
+}
+.profile-owned__dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.profile-owned__name {
+  flex: 1 1 0;
+  min-width: 0;
+  font-family: 'Golos UI', 'Unbounded', sans-serif;
+  font-weight: 700;
+  font-size: 12px;
+  line-height: 14px;
+  color: #484337;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -398,11 +410,11 @@ const L = computed(() => isRu.value
   transition: transform 80ms ease;
   font-family: 'Golos Text', 'Unbounded', sans-serif;
   font-weight: 900;
-  font-size: 20px;
-  line-height: 22px;
+  font-size: 22px;
+  line-height: 26px;
   color: #fff;
-  text-shadow: 1px 1px 0 rgba(0, 0, 0, 0.5);
-  letter-spacing: 0.02em;
+  text-shadow: 1px 1px 0 rgba(0, 0, 0, 0.6);
+  letter-spacing: 0.01em;
 }
 .profile-cta:active {
   transform: translateY(2px);
