@@ -577,16 +577,24 @@ export function proposeTrade(
   if (from.getOutCards.length < giveJail) return { ok: false, error: "not enough jail cards" };
   if (to.getOutCards.length < takeJail) return { ok: false, error: "recipient lacks jail cards" };
 
-  // Заложенные участки нельзя трогать (дома — можно, переходят к новому владельцу).
+  // Hasbro: a property can't be traded if any tile in its colour group
+  // has buildings — sell the houses (back to the bank at half price)
+  // first. Mortgaged tiles, on the other hand, ARE tradeable: the
+  // recipient just owes the bank 10% interest on receipt (charged at
+  // the moment the trade resolves). Mortgaged tiles transfer "as is".
   for (const idx of giveTiles) {
     const owned = room.properties[idx];
     if (!owned || owned.ownerId !== from.id) return { ok: false, error: "you don't own a tile" };
-    if (owned.mortgaged) return { ok: false, error: "mortgaged tile in offer" };
+    if (groupHasBuildings(room, BOARD[idx])) {
+      return { ok: false, error: "sell buildings on the colour group first" };
+    }
   }
   for (const idx of takeTiles) {
     const owned = room.properties[idx];
     if (!owned || owned.ownerId !== to.id) return { ok: false, error: "they don't own a tile" };
-    if (owned.mortgaged) return { ok: false, error: "mortgaged tile requested" };
+    if (groupHasBuildings(room, BOARD[idx])) {
+      return { ok: false, error: "their colour group has buildings" };
+    }
   }
 
   room.pendingTrade = {
@@ -636,17 +644,42 @@ export function resolveTrade(
   if (to.cash < t.takeCash) return { ok: false, error: "recipient no longer has cash" };
   if (from.getOutCards.length < t.giveJailCards) return { ok: false, error: "initiator no longer has jail cards" };
   if (to.getOutCards.length < t.takeJailCards) return { ok: false, error: "recipient no longer has jail cards" };
+  // Verify ownership AND re-check group-buildings (the group may have
+  // been built up between propose and resolve). Mortgaged tiles are
+  // allowed — they transfer "as is" with a 10% interest charge below.
   for (const idx of t.giveTiles) {
     const o = room.properties[idx];
-    if (!o || o.ownerId !== from.id || o.mortgaged) return { ok: false, error: "tile unavailable" };
+    if (!o || o.ownerId !== from.id) return { ok: false, error: "tile unavailable" };
+    if (groupHasBuildings(room, BOARD[idx])) {
+      return { ok: false, error: "your colour group now has buildings — sell them first" };
+    }
   }
   for (const idx of t.takeTiles) {
     const o = room.properties[idx];
-    if (!o || o.ownerId !== to.id || o.mortgaged) return { ok: false, error: "tile unavailable" };
+    if (!o || o.ownerId !== to.id) return { ok: false, error: "tile unavailable" };
+    if (groupHasBuildings(room, BOARD[idx])) {
+      return { ok: false, error: "their colour group now has buildings" };
+    }
   }
 
-  from.cash += t.takeCash - t.giveCash;
-  to.cash += t.giveCash - t.takeCash;
+  // Hasbro: 10% mortgage interest is paid by whoever RECEIVES a
+  // mortgaged tile — `to` for giveTiles, `from` for takeTiles. Sum it
+  // before mutating so we can fail cleanly if either side can't cover
+  // their cash + interest bill.
+  let interestForTo = 0;
+  let interestForFrom = 0;
+  for (const idx of t.giveTiles) interestForTo += mortgageTransferInterest(room, idx);
+  for (const idx of t.takeTiles) interestForFrom += mortgageTransferInterest(room, idx);
+
+  if (from.cash < t.giveCash + interestForFrom) {
+    return { ok: false, error: "initiator can't cover trade + mortgage interest" };
+  }
+  if (to.cash < t.takeCash + interestForTo) {
+    return { ok: false, error: "recipient can't cover trade + mortgage interest" };
+  }
+
+  from.cash += t.takeCash - t.giveCash - interestForFrom;
+  to.cash += t.giveCash - t.takeCash - interestForTo;
   // Move N jail cards from one player's hand to the other's. The
   // sources travel with the cards so each side knows which deck a
   // received card needs to return to when later used or sold.
@@ -663,6 +696,41 @@ export function resolveTrade(
     ru: `${from.name} и ${to.name} совершили обмен`,
   });
   return { ok: true };
+}
+
+/**
+ * Hasbro: a property cannot be traded while ANY tile in its colour
+ * group has houses or a hotel — the owner must sell every building
+ * back to the bank first. Returns true iff the trade restriction
+ * applies (called for both give- and take-tiles in proposeTrade /
+ * resolveTrade). Non-streets (railroads, utilities) have no group
+ * buildings, so they're always free to trade.
+ */
+function groupHasBuildings(room: RoomState, tile: Tile): boolean {
+  if (tile.kind !== "street") return false;
+  const groupTiles = BOARD.filter(
+    (t): t is StreetTile => t.kind === "street" && t.group === tile.group,
+  );
+  return groupTiles.some((t) => {
+    const o = room.properties[t.index];
+    return !!o && (o.houses > 0 || o.hotel);
+  });
+}
+
+/**
+ * Hasbro: when a mortgaged property changes hands in a trade, the
+ * recipient pays the bank 10% of the mortgage value immediately.
+ * (They can later choose to keep it mortgaged and pay another 10% at
+ * unmortgage time — that already happens via unmortgageProperty's
+ * `× 1.10` formula.) Returns the per-tile interest cost, 0 for non-
+ * mortgaged or non-priced tiles.
+ */
+function mortgageTransferInterest(room: RoomState, tileIndex: number): number {
+  const owned = room.properties[tileIndex];
+  if (!owned?.mortgaged) return 0;
+  const tile = BOARD[tileIndex];
+  if (tile.kind !== "street" && tile.kind !== "railroad" && tile.kind !== "utility") return 0;
+  return Math.ceil(tile.mortgage * 0.1);
 }
 
 function hasMonopoly(
