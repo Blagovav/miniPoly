@@ -655,6 +655,37 @@ const primaryButtons = computed<ActionButton[] | null>(() => {
   if (game.rolling || game.animatingPlayerId !== null) return null;
 
   if (r.phase === "rolling") {
+    // Jailed player: stack the bail / get-out-card options ABOVE the
+    // roll-for-doubles button. We were dropping these entirely after
+    // the Figma redesign — old GameHud rendered them, the new
+    // primary-bar didn't. Reusing existing variants keeps the styling
+    // consistent: green "buy" = pay, orange "auction" = use card,
+    // blue "roll" = try doubles. The jail key in GameHud's me-card
+    // still shows the count.
+    const me = game.me;
+    if (me?.inJail) {
+      const buttons: ActionButton[] = [];
+      if (me.cash >= 50) {
+        buttons.push({
+          variant: "buy",
+          label: isRu ? "ВЫКУПИТЬСЯ ($50)" : "PAY BAIL ($50)",
+          handler: payJail,
+        });
+      }
+      if (me.getOutCards > 0) {
+        buttons.push({
+          variant: "auction",
+          label: isRu ? "ИСПОЛЬЗОВАТЬ КАРТУ" : "USE CARD",
+          handler: useJailCard,
+        });
+      }
+      buttons.push({
+        variant: "roll",
+        label: isRu ? "БРОСИТЬ КУБИКИ" : "ROLL DICE",
+        handler: roll,
+      });
+      return buttons;
+    }
     return [{
       variant: "roll",
       label: isRu ? "БРОСИТЬ КУБИКИ" : "ROLL DICE",
