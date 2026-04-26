@@ -154,7 +154,7 @@ function resetTurnTimer(room: RoomState): void {
 
     // Bots pay the jail fine if they can afford it rather than sitting
     // and eventually going bankrupt.
-    if (aiMode && p.inJail && p.cash >= 50 && p.getOutCards === 0) {
+    if (aiMode && p.inJail && p.cash >= 50 && p.getOutCards.length === 0) {
       payJailFine(fresh, p.id);
     }
 
@@ -272,7 +272,7 @@ function botShouldAcceptTrade(room: RoomState, botId: string): boolean {
   if (!bot) return false;
   // Бот не может отдать то, чего у него нет (на всякий — engine это тоже проверит).
   if (bot.cash < t.takeCash) return false;
-  if (bot.getOutCards < t.takeJailCards) return false;
+  if (bot.getOutCards.length < t.takeJailCards) return false;
 
   const JAIL_CARD_VALUE = 50;
 

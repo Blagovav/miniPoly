@@ -98,7 +98,11 @@ export interface Player {
   cash: number;
   inJail: boolean;
   jailTurns: number;
-  getOutCards: number;
+  // Get-Out-of-Jail cards held by the player. Array (not count) so the
+  // engine knows which deck to return each card to when it's used or
+  // sold — Hasbro keeps the card out of its deck for as long as a
+  // player owns it. UI: read `.length` for display / capability checks.
+  getOutCards: ("chance" | "chest")[];
   bankrupt: boolean;
   ready: boolean;
   connected: boolean;
@@ -219,6 +223,15 @@ export interface RoomState {
   preRollBrackets: PreRollBracket[];
   preRollOrder: string[];
   preRollRolls: Record<string, number>;
+  // Card decks as queues of indices into CHANCE_CARDS / CHEST_CARDS.
+  // Hasbro: cards are drawn from the top of a shuffled deck and placed
+  // at the bottom — except "Get Out of Jail Free" which is held by the
+  // player until used or sold. Queues are seeded with a Fisher-Yates
+  // shuffle in createRoom; engine.drawCard shifts from the front and
+  // pushes back to the end (skipping jail cards), reshuffling when
+  // empty.
+  chanceQueue: number[];
+  chestQueue: number[];
 }
 
 export interface PublicRoomSummary {

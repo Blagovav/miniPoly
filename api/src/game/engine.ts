@@ -27,6 +27,16 @@ export function log(room: RoomState, text: I18nText, txn?: TxnInfo): void {
   if (room.log.length > 200) room.log.shift();
 }
 
+/** Fisher-Yates shuffle returning a fresh array. Used for the card decks. */
+function shuffle<T>(arr: readonly T[]): T[] {
+  const out = arr.slice();
+  for (let i = out.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [out[i], out[j]] = [out[j], out[i]];
+  }
+  return out;
+}
+
 export function createRoom(hostId: string, isPublic = true, maxPlayers = MAX_PLAYERS): RoomState {
   const clamped = Math.max(MIN_PLAYERS, Math.min(MAX_PLAYERS, Math.floor(maxPlayers)));
   return {
@@ -53,6 +63,8 @@ export function createRoom(hostId: string, isPublic = true, maxPlayers = MAX_PLA
     preRollBrackets: [],
     preRollOrder: [],
     preRollRolls: {},
+    chanceQueue: shuffle(CHANCE_CARDS.map((_, i) => i)),
+    chestQueue: shuffle(CHEST_CARDS.map((_, i) => i)),
   };
 }
 
@@ -91,7 +103,7 @@ export function addPlayer(
     cash: STARTING_CASH,
     inJail: false,
     jailTurns: 0,
-    getOutCards: 0,
+    getOutCards: [],
     bankrupt: false,
     ready: false,
     connected: true,
@@ -299,7 +311,7 @@ export function addBot(room: RoomState): Player | null {
     cash: STARTING_CASH,
     inJail: false,
     jailTurns: 0,
-    getOutCards: 0,
+    getOutCards: [],
     bankrupt: false,
     ready: true,
     connected: false,
@@ -562,8 +574,8 @@ export function proposeTrade(
 
   if (from.cash < giveCash) return { ok: false, error: "not enough cash" };
   if (to.cash < takeCash) return { ok: false, error: "recipient lacks cash" };
-  if (from.getOutCards < giveJail) return { ok: false, error: "not enough jail cards" };
-  if (to.getOutCards < takeJail) return { ok: false, error: "recipient lacks jail cards" };
+  if (from.getOutCards.length < giveJail) return { ok: false, error: "not enough jail cards" };
+  if (to.getOutCards.length < takeJail) return { ok: false, error: "recipient lacks jail cards" };
 
   // Заложенные участки нельзя трогать (дома — можно, переходят к новому владельцу).
   for (const idx of giveTiles) {
@@ -622,8 +634,8 @@ export function resolveTrade(
   // Перепроверяем состояние — за время ожидания ответа могло всё поменяться.
   if (from.cash < t.giveCash) return { ok: false, error: "initiator no longer has cash" };
   if (to.cash < t.takeCash) return { ok: false, error: "recipient no longer has cash" };
-  if (from.getOutCards < t.giveJailCards) return { ok: false, error: "initiator no longer has jail cards" };
-  if (to.getOutCards < t.takeJailCards) return { ok: false, error: "recipient no longer has jail cards" };
+  if (from.getOutCards.length < t.giveJailCards) return { ok: false, error: "initiator no longer has jail cards" };
+  if (to.getOutCards.length < t.takeJailCards) return { ok: false, error: "recipient no longer has jail cards" };
   for (const idx of t.giveTiles) {
     const o = room.properties[idx];
     if (!o || o.ownerId !== from.id || o.mortgaged) return { ok: false, error: "tile unavailable" };
@@ -635,8 +647,13 @@ export function resolveTrade(
 
   from.cash += t.takeCash - t.giveCash;
   to.cash += t.giveCash - t.takeCash;
-  from.getOutCards += t.takeJailCards - t.giveJailCards;
-  to.getOutCards += t.giveJailCards - t.takeJailCards;
+  // Move N jail cards from one player's hand to the other's. The
+  // sources travel with the cards so each side knows which deck a
+  // received card needs to return to when later used or sold.
+  const fromGives = from.getOutCards.splice(0, t.giveJailCards);
+  const toGives = to.getOutCards.splice(0, t.takeJailCards);
+  from.getOutCards.push(...toGives);
+  to.getOutCards.push(...fromGives);
   // Дома/отели остаются на клетке и переходят к новому владельцу.
   for (const idx of t.giveTiles) room.properties[idx].ownerId = to.id;
   for (const idx of t.takeTiles) room.properties[idx].ownerId = from.id;
@@ -682,11 +699,16 @@ export function rollAndMove(
 
   room.dice = dice;
 
-  // Jail handling
+  // Jail handling. Track whether the player just rolled themselves
+  // OUT of jail with doubles — Hasbro rule: doubles get you out, but
+  // your turn ends after that roll, no re-roll. Without this flag the
+  // doublesInARow increment below would grant a second roll.
+  let releasedFromJailByDoubles = false;
   if (p.inJail) {
     if (isDoubles) {
       p.inJail = false;
       p.jailTurns = 0;
+      releasedFromJailByDoubles = true;
       log(room, { en: `${p.name} rolled doubles and left jail`, ru: `${p.name} выбросил дубль и вышел из тюрьмы` });
     } else {
       p.jailTurns++;
@@ -709,7 +731,7 @@ export function rollAndMove(
     }
   }
 
-  if (isDoubles) {
+  if (isDoubles && !releasedFromJailByDoubles) {
     room.doublesInARow++;
     if (room.doublesInARow >= 3) {
       sendToJail(room, p);
@@ -740,7 +762,21 @@ function advance(p: Player, from: number, steps: number, room: RoomState): numbe
   return to;
 }
 
-function resolveTile(room: RoomState, p: Player): void {
+/**
+ * Card-driven landings can override how rent is calculated:
+ *  - "Advance to nearest Railroad" → pay TWICE the normal RR rent.
+ *  - "Advance to nearest Utility" → throw dice again and pay 10× the
+ *    throw regardless of how many utilities the owner has.
+ *
+ * Plain landings (tile resolve from a normal roll) pass no opts and
+ * the standard Hasbro rent table applies.
+ */
+interface ResolveOpts {
+  rentMultiplier?: number;        // multiplies the calculated rent (RR x2 card)
+  utilityRollMultiplier?: number; // overrides 4×/10× count-based mult for utilities
+}
+
+function resolveTile(room: RoomState, p: Player, opts?: ResolveOpts): void {
   const tile = BOARD[p.position];
   room.phase = "action";
 
@@ -762,12 +798,12 @@ function resolveTile(room: RoomState, p: Player): void {
     case "street":
     case "railroad":
     case "utility":
-      handleProperty(room, p, tile);
+      handleProperty(room, p, tile, opts);
       break;
   }
 }
 
-function handleProperty(room: RoomState, p: Player, tile: PropertyTile): void {
+function handleProperty(room: RoomState, p: Player, tile: PropertyTile, opts?: ResolveOpts): void {
   const owned = room.properties[tile.index];
   if (!owned) {
     if (p.cash >= tile.price) {
@@ -782,7 +818,7 @@ function handleProperty(room: RoomState, p: Player, tile: PropertyTile): void {
   const owner = room.players.find((pl) => pl.id === owned.ownerId);
   if (!owner || owner.bankrupt) return;
 
-  const rent = calculateRent(room, tile, owned);
+  const rent = calculateRent(room, tile, owned, opts);
   const paid = Math.min(rent, p.cash);
   p.cash -= paid;
   owner.cash += paid;
@@ -803,23 +839,29 @@ function calculateRent(
   room: RoomState,
   tile: PropertyTile,
   owned: OwnedProperty,
+  opts?: ResolveOpts,
 ): number {
+  let rent: number;
   if (tile.kind === "street") {
     const street = tile as StreetTile;
-    if (owned.hotel) return street.rent[5];
-    if (owned.houses > 0) return street.rent[owned.houses];
-    const base = street.rent[0];
-    return hasMonopoly(room, street, owned.ownerId) ? base * 2 : base;
-  }
-  if (tile.kind === "railroad") {
+    if (owned.hotel) rent = street.rent[5];
+    else if (owned.houses > 0) rent = street.rent[owned.houses];
+    else {
+      const base = street.rent[0];
+      rent = hasMonopoly(room, street, owned.ownerId) ? base * 2 : base;
+    }
+  } else if (tile.kind === "railroad") {
     const count = countOwnedOfKind(room, "railroad", owned.ownerId);
-    return RAILROAD_RENTS[Math.max(0, count - 1)] ?? 25;
+    rent = RAILROAD_RENTS[Math.max(0, count - 1)] ?? 25;
+  } else {
+    // utility
+    const count = countOwnedOfKind(room, "utility", owned.ownerId);
+    const multiplier = opts?.utilityRollMultiplier ?? (count === 2 ? 10 : 4);
+    const sum = (room.dice?.[0] ?? 0) + (room.dice?.[1] ?? 0);
+    rent = sum * multiplier;
   }
-  // utility
-  const count = countOwnedOfKind(room, "utility", owned.ownerId);
-  const multiplier = count === 2 ? 10 : 4;
-  const sum = (room.dice?.[0] ?? 0) + (room.dice?.[1] ?? 0);
-  return sum * multiplier;
+  if (opts?.rentMultiplier) rent *= opts.rentMultiplier;
+  return rent;
 }
 
 function countOwnedOfKind(
@@ -899,12 +941,25 @@ export function useGetOutCard(room: RoomState, playerId: string): { ok: boolean;
   if (!p.inJail) return { ok: false, error: "not in jail" };
   if (room.players[room.currentTurn].id !== playerId) return { ok: false, error: "not your turn" };
   if (room.phase !== "rolling") return { ok: false, error: "wrong phase" };
-  if (p.getOutCards <= 0) return { ok: false, error: "no jail card" };
-  p.getOutCards--;
+  if (p.getOutCards.length === 0) return { ok: false, error: "no jail card" };
+  // Pop the most recently drawn card and return it to the bottom of
+  // its source deck (Hasbro: spent jail cards re-enter the deck).
+  const source = p.getOutCards.pop()!;
+  returnJailCardToDeck(room, source);
   p.inJail = false;
   p.jailTurns = 0;
   log(room, { en: `${p.name} used Get Out of Jail card`, ru: `${p.name} использовал карту «Освобождение»` });
   return { ok: true };
+}
+
+/** Hasbro: spent jail card returns to the bottom of the deck it came from. */
+function returnJailCardToDeck(room: RoomState, source: "chance" | "chest"): void {
+  const queue = source === "chance" ? room.chanceQueue : room.chestQueue;
+  const deck = source === "chance" ? CHANCE_CARDS : CHEST_CARDS;
+  const jailIdx = deck.findIndex((c) => c.effect.kind === "getOutCard");
+  if (jailIdx < 0) return; // no jail card defined in this deck — nothing to push
+  if (queue.includes(jailIdx)) return; // already there (defensive)
+  queue.push(jailIdx);
 }
 
 /** Аукцион Hasbro: когда игрок отказался покупать клетку — она уходит с молотка. */
@@ -1110,6 +1165,13 @@ function bankruptPlayer(room: RoomState, p: Player, to?: Player): void {
       delete room.properties[idx];
     }
   }
+  // Hasbro: jail cards held by the bankrupt player return to the bottom
+  // of their deck (creditor doesn't keep them — Hasbro's wording on
+  // bankruptcy specifically says "all" cards return to deck).
+  for (const source of p.getOutCards) {
+    returnJailCardToDeck(room, source);
+  }
+  p.getOutCards = [];
   log(room, { en: `${p.name} went bankrupt`, ru: `${p.name} обанкротился` });
 }
 
@@ -1145,8 +1207,28 @@ function liquidateBuildings(room: RoomState, prop: OwnedProperty, creditor: Play
 
 function drawCard(room: RoomState, p: Player, kind: "chance" | "chest"): void {
   const deck = kind === "chance" ? CHANCE_CARDS : CHEST_CARDS;
-  const card = deck[Math.floor(Math.random() * deck.length)];
-  applyCardEffect(room, p, card);
+  const queue = kind === "chance" ? room.chanceQueue : room.chestQueue;
+
+  // Defensive reshuffle: if every card is currently in players' hands
+  // (only possible with multiple jail cards drawn into a tiny deck),
+  // refill the queue from a fresh shuffle so we don't crash. In normal
+  // play the queue is always populated.
+  if (queue.length === 0) {
+    queue.push(...shuffle(deck.map((_, i) => i)));
+  }
+
+  // Hasbro: draw from the top of the deck.
+  const idx = queue.shift()!;
+  const card = deck[idx];
+
+  // Get-Out-of-Jail card stays with the player (and out of the deck)
+  // until used or sold. Every other card cycles to the bottom.
+  if (card.effect.kind !== "getOutCard") {
+    queue.push(idx);
+  }
+
+  applyCardEffect(room, p, card, kind);
+
   const drawn: DrawnCard = {
     by: p.id,
     deck: kind,
@@ -1160,7 +1242,7 @@ function drawCard(room: RoomState, p: Player, kind: "chance" | "chest"): void {
   log(room, { en: `${p.name}: ${card.text.en}`, ru: `${p.name}: ${card.text.ru}` });
 }
 
-function applyCardEffect(room: RoomState, p: Player, card: CardDef): void {
+function applyCardEffect(room: RoomState, p: Player, card: CardDef, source: "chance" | "chest"): void {
   const e = card.effect;
   switch (e.kind) {
     case "cash":
@@ -1182,7 +1264,10 @@ function applyCardEffect(room: RoomState, p: Player, card: CardDef): void {
       sendToJail(room, p);
       return;
     case "getOutCard":
-      p.getOutCards++;
+      // Track which deck the card came from so it can be returned to
+      // the right pile when used or sold (Hasbro keeps the deck
+      // composition stable across the lifetime of the game).
+      p.getOutCards.push(source);
       return;
     case "payEach": {
       const others = room.players.filter((pl) => !pl.bankrupt && pl.id !== p.id);
@@ -1215,19 +1300,32 @@ function applyCardEffect(room: RoomState, p: Player, card: CardDef): void {
       return;
     }
     case "nearestRailroad": {
+      // Hasbro: "Advance to the nearest Railroad. If unowned, you may
+      // buy it from the Bank. If owned, pay owner TWICE the rental to
+      // which they are otherwise entitled."
       const rrs = BOARD.filter((t) => t.kind === "railroad").map((t) => t.index);
       const target = findNext(p.position, rrs);
       if (target < p.position) p.cash += GO_SALARY;
       p.position = target;
-      resolveTile(room, p);
+      resolveTile(room, p, { rentMultiplier: e.double ? 2 : 1 });
       return;
     }
     case "nearestUtility": {
+      // Hasbro: "Advance to the nearest Utility. If unowned, you may
+      // buy it from the Bank. If owned, throw dice and pay owner a
+      // total of 10× the amount thrown" — fixed 10×, regardless of
+      // whether the owner has one or both utilities. We re-roll the
+      // dice here so the rent reflects a fresh throw, not the one
+      // that landed the player on Chance.
       const uts = BOARD.filter((t) => t.kind === "utility").map((t) => t.index);
       const target = findNext(p.position, uts);
       if (target < p.position) p.cash += GO_SALARY;
       p.position = target;
-      resolveTile(room, p);
+      room.dice = [
+        1 + Math.floor(Math.random() * 6),
+        1 + Math.floor(Math.random() * 6),
+      ];
+      resolveTile(room, p, { utilityRollMultiplier: 10 });
       return;
     }
   }

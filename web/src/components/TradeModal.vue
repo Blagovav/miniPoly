@@ -130,8 +130,8 @@ function toggleTake(idx: number, mortgaged: boolean) {
 
 const myCashMax = computed(() => me.value?.cash ?? 0);
 const theirCashMax = computed(() => target.value?.cash ?? 0);
-const myJailMax = computed(() => me.value?.getOutCards ?? 0);
-const theirJailMax = computed(() => target.value?.getOutCards ?? 0);
+const myJailMax = computed(() => me.value?.getOutCards.length ?? 0);
+const theirJailMax = computed(() => target.value?.getOutCards.length ?? 0);
 
 function clampInt(v: number | string, min: number, max: number): number {
   const n = typeof v === "string" ? parseInt(v, 10) : Math.floor(v);

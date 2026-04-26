@@ -208,7 +208,7 @@ onBeforeUnmount(() => {
               {{ locale === 'ru' ? 'Заплатить $50' : 'Pay $50' }}
             </button>
             <button
-              v-if="onUseJailCard && me.getOutCards > 0"
+              v-if="onUseJailCard && me.getOutCards.length > 0"
               class="btn btn-ghost"
               @click="onUseJailCard"
             >
@@ -264,7 +264,7 @@ onBeforeUnmount(() => {
         <span class="me-card__label">{{ t("game.properties") }}</span>
         <span class="me-card__val">{{ myPropertyCount }}</span>
       </div>
-      <div v-if="me.getOutCards > 0" class="me-card__row">
+      <div v-if="me.getOutCards.length > 0" class="me-card__row">
         <span class="me-card__label">
           {{ locale === 'ru' ? 'Карта Выхода' : 'Get-Out card' }}
         </span>
@@ -273,7 +273,7 @@ onBeforeUnmount(() => {
           :title="locale === 'ru' ? 'Используй в тюрьме чтобы выйти бесплатно' : 'Use it in jail to skip the $50 fine'"
         >
           <Icon name="key" :size="12" color="#2a1d10" />
-          <span>×&nbsp;{{ me.getOutCards }}</span>
+          <span>×&nbsp;{{ me.getOutCards.length }}</span>
         </span>
       </div>
     </div>

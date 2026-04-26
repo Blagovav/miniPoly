@@ -672,7 +672,7 @@ const primaryButtons = computed<ActionButton[] | null>(() => {
           handler: payJail,
         });
       }
-      if (me.getOutCards > 0) {
+      if (me.getOutCards.length > 0) {
         buttons.push({
           variant: "auction",
           label: isRu ? "ИСПОЛЬЗОВАТЬ КАРТУ" : "USE CARD",
