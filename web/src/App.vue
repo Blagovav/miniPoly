@@ -7,6 +7,7 @@ import { useTheme } from "./composables/useTheme";
 import { useGameStore } from "./stores/game";
 import Icon from "./components/Icon.vue";
 import LoadingScreen from "./components/LoadingScreen.vue";
+import RouteLoader from "./components/RouteLoader.vue";
 import TourOverlay from "./components/TourOverlay.vue";
 import {
   preloadAll,
@@ -46,15 +47,30 @@ async function runBoot() {
   const startedAt = Date.now();
 
   init();
+
+  // Detect deep-link target FIRST so we can preload the correct asset
+  // bundle while the splash is still up. If the user is opening a
+  // game via `?room=XXX` (or Telegram's startapp=room_XXX), we'd
+  // otherwise dump them onto a flickering board because ROOM_ASSETS
+  // would still be downloading. Block boot on whichever bundle the
+  // user will actually see first.
+  const url = new URL(window.location.href);
+  const room = url.searchParams.get("room");
+  const startapp = url.searchParams.get("startapp") || url.searchParams.get("tgWebAppStartParam");
+  const fromStartapp = startapp?.startsWith("room_") ? startapp.slice(5) : null;
+  const targetRoom = room ?? fromStartapp;
+  const initialAssets = targetRoom ? ROOM_ASSETS : HOME_ASSETS;
+
   const profileJob = userId.value ? fetchProfile(userId.value) : Promise.resolve(null);
-  // Fetch profile, friends list, AND decode home-screen art in parallel.
-  // Home assets are blocking so the splash never disappears before the
-  // mascot / bg-pattern / nav icons are ready — kills the first-paint
-  // flicker on cold start.
+  // Fetch profile, friends list, AND decode the destination screen's
+  // art in parallel. The asset bundle is blocking so the splash never
+  // disappears before the destination view's mascot / bg-pattern /
+  // tile icons are ready — kills the first-paint flicker on cold
+  // start, including deep-links into a live match.
   await Promise.allSettled([
     profileJob,
     game.loadFriends(userId.value),
-    preloadAll(HOME_ASSETS),
+    preloadAll(initialAssets),
   ]);
 
   const elapsed = Date.now() - startedAt;
@@ -64,19 +80,16 @@ async function runBoot() {
 
   booting.value = false;
 
-  // Fire-and-forget prefetch for screens the user might navigate to next.
-  // Browser cache means later <img>/<url()> hits are served instantly with
-  // no network round-trip and no decode flash. Errors swallowed inside.
-  void preloadAll([...ROOMS_ASSETS, ...ROOM_ASSETS, ...CREATE_ASSETS]);
+  // Fire-and-forget prefetch for the OTHER screens. Browser cache means
+  // later <img>/<url()> hits are served instantly with no network
+  // round-trip and no decode flash. Errors swallowed inside.
+  const restAssets = targetRoom
+    ? [...HOME_ASSETS, ...ROOMS_ASSETS, ...CREATE_ASSETS]
+    : [...ROOMS_ASSETS, ...ROOM_ASSETS, ...CREATE_ASSETS];
+  void preloadAll(restAssets);
 
-  // Deep-link room routing after the UI is ready.
-  const url = new URL(window.location.href);
-  const room = url.searchParams.get("room");
-  const startapp = url.searchParams.get("startapp") || url.searchParams.get("tgWebAppStartParam");
-  const fromStartapp = startapp?.startsWith("room_") ? startapp.slice(5) : null;
-  const target = room ?? fromStartapp;
-  if (target) {
-    router.replace({ name: "room", params: { id: target } });
+  if (targetRoom) {
+    router.replace({ name: "room", params: { id: targetRoom } });
     return; // skip tour when deep-linking into a match
   }
 
@@ -142,6 +155,7 @@ function go(routeName: string) {
       </router-view>
     </main>
   </div>
+  <RouteLoader />
   <TourOverlay :open="showTour" @close="closeTour" />
 </template>
 

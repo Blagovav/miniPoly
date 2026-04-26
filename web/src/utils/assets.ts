@@ -82,24 +82,54 @@ export const CREATE_ASSETS: readonly string[] = [
 ];
 
 /**
+ * Per-route asset bundles. RouteLoader uses this to decide whether to
+ * show the splash overlay during navigation — if every asset for the
+ * destination is already in the in-memory cache, the loader stays
+ * hidden and the view shows instantly.
+ *
+ * Keys MUST match the `name` field on the router routes in main.ts.
+ * Routes without an entry skip the loader entirely (e.g. shop/friends/
+ * history, which are mostly text + Icon SVGs).
+ */
+export const ROUTE_ASSETS: Readonly<Record<string, readonly string[]>> = {
+  home: HOME_ASSETS,
+  rooms: ROOMS_ASSETS,
+  create: CREATE_ASSETS,
+  room: ROOM_ASSETS,
+};
+
+/**
+ * URLs whose `preloadImage()` call has already resolved. We use this to
+ * answer "is this asset hot?" synchronously, so RouteLoader can skip the
+ * overlay entirely on cache-warm navigations.
+ */
+const decodedUrls = new Set<string>();
+
+/**
  * Fetch + decode a single image into the browser's memory cache.
  * Resolves on success; swallows network/decoder failures so a single
- * bad asset never blocks the rest of boot.
+ * bad asset never blocks the rest of boot. Idempotent — repeat calls
+ * for the same URL resolve immediately from the in-memory tracker.
  */
 export function preloadImage(url: string): Promise<void> {
+  if (decodedUrls.has(url)) return Promise.resolve();
   return new Promise((resolve) => {
+    const finish = () => {
+      decodedUrls.add(url);
+      resolve();
+    };
     const img = new Image();
     img.decoding = "async";
     img.onload = () => {
       // Some browsers expose decode() — use it when available so the
       // pixel data is ready, not just the HTTP response.
       if (typeof img.decode === "function") {
-        img.decode().then(() => resolve(), () => resolve());
+        img.decode().then(finish, finish);
       } else {
-        resolve();
+        finish();
       }
     };
-    img.onerror = () => resolve();
+    img.onerror = finish;
     img.src = url;
   });
 }
@@ -107,4 +137,9 @@ export function preloadImage(url: string): Promise<void> {
 /** Preload many assets in parallel; resolves once all are settled. */
 export function preloadAll(urls: readonly string[]): Promise<void> {
   return Promise.allSettled(urls.map(preloadImage)).then(() => undefined);
+}
+
+/** True iff every URL has finished decoding at least once this session. */
+export function allAssetsCached(urls: readonly string[]): boolean {
+  return urls.every((u) => decodedUrls.has(u));
 }
