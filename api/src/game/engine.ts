@@ -234,6 +234,18 @@ function finalizePreRoll(room: RoomState): void {
   }
 }
 
+/**
+ * True iff a lobby has nobody who could keep it alive — every remaining
+ * "player" is a bot, or there are no players at all. Bots can't host or
+ * start a match, so a bot-only lobby is just as abandoned as an empty
+ * one. Used by the WS layer to delete the room from the in-memory Map
+ * instead of letting it zombie around in `/api/rooms/public`.
+ */
+export function isLobbyAbandoned(room: RoomState): boolean {
+  if (room.phase !== "lobby") return false;
+  return room.players.every((p) => p.isBot);
+}
+
 /** Передать хоста следующему подключённому игроку. Боты хостить не могут. */
 export function reassignHostIfNeeded(room: RoomState): void {
   const host = room.players.find((p) => p.id === room.hostId);

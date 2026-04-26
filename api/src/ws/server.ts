@@ -9,6 +9,7 @@ import {
   buyCurrentProperty,
   createRoom,
   endTurn,
+  isLobbyAbandoned,
   leaveActiveGame,
   mortgageProperty,
   passAuction,
@@ -28,6 +29,22 @@ import {
   useGetOutCard,
 } from "../game/engine";
 import { deleteRoom as mgrDeleteRoom } from "../rooms/manager";
+
+/**
+ * Drop a lobby that no human can keep alive — empty, or bot-only after
+ * the host left. Without this, the room would zombie around in
+ * `/api/rooms/public` (playerCount: 0, hostName: "—") because the WS
+ * close handler only removes the player, not the room.
+ *
+ * Returns true when the room was actually deleted, so callers can skip
+ * a now-pointless `sendState` broadcast.
+ */
+function deleteIfAbandoned(room: RoomState): boolean {
+  if (!isLobbyAbandoned(room)) return false;
+  voiceRooms.delete(room.id);
+  mgrDeleteRoom(room.id);
+  return true;
+}
 
 /** Чистит всех offline-игроков из лобби. Вызывается перед каждым broadcast.
  *  Ботов не трогаем — у них `connected: false` намеренно (у бота нет своего
@@ -90,6 +107,12 @@ function sendState(roomId: string): void {
   const room = getRoom(roomId);
   if (!room) return;
   sweepOfflineLobby(room);
+  // After the sweep / any preceding removePlayer call, if the lobby
+  // has no humans left (every survivor is a bot, or the array is
+  // empty), drop the room from the in-memory Map so it stops
+  // surfacing in /api/rooms/public as a "playerCount: 0, hostName: —"
+  // zombie. Skipping the broadcast is safe — there's nobody listening.
+  if (deleteIfAbandoned(room)) return;
   broadcast(roomId, { type: "state", room });
 }
 
