@@ -220,7 +220,18 @@ function roll() {
   rollIfAllowed();
   if (!shakeAttempted) {
     shakeAttempted = true;
-    shake.start(() => rollIfAllowed());
+    // Shake fires any time the phone moves enough — guard the
+    // shake-driven roll so a buzz on the metro during an opponent's
+    // turn doesn't trigger haptics + a doomed WS send. Server would
+    // reject the message anyway; this just kills the noise.
+    shake.start(() => {
+      const phase = game.room?.phase;
+      const canRoll =
+        (phase === "rolling" && game.isMyTurn && !game.rolling) ||
+        (phase === "preRoll" && game.isMyPreRoll && !game.rolling);
+      if (!canRoll) return;
+      rollIfAllowed();
+    });
   }
 }
 function buy() {

@@ -16,6 +16,10 @@ export const useGameStore = defineStore("game", () => {
   const room = ref<RoomState | null>(null);
   const myPlayerId = ref<string | null>(null);
   const lastError = ref<string | null>(null);
+  // Latest pending self-clear timer for `lastError`, so a fresh error
+  // arriving mid-display can cancel the previous one and start its
+  // own 3-second window cleanly.
+  let errorClearTimer: ReturnType<typeof setTimeout> | null = null;
   const rolling = ref(false);
   const lastDice = ref<[number, number] | null>(null);
   const chat = ref<ChatMessage[]>([]);
@@ -128,8 +132,15 @@ export const useGameStore = defineStore("game", () => {
         myPlayerId.value = m.playerId;
         break;
       case "error":
+        // Cancel any pending self-clear from a previous error before
+        // starting a new 3s timer. Without this, error A's old timer
+        // fires mid-display of error B and clears B prematurely.
+        if (errorClearTimer !== null) clearTimeout(errorClearTimer);
         lastError.value = m.message;
-        setTimeout(() => (lastError.value = null), 3000);
+        errorClearTimer = setTimeout(() => {
+          lastError.value = null;
+          errorClearTimer = null;
+        }, 3000);
         break;
       case "diceRolled":
         rolling.value = true;

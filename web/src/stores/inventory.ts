@@ -19,7 +19,10 @@ function load(): StoredInventory {
       return {
         coins: parsed.coins ?? 10000,
         owned: parsed.owned ?? [],
-        equipped: parsed.equipped ?? { token: "token-car", theme: "theme-classic" },
+        // Spread defaults so a partial `equipped` (e.g. only theme set
+        // by a previous schema) doesn't leave token undefined and
+        // silently fall back to the knight piece on the board.
+        equipped: { token: "token-car", theme: "theme-classic", ...(parsed.equipped ?? {}) },
         serverUnlocks: parsed.serverUnlocks ?? [],
         lastBonusDate: parsed.lastBonusDate ?? null,
       };

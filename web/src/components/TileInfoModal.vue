@@ -463,7 +463,10 @@ const ownerTokenId = computed<TokenArtId>(() => tokenArtFor(owner.value?.token |
   position: fixed;
   inset: 0;
   background: rgba(0, 0, 0, 0.4);
-  z-index: 110;
+  /* Above Chat (120) so a chat tap mid-modal doesn't cover the
+     property card. RouteLoader is 90, TourOverlay is 600 — modal
+     fits cleanly between Chat and Tour. */
+  z-index: 130;
   display: flex;
   align-items: center;
   justify-content: center;

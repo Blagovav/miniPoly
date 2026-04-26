@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from "vue";
+import { computed, onMounted, onBeforeUnmount, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { useI18n } from "vue-i18n";
 import { useTelegram } from "./composables/useTelegram";
@@ -103,9 +103,12 @@ async function runBoot() {
 
 // Expose globally so HomeView / any screen can re-open the tour via
 // window.dispatchEvent(new CustomEvent('open-tour')). Keeps App free of
-// child prop-drilling for a tiny feature.
+// child prop-drilling for a tiny feature. App.vue is the root and never
+// unmounts in production, but cleanup matters for HMR / Vitest where
+// the same listener would otherwise pile up across reloads.
 if (typeof window !== "undefined") {
   window.addEventListener("open-tour", openTour);
+  onBeforeUnmount(() => window.removeEventListener("open-tour", openTour));
 }
 
 onMounted(() => {

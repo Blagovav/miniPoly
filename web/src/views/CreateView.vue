@@ -183,7 +183,7 @@ onUnmounted(() => {
             <div class="create-v2__cell-caption">{{ L.players }}</div>
             <div class="create-v2__players">
               <button
-                v-for="n in [1, 2, 3, 4, 5, 6]"
+                v-for="n in [2, 3, 4, 5, 6]"
                 :key="n"
                 type="button"
                 class="create-v2__pbtn"

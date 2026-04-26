@@ -72,10 +72,17 @@ const canStart = computed(() =>
   activePlayers.value.length >= 2 && readyActive.value.length === activePlayers.value.length,
 );
 const canAddBot = computed(
-  () =>
-    isHost.value
-    && !!props.onAddBot
-    && props.room.players.length < props.room.maxPlayers,
+  () => {
+    // Mirror the server's "viable seat" capacity check (engine.ts
+    // addPlayer/addBot) — offline humans inside the 3-min reconnect
+    // grace shouldn't visually block the host from filling the
+    // remaining seat with a bot.
+    if (!isHost.value || !props.onAddBot) return false;
+    const seated = props.room.players.filter(
+      (p) => p.connected || p.isBot,
+    ).length;
+    return seated < props.room.maxPlayers;
+  },
 );
 
 // Deterministic colour per player from ORDERED_PLAYER_COLORS.

@@ -142,7 +142,9 @@ void props;
   right: 14px;
   max-width: 460px;
   margin: 0 auto;
-  z-index: 105;
+  /* Above Chat (120) so an incoming trade banner stays visible
+     while the chat panel is open. */
+  z-index: 125;
   background: var(--card-alt);
   border: 2px solid var(--gold);
   border-radius: var(--r-md);
