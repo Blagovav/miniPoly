@@ -73,7 +73,11 @@ export function addPlayer(
     return existing;
   }
   if (room.phase !== "lobby") return null;
-  if (room.players.length >= (room.maxPlayers ?? MAX_PLAYERS)) return null;
+  // Capacity counts only "viable" seats — connected humans + bots. An
+  // offline player still occupying a slot during the 3-minute rejoin
+  // grace would otherwise block strangers from filling the lobby.
+  const seated = room.players.filter((p) => p.connected || p.isBot).length;
+  if (seated >= (room.maxPlayers ?? MAX_PLAYERS)) return null;
 
   const defaultTokens = ["token-car", "token-dog", "token-hat", "token-cat", "token-crown", "token-ufo"];
   const player: Player = {
@@ -269,7 +273,10 @@ const BOT_NAMES = [
  */
 export function addBot(room: RoomState): Player | null {
   if (room.phase !== "lobby") return null;
-  if (room.players.length >= (room.maxPlayers ?? MAX_PLAYERS)) return null;
+  // Same capacity rule as addPlayer — offline humans during grace
+  // shouldn't stop the host from filling out the lobby with bots.
+  const seated = room.players.filter((p) => p.connected || p.isBot).length;
+  if (seated >= (room.maxPlayers ?? MAX_PLAYERS)) return null;
 
   const usedNames = new Set(room.players.map((p) => p.name));
   const freeName = BOT_NAMES.find((n) => !usedNames.has(`Bot ${n}`));

@@ -18,15 +18,31 @@ app.get("/health", async () => ({ ok: true, rooms: allRooms().length }));
 app.get("/api/board", async () => ({ board: BOARD }));
 
 app.get("/api/rooms/public", async () => {
+  // "Viable seat" = a connected human or a bot. Offline humans inside
+  // the 3-minute reconnect grace stay in players[] but don't count
+  // toward capacity, and a lobby with NO connected humans is hidden
+  // from the list entirely until somebody picks it up again — so
+  // strangers don't accidentally land in a room whose host is mid-
+  // metro and may never come back.
   const rooms = allRooms()
-    .filter((r) => r.isPublic && r.phase === "lobby" && r.players.length < 6)
-    .map((r) => ({
-      id: r.id,
-      hostName: r.players.find((p) => p.id === r.hostId)?.name ?? "—",
-      playerCount: r.players.length,
-      maxPlayers: 6,
-      createdAt: r.createdAt,
-    }));
+    .filter((r) => {
+      if (!r.isPublic || r.phase !== "lobby") return false;
+      const seated = r.players.filter((p) => p.connected || p.isBot).length;
+      if (seated >= (r.maxPlayers ?? 6)) return false;
+      const anyHumanOnline = r.players.some((p) => p.connected && !p.isBot);
+      return anyHumanOnline;
+    })
+    .map((r) => {
+      const host = r.players.find((p) => p.id === r.hostId);
+      const viable = r.players.filter((p) => p.connected || p.isBot);
+      return {
+        id: r.id,
+        hostName: host?.name ?? "—",
+        playerCount: viable.length,
+        maxPlayers: r.maxPlayers ?? 6,
+        createdAt: r.createdAt,
+      };
+    });
   return { rooms };
 });
 

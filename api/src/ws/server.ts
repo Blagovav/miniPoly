@@ -46,15 +46,15 @@ function deleteIfAbandoned(room: RoomState): boolean {
   return true;
 }
 
-/** Чистит всех offline-игроков из лобби. Вызывается перед каждым broadcast.
- *  Ботов не трогаем — у них `connected: false` намеренно (у бота нет своего
- *  WS), и sweep иначе мгновенно выметал их сразу после addBot — кнопка
- *  "Добавить бота" выглядела как ничего не делающая. */
-function sweepOfflineLobby(room: RoomState): void {
-  if (room.phase !== "lobby") return;
-  const offline = room.players.filter((p) => !p.connected && !p.isBot);
-  for (const p of offline) removePlayer(room, p.id);
-}
+// Note: previous versions had a `sweepOfflineLobby` that aggressively
+// removed any offline non-bot from the lobby on every sendState. That
+// made the documented "3-second grace" meaningless — by the time the
+// timer fired the player was long gone and a reconnect had to fall
+// through the new-player branch in addPlayer. We dropped the sweep so
+// offline humans persist in the players array (rendered as an
+// "offline" chip on the client) for the full grace window. The
+// timeout in the close handler is now the single source of truth for
+// when an offline player actually leaves.
 import { getRoom, onStateChange, registerBroadcasters, saveRoom } from "../rooms/manager";
 
 interface Conn {
@@ -106,7 +106,6 @@ function leaveVoice(roomId: string, playerId: string): void {
 function sendState(roomId: string): void {
   const room = getRoom(roomId);
   if (!room) return;
-  sweepOfflineLobby(room);
   broadcast(roomId, { type: "state", room });
 }
 
@@ -145,14 +144,25 @@ export async function registerWebSocket(app: FastifyInstance): Promise<void> {
             p.connected = false;
             reassignHostIfNeeded(room);
           }
-          // В игре — сохраняем offline-игрока для возможного реконнекта.
-          // В лобби — грейс-период 3с, потом удаляем если не вернулся.
-          // CRITICAL: the grace window is what makes Create→Room work.
-          // When the user clicks "Создать" the host's WS#1 (CreateView)
-          // closes during the route transition — within 1.5 s the new
-          // RoomView spins up WS#2 and re-joins. If we deleted the room
-          // synchronously here, WS#2 would land on "room not found" and
-          // the client would show the "Партия завершена" modal.
+          // Lobby disconnect: keep the player in the array (rendered as
+          // an offline chip on the client) for a 3-minute grace window
+          // so they can reconnect and pick up where they left off —
+          // metro tunnel, signal drop, app force-close, brief swipe to
+          // check another chat, etc. After 3 min with no return, we
+          // remove them and, if they were the last human, drop the
+          // room from the Map so it stops zombying in
+          // /api/rooms/public.
+          //
+          // The grace also covers a sneakier case: the
+          // CreateView→RoomView route transition closes WS#1 mid-flight
+          // while WS#2 spins up ~1.5 s later. As long as the timeout
+          // hasn't fired, addPlayer's `existing` branch flips
+          // connected=true and the room hums along.
+          //
+          // Active matches use a 10-min grace below — players have
+          // more invested in an in-progress game and deserve longer to
+          // come back.
+          const LOBBY_GRACE_MS = 3 * 60 * 1000;
           if (room.phase === "lobby") {
             setTimeout(() => {
               const fresh = getRoom(roomId);
@@ -160,15 +170,12 @@ export async function registerWebSocket(app: FastifyInstance): Promise<void> {
               const stale = fresh.players.find((pl) => pl.id === playerId);
               if (stale && !stale.connected) {
                 removePlayer(fresh, stale.id);
-                // Now (and ONLY now, after the grace window) we can
-                // decide if the lobby is truly abandoned. If yes, drop
-                // the room from the Map so it stops zombying in
-                // /api/rooms/public; otherwise broadcast the trimmed
-                // state to whoever's still in.
+                // Only AFTER we drop the lingering offline can we
+                // decide if the lobby is truly abandoned.
                 if (deleteIfAbandoned(fresh)) return;
                 sendState(roomId);
               }
-            }, 3000);
+            }, LOBBY_GRACE_MS);
           } else if (room.phase !== "ended") {
             // Active match desertion: if every human stays gone for the
             // grace window, the room is just bots cycling state to no
