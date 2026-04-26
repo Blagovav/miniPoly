@@ -1,21 +1,24 @@
 #!/usr/bin/env node
 /**
- * Convert every PNG under web/public/figma/** to a sibling .webp.
+ * Convert every PNG under web/figma-src/** to a .webp inside
+ * web/public/figma/, preserving the directory layout.
  *
- * The original PNGs stay in place — they act as the fallback for the
- * <picture> tag and as the asset cache key when CSS image-set() falls
- * back. Re-running is idempotent (.webp gets re-written each time).
+ * `figma-src/` is the committed source-of-truth for designer-supplied
+ * PNGs — never served, only used as input. `public/figma/` ships the
+ * compressed WebP outputs that the app actually loads. Re-running is
+ * idempotent (every .webp gets rewritten).
  *
- * Usage:
- *   node scripts/optimize-images.mjs           # quality 85 (default)
- *   node scripts/optimize-images.mjs --quality 90
+ * If the designer adds a new PNG: drop it into `web/figma-src/<dir>/`,
+ * run `npm run optimize-images`, commit both. To regenerate everything
+ * at a different quality, run with `--quality 90` (default 85).
  */
-import { readdir, stat, readFile, writeFile } from "node:fs/promises";
-import { join, extname, relative } from "node:path";
+import { readdir, stat, readFile, writeFile, mkdir } from "node:fs/promises";
+import { join, extname, relative, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import sharp from "sharp";
 
-const ROOT = fileURLToPath(new URL("../public/figma", import.meta.url));
+const SRC_ROOT = fileURLToPath(new URL("../figma-src", import.meta.url));
+const OUT_ROOT = fileURLToPath(new URL("../public/figma", import.meta.url));
 const REPO_ROOT = fileURLToPath(new URL("..", import.meta.url));
 
 const argQ = process.argv.indexOf("--quality");
@@ -44,11 +47,19 @@ let totalIn = 0;
 let totalOut = 0;
 let count = 0;
 
-console.log(`▶ optimize-images  quality=${QUALITY}  root=${relative(REPO_ROOT, ROOT)}`);
+console.log(
+  `▶ optimize-images  quality=${QUALITY}  ` +
+  `${relative(REPO_ROOT, SRC_ROOT)} → ${relative(REPO_ROOT, OUT_ROOT)}`,
+);
 console.log("");
 
-for await (const pngPath of walkPngs(ROOT)) {
-  const webpPath = pngPath.replace(/\.png$/i, ".webp");
+for await (const pngPath of walkPngs(SRC_ROOT)) {
+  // Mirror the relative path under OUT_ROOT, swapping .png → .webp.
+  const relSrc = relative(SRC_ROOT, pngPath);
+  const webpPath = join(OUT_ROOT, relSrc).replace(/\.png$/i, ".webp");
+
+  await mkdir(dirname(webpPath), { recursive: true });
+
   const inBuf = await readFile(pngPath);
   const inStat = await stat(pngPath);
 
