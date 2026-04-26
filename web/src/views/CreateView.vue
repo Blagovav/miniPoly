@@ -215,7 +215,7 @@ onUnmounted(() => {
           <button type="button" class="create-v2__cell create-v2__cell--shaded" @click="cycleCash">
             <span class="create-v2__cell-text">{{ L.ruleCash }}</span>
             <span class="create-v2__cell-val">
-              <img class="create-v2__coin" src="/figma/create/money.png" alt="" aria-hidden="true"/>
+              <img class="create-v2__coin" src="/figma/create/money.webp" alt="" aria-hidden="true"/>
               {{ fmtCash(startingCash) }}
             </span>
           </button>
@@ -248,7 +248,7 @@ onUnmounted(() => {
           <button type="button" class="create-v2__cell" @click="cycleEntry">
             <span class="create-v2__cell-text">{{ L.ruleEntry }}</span>
             <span class="create-v2__cell-val">
-              <img class="create-v2__coin" src="/figma/create/money.png" alt="" aria-hidden="true"/>
+              <img class="create-v2__coin" src="/figma/create/money.webp" alt="" aria-hidden="true"/>
               {{ fmtCash(entryFee) }}
             </span>
           </button>

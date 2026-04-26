@@ -159,7 +159,7 @@ const subtitle = computed(() => {
   background-color: #9fe101;
   background-image:
     linear-gradient(rgba(159, 225, 1, 0.7), rgba(159, 225, 1, 0.7)),
-    url('/figma/room/bg-pattern.png');
+    url('/figma/room/bg-pattern.webp');
   background-size: auto, cover;
   background-position: center, center;
   background-repeat: no-repeat, no-repeat;

@@ -122,7 +122,7 @@ const visible = computed(() => open.value && !!tile.value && !!auction.value && 
             >{{ tileKindLabel }}</span>
             <span class="auction-meta-label">{{ loc === "ru" ? "Базовая" : "Base" }}</span>
             <span class="auction-meta-coin">
-              <img src="/figma/room/icon-money.png" alt="" />
+              <img src="/figma/room/icon-money.webp" alt="" />
               <b>{{ tilePrice }}</b>
             </span>
           </div>
@@ -139,7 +139,7 @@ const visible = computed(() => open.value && !!tile.value && !!auction.value && 
           <div class="bid-leading__row">
             <span class="bid-leading__who">{{ highBidder?.name ?? "—" }}</span>
             <span class="bid-leading__amt">
-              <img src="/figma/room/icon-money.png" alt="" />
+              <img src="/figma/room/icon-money.webp" alt="" />
               <b>{{ auction.highBid }}</b>
             </span>
           </div>
@@ -169,7 +169,7 @@ const visible = computed(() => open.value && !!tile.value && !!auction.value && 
         <!-- Input + place-bid -->
         <div class="bid-row">
           <div class="bid-input">
-            <img src="/figma/room/icon-money.png" alt="" class="bid-input__coin" />
+            <img src="/figma/room/icon-money.webp" alt="" class="bid-input__coin" />
             <input
               v-model.number="bidInput"
               type="number"
@@ -197,7 +197,7 @@ const visible = computed(() => open.value && !!tile.value && !!auction.value && 
             @click="bidBy(delta)"
           >
             <span>+</span>
-            <img src="/figma/room/icon-money.png" alt="" />
+            <img src="/figma/room/icon-money.webp" alt="" />
             <span>{{ delta }}</span>
           </button>
         </div>

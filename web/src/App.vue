@@ -8,6 +8,13 @@ import { useGameStore } from "./stores/game";
 import Icon from "./components/Icon.vue";
 import LoadingScreen from "./components/LoadingScreen.vue";
 import TourOverlay from "./components/TourOverlay.vue";
+import {
+  preloadAll,
+  HOME_ASSETS,
+  ROOMS_ASSETS,
+  ROOM_ASSETS,
+  CREATE_ASSETS,
+} from "./utils/assets";
 
 const TOUR_KEY = "tourV1";
 
@@ -40,7 +47,15 @@ async function runBoot() {
 
   init();
   const profileJob = userId.value ? fetchProfile(userId.value) : Promise.resolve(null);
-  await Promise.allSettled([profileJob, game.loadFriends(userId.value)]);
+  // Fetch profile, friends list, AND decode home-screen art in parallel.
+  // Home assets are blocking so the splash never disappears before the
+  // mascot / bg-pattern / nav icons are ready — kills the first-paint
+  // flicker on cold start.
+  await Promise.allSettled([
+    profileJob,
+    game.loadFriends(userId.value),
+    preloadAll(HOME_ASSETS),
+  ]);
 
   const elapsed = Date.now() - startedAt;
   if (elapsed < MIN_BOOT_MS) {
@@ -48,6 +63,11 @@ async function runBoot() {
   }
 
   booting.value = false;
+
+  // Fire-and-forget prefetch for screens the user might navigate to next.
+  // Browser cache means later <img>/<url()> hits are served instantly with
+  // no network round-trip and no decode flash. Errors swallowed inside.
+  void preloadAll([...ROOMS_ASSETS, ...ROOM_ASSETS, ...CREATE_ASSETS]);
 
   // Deep-link room routing after the UI is ready.
   const url = new URL(window.location.href);

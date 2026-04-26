@@ -344,7 +344,7 @@ const ownerTokenId = computed<TokenArtId>(() => tokenArtFor(owner.value?.token |
             <div class="info-name">{{ tile.name[loc] }}</div>
             <div v-if="isProperty" class="info-cost">
               <span>{{ isRu ? "Стоимость" : "Price" }}</span>
-              <img src="/figma/room/icon-money.png" alt="" />
+              <img src="/figma/room/icon-money.webp" alt="" />
               <b>{{ 'price' in tile ? tile.price : 0 }}</b>
             </div>
           </div>
@@ -385,7 +385,7 @@ const ownerTokenId = computed<TokenArtId>(() => tokenArtFor(owner.value?.token |
             >
               <span class="rent-row__label">{{ r.label }}</span>
               <span class="rent-row__val">
-                <img src="/figma/room/icon-money.png" alt="" />
+                <img src="/figma/room/icon-money.webp" alt="" />
                 <b>{{ r.value }}</b>
               </span>
             </div>
@@ -402,7 +402,7 @@ const ownerTokenId = computed<TokenArtId>(() => tokenArtFor(owner.value?.token |
             >
               <span class="action-btn__label">{{ houseButton.label }}</span>
               <span class="action-btn__cost">
-                <img src="/figma/room/icon-money.png" alt="" />
+                <img src="/figma/room/icon-money.webp" alt="" />
                 <b>{{ houseButton.cost }}</b>
               </span>
             </button>
@@ -414,7 +414,7 @@ const ownerTokenId = computed<TokenArtId>(() => tokenArtFor(owner.value?.token |
             >
               <span class="action-btn__label">{{ isRu ? "Отель" : "Hotel" }}</span>
               <span class="action-btn__cost">
-                <img src="/figma/room/icon-money.png" alt="" />
+                <img src="/figma/room/icon-money.webp" alt="" />
                 <b>{{ buildCost }}</b>
               </span>
             </button>
@@ -425,7 +425,7 @@ const ownerTokenId = computed<TokenArtId>(() => tokenArtFor(owner.value?.token |
             >
               <span class="action-btn__label">{{ mortgageButton.label }}</span>
               <span class="action-btn__cost">
-                <img src="/figma/room/icon-money.png" alt="" />
+                <img src="/figma/room/icon-money.webp" alt="" />
                 <b>{{ mortgageButton.cost }}</b>
               </span>
             </button>

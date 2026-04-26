@@ -568,9 +568,9 @@ function openLeaderboardRow(playerId: string) {
 // Rank → medal PNG. Gold/silver/bronze for top-3; 4th reuses bronze
 // until a designated 4th asset exists.
 function medalSrc(rank: number): string {
-  if (rank === 0) return "/figma/room/medal-gold.png";
-  if (rank === 1) return "/figma/room/medal-silver.png";
-  return "/figma/room/medal-bronze.png";
+  if (rank === 0) return "/figma/room/medal-gold.webp";
+  if (rank === 1) return "/figma/room/medal-silver.webp";
+  return "/figma/room/medal-bronze.webp";
 }
 
 // Player property count — used in the current-turn chip.
@@ -747,7 +747,7 @@ void t;
           @touchend="voiceHoldEnd"
           @touchcancel="voiceHoldEnd"
         >
-          <img src="/figma/room/nav-chat.png" alt="" />
+          <img src="/figma/room/nav-chat.webp" alt="" />
           <span
             class="voice-dot"
             :class="{
@@ -768,7 +768,7 @@ void t;
           :aria-label="locale === 'ru' ? 'Чат' : 'Chat'"
           @click="toggleChat"
         >
-          <img src="/figma/room/nav-home.png" alt="" />
+          <img src="/figma/room/nav-home.webp" alt="" />
         </button>
         <button class="room-topbar__menu-btn" aria-label="menu" @click="handleMenu">
           <span class="room-topbar__menu-bar" />
@@ -835,7 +835,7 @@ void t;
               {{ game.currentPlayer.name?.toUpperCase() || '…' }}
             </div>
             <div class="board-hud__timer">
-              <img src="/figma/room/icon-stopwatch.png" alt="" />
+              <img src="/figma/room/icon-stopwatch.webp" alt="" />
               <span>{{ turnRemainingSec }}</span>
             </div>
             </template>
@@ -843,14 +843,14 @@ void t;
               <div class="board-hud__budget-row">
                 <span>{{ locale === 'ru' ? 'Ваш бюджет' : 'Your budget' }}</span>
                 <span class="board-hud__budget-val">
-                  <img src="/figma/room/icon-money.png" alt="" />
+                  <img src="/figma/room/icon-money.webp" alt="" />
                   {{ game.me.cash }}
                 </span>
               </div>
               <div class="board-hud__budget-row">
                 <span>{{ locale === 'ru' ? 'Собственностей' : 'Properties' }}</span>
                 <span class="board-hud__budget-val">
-                  <img src="/figma/room/icon-chair.png" alt="" />
+                  <img src="/figma/room/icon-chair.webp" alt="" />
                   {{ propCountFor(game.me.id) }}
                 </span>
               </div>
@@ -882,8 +882,8 @@ void t;
               <div class="turn-card__body">
                 <div class="turn-card__name">{{ slot.player.name }}</div>
                 <div class="turn-card__stats">
-                  <span><img src="/figma/room/icon-money.png" alt=""/>{{ slot.player.cash }}</span>
-                  <span><img src="/figma/room/icon-chair.png" alt=""/>{{ propCountFor(slot.player.id) }}</span>
+                  <span><img src="/figma/room/icon-money.webp" alt=""/>{{ slot.player.cash }}</span>
+                  <span><img src="/figma/room/icon-chair.webp" alt=""/>{{ propCountFor(slot.player.id) }}</span>
                 </div>
               </div>
             </div>
@@ -897,7 +897,7 @@ void t;
         <div v-if="currentTileInfo && !isPreRoll" class="tile-info">
           <span class="tile-info__name">{{ currentTileInfo.name }}</span>
           <span v-if="currentTileInfo.value !== null" class="tile-info__value">
-            <img src="/figma/room/icon-money.png" alt="" />
+            <img src="/figma/room/icon-money.webp" alt="" />
             {{ currentTileInfo.value }}
           </span>
         </div>
@@ -937,7 +937,7 @@ void t;
                 <span class="leaderboard__name">{{ p.name }}</span>
               </div>
               <span class="leaderboard__cash">
-                <img src="/figma/room/icon-money.png" alt="" />
+                <img src="/figma/room/icon-money.webp" alt="" />
                 {{ p.cash }}
               </span>
             </div>
@@ -983,7 +983,7 @@ void t;
         >
           <span class="primary-btn__label">{{ btn.label }}</span>
           <span v-if="btn.variant === 'buy' && btn.price" class="primary-btn__price">
-            <img src="/figma/room/icon-money.png" alt="" />
+            <img src="/figma/room/icon-money.webp" alt="" />
             {{ btn.price }}
           </span>
         </button>
@@ -1859,7 +1859,7 @@ body.room-figma-root {
   background-color: #9fe101 !important;
   background-image:
     linear-gradient(rgba(159, 225, 1, 0.7), rgba(159, 225, 1, 0.7)),
-    url('/figma/room/bg-pattern.png') !important;
+    url('/figma/room/bg-pattern.webp') !important;
   background-size: auto, cover !important;
   background-position: center, center !important;
   background-repeat: no-repeat, no-repeat !important;

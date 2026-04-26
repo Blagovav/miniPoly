@@ -149,14 +149,14 @@ function go(name: string) { haptic("light"); router.push({ name }); }
 
       <div class="home-v2__hero">
         <div class="home-v2__mascot-clip" aria-hidden="true">
-          <img class="home-v2__mascot" src="/figma/home/mascot.png" alt="" />
+          <img class="home-v2__mascot" src="/figma/home/mascot.webp" alt="" />
         </div>
         <button
           class="home-v2__settings"
           :aria-label="L.settingsAria"
           @click="startEditName"
         >
-          <img src="/figma/home/settings.png" alt="" />
+          <img src="/figma/home/settings.webp" alt="" />
         </button>
       </div>
       <h1 class="home-v2__greeting">{{ L.greeting }}</h1>
@@ -174,14 +174,14 @@ function go(name: string) { haptic("light"); router.push({ name }); }
 
       <div class="home-v2__cards">
         <button class="home-v2__card home-v2__card--create" @click="go('create')">
-          <img class="home-v2__card-art" src="/figma/home/dice.png" alt="" />
+          <img class="home-v2__card-art" src="/figma/home/dice.webp" alt="" />
           <div class="home-v2__card-title">{{ L.createT }}</div>
           <div class="home-v2__card-sub">{{ L.createS }}</div>
         </button>
         <button class="home-v2__card home-v2__card--join" @click="go('rooms')">
           <img
             class="home-v2__card-art home-v2__card-art--join"
-            src="/figma/home/magnifier.png"
+            src="/figma/home/magnifier.webp"
             alt=""
           />
           <div class="home-v2__card-title">{{ L.joinT }}</div>
@@ -191,15 +191,15 @@ function go(name: string) { haptic("light"); router.push({ name }); }
 
       <nav class="home-v2__nav">
         <button class="home-v2__nav-item" @click="go('history')">
-          <img src="/figma/home/history.png" alt="" />
+          <img src="/figma/home/history.webp" alt="" />
           <span>{{ L.history }}</span>
         </button>
         <button class="home-v2__nav-item" @click="go('shop')">
-          <img src="/figma/home/shop.png" alt="" />
+          <img src="/figma/home/shop.webp" alt="" />
           <span>{{ L.shop }}</span>
         </button>
         <button class="home-v2__nav-item" @click="go('friends')">
-          <img src="/figma/home/friends.png" alt="" />
+          <img src="/figma/home/friends.webp" alt="" />
           <span>{{ L.friends }}</span>
         </button>
       </nav>
@@ -567,7 +567,7 @@ body.home-figma-root {
   background-color: #0d68db !important;
   background-image:
     linear-gradient(rgba(13, 104, 219, 0.55), rgba(13, 104, 219, 0.55)),
-    url('/figma/home/bg-pattern.png') !important;
+    url('/figma/home/bg-pattern.webp') !important;
   background-size: auto, cover !important;
   background-position: center, center !important;
   background-repeat: no-repeat, no-repeat !important;

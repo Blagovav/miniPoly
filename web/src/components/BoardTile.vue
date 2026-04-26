@@ -43,23 +43,23 @@ const bandColor = computed(() => {
 //   tile-coin.png        = house + water drop    → Water utility
 // Index 0 (GO) is rendered as a text label; no PNG in the Figma.
 const CORNER_ART: Record<number, string> = {
-  10: "/figma/room/tile-jail.png",     // Jail / Just Visiting — metal bars (Figma 19:2783)
-  20: "/figma/room/tile-parking.png",  // Free Parking — P sign (Figma 19:2781)
-  30: "/figma/room/tile-luxury.png",   // Go-to-Jail — brick building (Figma 19:2880)
+  10: "/figma/room/tile-jail.webp",     // Jail / Just Visiting — metal bars (Figma 19:2783)
+  20: "/figma/room/tile-parking.webp",  // Free Parking — P sign (Figma 19:2781)
+  30: "/figma/room/tile-luxury.webp",   // Go-to-Jail — brick building (Figma 19:2880)
 };
 
 // Specials that show a PNG icon instead of a price label.
 function specialArt(kind: string, index: number): string | null {
   switch (kind) {
-    case "chance":   return "/figma/room/tile-chest2.png";       // red ?
-    case "chest":    return "/figma/room/tile-question.png";     // chest
-    case "tax":      return "/figma/room/tile-bag.png";          // money stack
-    case "railroad": return "/figma/room/tile-chest.png";        // train
+    case "chance":   return "/figma/room/tile-chest2.webp";       // red ?
+    case "chest":    return "/figma/room/tile-question.webp";     // chest
+    case "tax":      return "/figma/room/tile-bag.webp";          // money stack
+    case "railroad": return "/figma/room/tile-chest.webp";        // train
     case "utility":
       // Index 12 is the Electric Company, 28 is the Water Works.
       return index === 12
-        ? "/figma/room/tile-money-stack.png"
-        : "/figma/room/tile-coin.png";
+        ? "/figma/room/tile-money-stack.webp"
+        : "/figma/room/tile-coin.webp";
     default: return null;
   }
 }

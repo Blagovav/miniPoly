@@ -141,7 +141,7 @@ onUnmounted(() => {
       <div v-if="!loading && filteredRooms.length === 0" class="rooms-v2__empty">
         <img
           class="rooms-v2__empty-art"
-          src="/figma/rooms/char-empty.png"
+          src="/figma/rooms/char-empty.webp"
           alt=""
         />
         <div class="rooms-v2__empty-text">
@@ -534,7 +534,7 @@ body.rooms-figma-root {
   background-color: #0d68db !important;
   background-image:
     linear-gradient(rgba(13, 104, 219, 0.55), rgba(13, 104, 219, 0.55)),
-    url('/figma/home/bg-pattern.png') !important;
+    url('/figma/home/bg-pattern.webp') !important;
   background-size: auto, cover !important;
   background-position: center, center !important;
   background-repeat: no-repeat, no-repeat !important;

@@ -16,7 +16,7 @@ onUnmounted(() => {
 
 <template>
   <div class="splash">
-    <img class="splash__logo" src="/figma/splash/logo.png" alt="MiniPoly" />
+    <img class="splash__logo" src="/figma/splash/logo.webp" alt="MiniPoly" />
   </div>
 </template>
 
@@ -55,7 +55,7 @@ body.splash-figma-root {
   background-color: #0d68db !important;
   background-image:
     linear-gradient(rgba(13, 104, 219, 0.55), rgba(13, 104, 219, 0.55)),
-    url('/figma/home/bg-pattern.png') !important;
+    url('/figma/home/bg-pattern.webp') !important;
   background-size: auto, cover !important;
   background-position: center, center !important;
   background-repeat: no-repeat, no-repeat !important;
