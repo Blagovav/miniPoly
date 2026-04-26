@@ -107,12 +107,6 @@ function sendState(roomId: string): void {
   const room = getRoom(roomId);
   if (!room) return;
   sweepOfflineLobby(room);
-  // After the sweep / any preceding removePlayer call, if the lobby
-  // has no humans left (every survivor is a bot, or the array is
-  // empty), drop the room from the in-memory Map so it stops
-  // surfacing in /api/rooms/public as a "playerCount: 0, hostName: —"
-  // zombie. Skipping the broadcast is safe — there's nobody listening.
-  if (deleteIfAbandoned(room)) return;
   broadcast(roomId, { type: "state", room });
 }
 
@@ -153,6 +147,12 @@ export async function registerWebSocket(app: FastifyInstance): Promise<void> {
           }
           // В игре — сохраняем offline-игрока для возможного реконнекта.
           // В лобби — грейс-период 3с, потом удаляем если не вернулся.
+          // CRITICAL: the grace window is what makes Create→Room work.
+          // When the user clicks "Создать" the host's WS#1 (CreateView)
+          // closes during the route transition — within 1.5 s the new
+          // RoomView spins up WS#2 and re-joins. If we deleted the room
+          // synchronously here, WS#2 would land on "room not found" and
+          // the client would show the "Партия завершена" modal.
           if (room.phase === "lobby") {
             setTimeout(() => {
               const fresh = getRoom(roomId);
@@ -160,6 +160,12 @@ export async function registerWebSocket(app: FastifyInstance): Promise<void> {
               const stale = fresh.players.find((pl) => pl.id === playerId);
               if (stale && !stale.connected) {
                 removePlayer(fresh, stale.id);
+                // Now (and ONLY now, after the grace window) we can
+                // decide if the lobby is truly abandoned. If yes, drop
+                // the room from the Map so it stops zombying in
+                // /api/rooms/public; otherwise broadcast the trimmed
+                // state to whoever's still in.
+                if (deleteIfAbandoned(fresh)) return;
                 sendState(roomId);
               }
             }, 3000);
@@ -577,10 +583,20 @@ function handleLeave(conn: Conn): void {
   const ctx = getRoomAndPlayer(conn);
   if (!ctx || !ctx.p) return;
   leaveVoice(ctx.room.id, ctx.p.id);
-  if (ctx.room.phase === "lobby") {
+  const wasLobby = ctx.room.phase === "lobby";
+  if (wasLobby) {
     removePlayer(ctx.room, ctx.p.id);
   } else if (ctx.room.phase !== "ended") {
     leaveActiveGame(ctx.room, ctx.p.id);
+  }
+  // Explicit leave (player tapped the door button) is intent-to-quit,
+  // not a transient disconnect — no grace period needed. If they were
+  // the last human in the lobby, drop the room immediately so it
+  // doesn't surface as a zombie in /api/rooms/public.
+  if (wasLobby && deleteIfAbandoned(ctx.room)) {
+    conn.roomId = null;
+    conn.playerId = null;
+    return;
   }
   sendState(ctx.room.id);
   conn.roomId = null;
