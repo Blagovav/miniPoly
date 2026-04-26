@@ -375,9 +375,14 @@ export function leaveActiveGame(room: RoomState, playerId: string): void {
     room.phase = "rolling";
     room.dice = null;
     room.doublesInARow = 0;
-    do {
-      room.currentTurn = (room.currentTurn + 1) % room.players.length;
-    } while (room.players[room.currentTurn].bankrupt);
+    // Same guard as in nextTurn — bail out of the spin if every player
+    // is now bankrupt (the alive-count check below will end the room).
+    const alive = room.players.some((pl) => !pl.bankrupt);
+    if (alive) {
+      do {
+        room.currentTurn = (room.currentTurn + 1) % room.players.length;
+      } while (room.players[room.currentTurn].bankrupt);
+    }
   }
   // проверка победы
   const alive = room.players.filter((pl) => !pl.bankrupt);
@@ -1134,7 +1139,14 @@ function finishAuction(room: RoomState): void {
   }
   const winner = room.players.find((pl) => pl.id === a.highBidderId);
   const tile = BOARD[a.tileIndex];
-  if (winner && (tile.kind === "street" || tile.kind === "railroad" || tile.kind === "utility")) {
+  // Guard against awarding the property to a bankrupt or vanished
+  // bidder. This shouldn't normally happen (auctionActiveBidders
+  // filters them out before the trigger), but a parallel chained
+  // bankruptcy could land between the last raise and the resolve.
+  // Without this check the property ends up owned by a $0-cash
+  // bankrupt player.
+  const validWinner = winner && !winner.bankrupt;
+  if (validWinner && (tile.kind === "street" || tile.kind === "railroad" || tile.kind === "utility")) {
     winner.cash -= a.highBid;
     room.properties[a.tileIndex] = {
       tileIndex: a.tileIndex,
@@ -1146,6 +1158,11 @@ function finishAuction(room: RoomState): void {
     log(room, {
       en: `${winner.name} won auction: ${tile.name.en} for $${a.highBid}`,
       ru: `${winner.name} выиграл аукцион: ${tile.name.ru} за $${a.highBid}`,
+    });
+  } else {
+    log(room, {
+      en: `Auction ended — winner unavailable, tile returns to bank`,
+      ru: `Аукцион окончен — победитель недоступен, клетка возвращается в банк`,
     });
   }
   room.auction = null;
@@ -1167,9 +1184,17 @@ function nextTurn(room: RoomState): void {
     room.dice && room.dice[0] === room.dice[1] && p && !p.inJail && room.doublesInARow > 0;
   if (!rolledDoubles) {
     room.doublesInARow = 0;
-    do {
-      room.currentTurn = (room.currentTurn + 1) % room.players.length;
-    } while (room.players[room.currentTurn].bankrupt);
+    // Guard against the "every player is bankrupt" infinite loop —
+    // can happen on cascading bankruptcies (e.g. third-turn jail-fine
+    // failure when the only other player is also already bankrupt).
+    // checkWinCondition below will pick up the alive=0 case and end
+    // the match cleanly.
+    const alive = room.players.some((pl) => !pl.bankrupt);
+    if (alive) {
+      do {
+        room.currentTurn = (room.currentTurn + 1) % room.players.length;
+      } while (room.players[room.currentTurn].bankrupt);
+    }
   }
   room.phase = "rolling";
   room.dice = null;

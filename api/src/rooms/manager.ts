@@ -16,9 +16,18 @@ import {
 
 // Bots move fast so 2+1 or 2+2 human-vs-bot games stay snappy.
 const BOT_TURN_DELAY_MS = 2500;
+// Auction bidding cadence — slightly faster than a full turn so an
+// all-bot auction doesn't drag, but not instant so humans can read
+// the bidding war.
+const BOT_AUCTION_DELAY_MS = 1200;
 
 const rooms = new Map<string, RoomState>();
 const turnTimers = new Map<string, NodeJS.Timeout>();
+// Separate timer for non-current bots in an auction. The regular
+// turnTimer only ticks for `currentPlayer`; an auction can stretch
+// across multiple bots who aren't the current turn — each needs to be
+// nudged into placing a bid or passing, otherwise the auction freezes.
+const auctionTimers = new Map<string, NodeJS.Timeout>();
 const notifiedTurns = new Map<string, string>();
 
 // Broadcasters are injected by the WS server on startup so the bot-turn
@@ -48,6 +57,9 @@ export function deleteRoom(id: string): void {
   const t = turnTimers.get(id);
   if (t) clearTimeout(t);
   turnTimers.delete(id);
+  const at = auctionTimers.get(id);
+  if (at) clearTimeout(at);
+  auctionTimers.delete(id);
   notifiedTurns.delete(id);
 }
 
@@ -73,6 +85,7 @@ export function onStateChange(room: RoomState): void {
   const anyHumanOnline = room.players.some((p) => p.connected && !p.isBot);
   if (!anyHumanOnline) {
     clearTurnTimer(room.id);
+    clearAuctionTimer(room.id);
     return;
   }
 
@@ -82,6 +95,17 @@ export function onStateChange(room: RoomState): void {
     if (target?.isBot) {
       resolveTrade(room, target.id, botShouldAcceptTrade(room, target.id));
     }
+  }
+
+  // Auction running with non-current bots in the bidder list?
+  // Schedule the next bot to act so the auction doesn't freeze on
+  // bots that aren't `currentPlayer` — the regular turnTimer only
+  // ticks for the current turn, and an auction stretches across
+  // every non-bankrupt player.
+  if (room.auction && room.phase === "auction") {
+    scheduleAuctionBotTick(room);
+  } else {
+    clearAuctionTimer(room.id);
   }
 
   // Pre-roll: current roller lives in the first bracket's pending queue, not
@@ -260,6 +284,81 @@ function clearTurnTimer(roomId: string): void {
   const t = turnTimers.get(roomId);
   if (t) clearTimeout(t);
   turnTimers.delete(roomId);
+}
+
+function clearAuctionTimer(roomId: string): void {
+  const t = auctionTimers.get(roomId);
+  if (t) clearTimeout(t);
+  auctionTimers.delete(roomId);
+}
+
+/**
+ * Pick the next bot in the auction's active bidder list that needs to
+ * act (i.e. isn't already the high bidder, isn't passed, isn't
+ * bankrupt) and arm a single setTimeout to bid or pass on its behalf.
+ *
+ * After the bot acts we broadcast state, which feeds back into
+ * `onStateChange` and re-arms this scheduler — chained handoff that
+ * naturally walks every bot in the bidder pool until one of these
+ * exits is hit:
+ *   - a human is now expected to bid (we pause; placeBid/passAuction
+ *     from the human triggers the next onStateChange and we resume),
+ *   - only the high bidder remains active → engine.maybeEndAuction
+ *     finishes the auction.
+ *
+ * Idempotent: replaces any existing auction timer for the room.
+ */
+function scheduleAuctionBotTick(room: RoomState): void {
+  if (!room.auction) {
+    clearAuctionTimer(room.id);
+    return;
+  }
+  const a = room.auction;
+  const candidate = room.players.find(
+    (p) =>
+      p.isBot
+      && !p.bankrupt
+      && !a.passedIds.includes(p.id)
+      && a.highBidderId !== p.id,
+  );
+  if (!candidate) {
+    // Either the high bidder is the only active bidder (engine will
+    // finish the auction), or only humans are left to act. Either way
+    // the bot tick has nothing to do.
+    clearAuctionTimer(room.id);
+    return;
+  }
+
+  clearAuctionTimer(room.id);
+  const timer = setTimeout(async () => {
+    const fresh = getRoom(room.id);
+    if (!fresh || !fresh.auction) return;
+    const auction = fresh.auction;
+    const bot = fresh.players.find((p) => p.id === candidate.id);
+    if (!bot || bot.bankrupt) return;
+    if (auction.passedIds.includes(bot.id)) return;
+    if (auction.highBidderId === bot.id) return;
+
+    // Same bidding heuristic as the in-turn auction branch: 50–85% of
+    // tile price, capped to keep a $300 reserve.
+    const tile = BOARD[auction.tileIndex];
+    const price = (tile as { price?: number }).price ?? 0;
+    const reserve = 300;
+    const willingness = Math.floor(price * (0.5 + Math.random() * 0.35));
+    const affordable = Math.max(0, bot.cash - reserve);
+    const myCap = Math.min(willingness, affordable);
+    const nextBid = auction.highBid + Math.floor(10 + Math.random() * 20);
+
+    const { placeBid: engPlaceBid, passAuction: engPassAuction } = await import("../game/engine");
+    if (myCap > 0 && nextBid > auction.highBid && nextBid <= myCap) {
+      engPlaceBid(fresh, bot.id, nextBid);
+    } else {
+      engPassAuction(fresh, bot.id);
+    }
+    if (broadcastState) broadcastState(fresh.id);
+    onStateChange(fresh);
+  }, BOT_AUCTION_DELAY_MS);
+  auctionTimers.set(room.id, timer);
 }
 
 /** Простая оценка входящего обмена глазами бота: принимаем если ценность того

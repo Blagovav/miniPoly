@@ -15,7 +15,13 @@ let timeout: ReturnType<typeof setTimeout> | null = null;
 // so the player knows they can use it later (jail key in HUD + Pay/Card
 // buttons when they actually land in jail).
 const isJailKeyCard = computed(() =>
-  current.value?.cardId === "ch-gooj" || current.value?.cardId === "co-gooj",
+  // Card IDs come straight from shared/cards.ts:
+  //   Chance "Get Out of Jail Free"          → "ch-gooj"
+  //   Community Chest "Get Out of Jail Free" → "cc-gooj"
+  // Earlier code mistyped the chest variant as "co-gooj", so half the
+  // jail cards drawn auto-closed before the user could read the
+  // "we saved this card for later" copy.
+  current.value?.cardId === "ch-gooj" || current.value?.cardId === "cc-gooj",
 );
 
 // Only the drawer gets the interactive "Got it" close button — everyone
