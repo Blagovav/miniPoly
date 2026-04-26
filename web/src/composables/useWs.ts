@@ -10,6 +10,13 @@ export interface WsClient {
   close: () => void;
 }
 
+// Cap the offline-send queue. Without a cap, a user mashing "Roll"
+// or any other action 200× while the server is down would flush all
+// 200 messages on reconnect, most of which are stale or invalid in
+// the new state. 50 is more than enough for any legitimate burst
+// while still bounded.
+const MAX_QUEUE = 50;
+
 export function useWs(): WsClient {
   const connected = ref(false);
   const listeners = new Set<(m: ServerMessage) => void>();
@@ -48,7 +55,13 @@ export function useWs(): WsClient {
 
   function send(m: ClientMessage) {
     if (ws?.readyState === WebSocket.OPEN) ws.send(JSON.stringify(m));
-    else queue.push(m);
+    else {
+      // Drop the oldest queued message when at cap. Latest intent
+      // wins — better to skip the original "Roll" tap than to discard
+      // the corrected one the user was about to send.
+      queue.push(m);
+      if (queue.length > MAX_QUEUE) queue.splice(0, queue.length - MAX_QUEUE);
+    }
   }
 
   function onMessage(cb: (m: ServerMessage) => void) {

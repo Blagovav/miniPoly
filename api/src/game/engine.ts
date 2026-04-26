@@ -362,10 +362,16 @@ export function leaveActiveGame(room: RoomState, playerId: string): void {
   }
   p.bankrupt = true;
   p.cash = 0;
-  // освобождаем его собственность + возвращаем постройки в банк
+  // освобождаем его собственность + возвращаем постройки в банк.
+  // Snapshot the keys before mutating room.properties — `for...in` +
+  // `delete` is technically defined but a footgun for refactors,
+  // and bankruptPlayer already uses the same snapshot pattern.
+  const ownedIdx: number[] = [];
   for (const idx in room.properties) {
+    if (room.properties[idx].ownerId === p.id) ownedIdx.push(parseInt(idx, 10));
+  }
+  for (const idx of ownedIdx) {
     const prop = room.properties[idx];
-    if (prop.ownerId !== p.id) continue;
     returnBuildingsToBank(room, prop);
     delete room.properties[idx];
   }
@@ -555,8 +561,10 @@ export function proposeTrade(
   if (from.id === to.id) return { ok: false, error: "cannot trade with yourself" };
   if (from.bankrupt || to.bankrupt) return { ok: false, error: "bankrupt player" };
 
-  // Инициировать можно только в свой ход.
-  if (room.players[room.currentTurn].id !== fromId) return { ok: false, error: "not your turn" };
+  // Инициировать можно только в свой ход. `?.` guards against the
+  // (rare but possible) state where `currentTurn` is past the array
+  // bounds — e.g. if every player just bankrupted at once.
+  if (room.players[room.currentTurn]?.id !== fromId) return { ok: false, error: "not your turn" };
 
   const giveCash = Math.max(0, Math.floor(offer.giveCash));
   const takeCash = Math.max(0, Math.floor(offer.takeCash));
@@ -1005,7 +1013,7 @@ export function payJailFine(room: RoomState, playerId: string): { ok: boolean; e
   const p = room.players.find((x) => x.id === playerId);
   if (!p) return { ok: false, error: "no player" };
   if (!p.inJail) return { ok: false, error: "not in jail" };
-  if (room.players[room.currentTurn].id !== playerId) return { ok: false, error: "not your turn" };
+  if (room.players[room.currentTurn]?.id !== playerId) return { ok: false, error: "not your turn" };
   if (room.phase !== "rolling") return { ok: false, error: "wrong phase" };
   if (p.cash < JAIL_FINE) return { ok: false, error: "not enough cash" };
   p.cash -= JAIL_FINE;
@@ -1020,7 +1028,7 @@ export function useGetOutCard(room: RoomState, playerId: string): { ok: boolean;
   const p = room.players.find((x) => x.id === playerId);
   if (!p) return { ok: false, error: "no player" };
   if (!p.inJail) return { ok: false, error: "not in jail" };
-  if (room.players[room.currentTurn].id !== playerId) return { ok: false, error: "not your turn" };
+  if (room.players[room.currentTurn]?.id !== playerId) return { ok: false, error: "not your turn" };
   if (room.phase !== "rolling") return { ok: false, error: "wrong phase" };
   if (p.getOutCards.length === 0) return { ok: false, error: "no jail card" };
   // Pop the most recently drawn card and return it to the bottom of

@@ -66,6 +66,16 @@ interface Conn {
 
 const connections = new Map<WebSocket, Conn>();
 
+// Pending disconnect-grace timeouts, keyed by `roomId|playerId`. Without
+// dedup, every reconnect/disconnect cycle on a flaky network would pile
+// up a fresh setTimeout that lingers for the full grace window
+// (3 min for lobby, 10 min for active match). They're all idempotent
+// at fire time, but the queue grows unboundedly with reconnect storms
+// — fix is to clear any prior timer for the same player before
+// scheduling a new one.
+const disconnectTimers = new Map<string, NodeJS.Timeout>();
+const disconnectKey = (roomId: string, playerId: string) => `${roomId}|${playerId}`;
+
 // Voice-chat participants per room (playerId set). A player is in this set from
 // the moment the client sends voiceJoin until voiceLeave (or disconnect).
 const voiceRooms = new Map<string, Set<string>>();
@@ -163,8 +173,15 @@ export async function registerWebSocket(app: FastifyInstance): Promise<void> {
           // more invested in an in-progress game and deserve longer to
           // come back.
           const LOBBY_GRACE_MS = 3 * 60 * 1000;
+          // Dedup: if this player previously disconnected and we haven't
+          // resolved that timer yet, cancel it before scheduling the new
+          // one. Otherwise reconnect storms accumulate stale timers.
+          const dKey = disconnectKey(roomId, playerId);
+          const prevTimer = disconnectTimers.get(dKey);
+          if (prevTimer) clearTimeout(prevTimer);
           if (room.phase === "lobby") {
-            setTimeout(() => {
+            const t = setTimeout(() => {
+              disconnectTimers.delete(dKey);
               const fresh = getRoom(roomId);
               if (!fresh || fresh.phase !== "lobby") return;
               const stale = fresh.players.find((pl) => pl.id === playerId);
@@ -176,6 +193,7 @@ export async function registerWebSocket(app: FastifyInstance): Promise<void> {
                 sendState(roomId);
               }
             }, LOBBY_GRACE_MS);
+            disconnectTimers.set(dKey, t);
           } else if (room.phase !== "ended") {
             // Active match desertion: if every human stays gone for the
             // grace window, the room is just bots cycling state to no
@@ -184,7 +202,8 @@ export async function registerWebSocket(app: FastifyInstance): Promise<void> {
             // enough for a player to lose signal, ride a metro, etc.
             // and come back without losing their progress.
             const ACTIVE_DESERTED_GRACE_MS = 10 * 60 * 1000;
-            setTimeout(() => {
+            const t = setTimeout(() => {
+              disconnectTimers.delete(dKey);
               const fresh = getRoom(roomId);
               if (!fresh) return;
               if (fresh.phase === "lobby" || fresh.phase === "ended") return;
@@ -195,6 +214,7 @@ export async function registerWebSocket(app: FastifyInstance): Promise<void> {
               voiceRooms.delete(roomId);
               mgrDeleteRoom(roomId);
             }, ACTIVE_DESERTED_GRACE_MS);
+            disconnectTimers.set(dKey, t);
           }
           sendState(roomId);
           // Re-run state evaluation so the turn timer freezes immediately
@@ -362,6 +382,14 @@ function handleJoin(conn: Conn, msg: ClientMessage & { type: "join" }): void {
   conn.roomId = room.id;
   conn.playerId = player.id;
   conn.tgUserId = auth.tgUserId;
+  // Cancel any pending disconnect-grace timer for this player —
+  // they're back online, no need to fire the cleanup later.
+  const dKey = disconnectKey(room.id, player.id);
+  const pending = disconnectTimers.get(dKey);
+  if (pending) {
+    clearTimeout(pending);
+    disconnectTimers.delete(dKey);
+  }
   conn.send({ type: "joined", roomId: room.id, playerId: player.id });
   sendState(room.id);
 }
