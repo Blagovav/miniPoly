@@ -163,6 +163,25 @@ export async function registerWebSocket(app: FastifyInstance): Promise<void> {
                 sendState(roomId);
               }
             }, 3000);
+          } else if (room.phase !== "ended") {
+            // Active match desertion: if every human stays gone for the
+            // grace window, the room is just bots cycling state to no
+            // audience — drop it from memory so it stops eating RAM and
+            // pinging the bot-turn timer forever. 10 min is generous
+            // enough for a player to lose signal, ride a metro, etc.
+            // and come back without losing their progress.
+            const ACTIVE_DESERTED_GRACE_MS = 10 * 60 * 1000;
+            setTimeout(() => {
+              const fresh = getRoom(roomId);
+              if (!fresh) return;
+              if (fresh.phase === "lobby" || fresh.phase === "ended") return;
+              const anyHumanOnline = fresh.players.some(
+                (pl) => pl.connected && !pl.isBot,
+              );
+              if (anyHumanOnline) return;
+              voiceRooms.delete(roomId);
+              mgrDeleteRoom(roomId);
+            }, ACTIVE_DESERTED_GRACE_MS);
           }
           sendState(roomId);
           // Re-run state evaluation so the turn timer freezes immediately
