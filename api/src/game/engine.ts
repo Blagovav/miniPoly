@@ -65,6 +65,7 @@ export function createRoom(hostId: string, isPublic = true, maxPlayers = MAX_PLA
     preRollRolls: {},
     chanceQueue: shuffle(CHANCE_CARDS.map((_, i) => i)),
     chestQueue: shuffle(CHEST_CARDS.map((_, i) => i)),
+    pendingBankAuctionTiles: [],
   };
 }
 
@@ -781,6 +782,9 @@ export function rollAndMove(
     } else {
       p.jailTurns++;
       if (p.jailTurns >= 3) {
+        // Hasbro: forced $50 fine on the third turn — try liquidation
+        // before declaring bankruptcy.
+        if (p.cash < JAIL_FINE) liquidateForCash(room, p, JAIL_FINE);
         if (p.cash >= JAIL_FINE) {
           p.cash -= JAIL_FINE;
           p.inJail = false;
@@ -887,6 +891,10 @@ function handleProperty(room: RoomState, p: Player, tile: PropertyTile, opts?: R
   if (!owner || owner.bankrupt) return;
 
   const rent = calculateRent(room, tile, owned, opts);
+  // Hasbro: forced liquidation before bankruptcy — sell houses and
+  // mortgage holdings to try to make rent. Bankruptcy is only after
+  // there's literally nothing left.
+  if (p.cash < rent) liquidateForCash(room, p, rent);
   const paid = Math.min(rent, p.cash);
   p.cash -= paid;
   owner.cash += paid;
@@ -898,7 +906,7 @@ function handleProperty(room: RoomState, p: Player, tile: PropertyTile, opts?: R
     },
     { kind: "rent", amount: paid, actorId: p.id, counterpartyId: owner.id, tileIndex: tile.index },
   );
-  if (p.cash < 0 || rent > paid) {
+  if (rent > paid) {
     bankruptPlayer(room, p, owner);
   }
 }
@@ -1107,6 +1115,7 @@ function maybeEndAuction(room: RoomState): void {
     });
     room.auction = null;
     room.phase = "action";
+    startNextBankAuctionIfPending(room);
     return;
   }
 
@@ -1120,6 +1129,7 @@ function finishAuction(room: RoomState): void {
   if (!a || !a.highBidderId) {
     room.auction = null;
     room.phase = "action";
+    startNextBankAuctionIfPending(room);
     return;
   }
   const winner = room.players.find((pl) => pl.id === a.highBidderId);
@@ -1140,6 +1150,8 @@ function finishAuction(room: RoomState): void {
   }
   room.auction = null;
   room.phase = "action";
+  // If a bankrupt player queued more tiles for auction, advance the chain.
+  startNextBankAuctionIfPending(room);
 }
 
 export function endTurn(room: RoomState): boolean {
@@ -1202,12 +1214,59 @@ function sendToJail(room: RoomState, p: Player): void {
   log(room, { en: `${p.name} went to jail`, ru: `${p.name} отправлен в тюрьму` });
 }
 
+/**
+ * Hasbro: a player must sell every house they own, then mortgage every
+ * unmortgaged property, BEFORE declaring bankruptcy. Real rules let the
+ * player choose which to sell selectively — our digital simplification
+ * is to liquidate everything in one go (always profitable for the
+ * player, since selling more than needed turns into surplus cash).
+ *
+ * Mutates `p.cash` upward; callers re-check whether the post-liquidate
+ * balance covers the obligation. Returns silently when the player
+ * already has enough cash, so it's safe to call unconditionally on a
+ * "can I afford this?" branch.
+ */
+function liquidateForCash(room: RoomState, p: Player, target: number): void {
+  if (p.cash >= target) return;
+
+  // Phase 1 — sell all buildings (half house cost each, hotel = 5 houses).
+  for (const idx in room.properties) {
+    const prop = room.properties[idx];
+    if (prop.ownerId !== p.id) continue;
+    if (!prop.hotel && prop.houses === 0) continue;
+    const tile = BOARD[parseInt(idx, 10)];
+    if (tile.kind !== "street") continue;
+    if (prop.hotel) {
+      p.cash += Math.floor((tile.houseCost * 5) / 2);
+      prop.hotel = false;
+      room.hotelBank++;
+    }
+    if (prop.houses > 0) {
+      p.cash += Math.floor((tile.houseCost * prop.houses) / 2);
+      room.houseBank += prop.houses;
+      prop.houses = 0;
+    }
+  }
+  if (p.cash >= target) return;
+
+  // Phase 2 — mortgage every property not already mortgaged.
+  for (const idx in room.properties) {
+    const prop = room.properties[idx];
+    if (prop.ownerId !== p.id || prop.mortgaged) continue;
+    const tile = BOARD[parseInt(idx, 10)];
+    if (tile.kind !== "street" && tile.kind !== "railroad" && tile.kind !== "utility") continue;
+    p.cash += tile.mortgage;
+    prop.mortgaged = true;
+  }
+}
+
 function payOrBankrupt(
   room: RoomState,
   p: Player,
   amount: number,
   reason: I18nText,
 ): void {
+  if (p.cash < amount) liquidateForCash(room, p, amount);
   if (p.cash >= amount) {
     p.cash -= amount;
     log(room, { en: `${p.name}: ${reason.en}`, ru: `${p.name}: ${reason.ru}` });
@@ -1219,18 +1278,35 @@ function payOrBankrupt(
 function bankruptPlayer(room: RoomState, p: Player, to?: Player): void {
   p.bankrupt = true;
   p.cash = 0;
-  // transfer properties. When returning to the bank, buildings are freed too;
-  // when handing to a creditor, Hasbro rule says the creditor must immediately
-  // sell any buildings at half price — we approximate by liquidating on transfer.
+  // Snapshot the bankrupt player's tiles before mutating room.properties
+  // (delete-while-iterating is fine in JS but harder to reason about
+  // when we also queue auctions).
+  const owned: Array<[number, OwnedProperty]> = [];
   for (const idx in room.properties) {
     const prop = room.properties[idx];
-    if (prop.ownerId !== p.id) continue;
+    if (prop.ownerId === p.id) owned.push([parseInt(idx, 10), prop]);
+  }
+  for (const [idx, prop] of owned) {
     if (to) {
+      // Bankrupt to a player (rent / direct trade-in-game).
+      // Hasbro: creditor takes the property; if it has buildings, the
+      // creditor sells them all to the bank at half price (approximated
+      // here by liquidateBuildings paying half-cash to the creditor).
       liquidateBuildings(room, prop, to);
       prop.ownerId = to.id;
     } else {
+      // Bankrupt to the bank (tax / repair card / failed jail fine).
+      // Hasbro: houses go to the bank; UNmortgaged properties go to
+      // auction; mortgaged properties simply pass to the bank (the
+      // next buyer can choose to keep them mortgaged or unmortgage at
+      // standard cost). We queue unmortgaged tiles and start the
+      // first auction; the chain advances after each auction ends.
       returnBuildingsToBank(room, prop);
+      const wasMortgaged = prop.mortgaged;
       delete room.properties[idx];
+      if (!wasMortgaged) {
+        room.pendingBankAuctionTiles.push(idx);
+      }
     }
   }
   // Hasbro: jail cards held by the bankrupt player return to the bottom
@@ -1241,6 +1317,23 @@ function bankruptPlayer(room: RoomState, p: Player, to?: Player): void {
   }
   p.getOutCards = [];
   log(room, { en: `${p.name} went bankrupt`, ru: `${p.name} обанкротился` });
+  // Kick off the chain of bank-property auctions if any were queued
+  // and no auction is currently running.
+  startNextBankAuctionIfPending(room);
+}
+
+/**
+ * If a bankrupt-to-bank queued tiles for auction, pop the next one and
+ * start its auction — but only if no other auction is currently in
+ * progress. Called after each auction ends (maybeEndAuction /
+ * finishAuction) to keep the chain rolling, and at the end of
+ * bankruptPlayer to kick the first one off.
+ */
+function startNextBankAuctionIfPending(room: RoomState): void {
+  if (room.auction) return;
+  const next = room.pendingBankAuctionTiles.shift();
+  if (next === undefined) return;
+  startAuction(room, next);
 }
 
 function returnBuildingsToBank(room: RoomState, prop: OwnedProperty): void {
@@ -1340,6 +1433,7 @@ function applyCardEffect(room: RoomState, p: Player, card: CardDef, source: "cha
     case "payEach": {
       const others = room.players.filter((pl) => !pl.bankrupt && pl.id !== p.id);
       const total = e.amount * others.length;
+      if (p.cash < total) liquidateForCash(room, p, total);
       if (p.cash < total) {
         bankruptPlayer(room, p);
         return;

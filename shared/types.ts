@@ -232,6 +232,12 @@ export interface RoomState {
   // empty.
   chanceQueue: number[];
   chestQueue: number[];
+  // Tile indices waiting to be auctioned because a bankrupt-to-bank
+  // freed them. Hasbro: when a player goes bankrupt to the bank, their
+  // unmortgaged properties go to auction one by one. We process the
+  // queue sequentially via finishAuction → startNextBankAuction so we
+  // never have two auctions running at once.
+  pendingBankAuctionTiles: number[];
 }
 
 export interface PublicRoomSummary {
