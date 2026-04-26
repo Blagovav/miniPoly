@@ -65,12 +65,15 @@ export function useTelegram() {
     }
     try { w.ready(); } catch {}
     try { w.expand(); } catch {}
-    // Match Telegram's own header/background to our parchment bg so the
-    // desktop Mini App title bar ("× Mini Poly") blends with the content
-    // instead of sitting as a dark strip above it.
-    try { w.setHeaderColor?.("#f0e4c8"); } catch {}
-    try { w.setBackgroundColor?.("#f0e4c8"); } catch {}
-    try { w.setBottomBarColor?.("#f0e4c8"); } catch {}
+    // Match Telegram's own header/background/bottom bars to our Figma
+    // brand blue. Telegram automatically picks white-tinted icons when
+    // the bar is dark, so the title pill ("Mini Poly") and the close
+    // chevron stay readable. The colour gets re-set by App.vue when
+    // the user navigates to Create (#faf3e2 cream) or into an active
+    // game (#9fe101 board green) — see setBgColor below.
+    try { w.setHeaderColor?.("#0d68db"); } catch {}
+    try { w.setBackgroundColor?.("#0d68db"); } catch {}
+    try { w.setBottomBarColor?.("#0d68db"); } catch {}
     // Fullscreen (Bot API 8.0+) — прячет шапку Telegram, когда Mini App открыт из диалога.
     // Без этого приложение показывается как bottom sheet с видимым хедером Telegram.
     try {
@@ -127,6 +130,22 @@ export function useTelegram() {
     try { tg.value?.close(); } catch {}
   }
 
+  /**
+   * Repaint Telegram's header / safe-area / bottom-bar to a single hex
+   * colour. Idempotent — same hex is just no-op'd by Telegram. Skipped
+   * cleanly when running outside the WebView (dev). Used by App.vue to
+   * keep the chrome in sync with the active screen's body background
+   * so the "Mini Poly" title pill and close chevron never sit on a
+   * mismatched colour.
+   */
+  function setBgColor(hex: string) {
+    const w = tg.value;
+    if (!w) return;
+    try { w.setHeaderColor?.(hex); } catch {}
+    try { w.setBackgroundColor?.(hex); } catch {}
+    try { w.setBottomBarColor?.(hex); } catch {}
+  }
+
   // Во время активной партии включаем диалог "Точно закрыть?" на свайп/крестик
   // Telegram — чтобы случайный жест не терял прогресс.
   function setClosingConfirmation(enabled: boolean) {
@@ -163,5 +182,5 @@ export function useTelegram() {
     } catch { return null; }
   }
 
-  return { tg, initData, userId, userName, init, haptic, notify, close, setClosingConfirmation, setUserName, fetchProfile };
+  return { tg, initData, userId, userName, init, haptic, notify, close, setClosingConfirmation, setUserName, fetchProfile, setBgColor };
 }

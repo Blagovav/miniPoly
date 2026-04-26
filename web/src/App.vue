@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from "vue";
+import { computed, onMounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { useI18n } from "vue-i18n";
 import { useTelegram } from "./composables/useTelegram";
@@ -22,7 +22,7 @@ const TOUR_KEY = "tourV1";
 const router = useRouter();
 const route = useRoute();
 const { locale } = useI18n();
-const { init, userId, fetchProfile } = useTelegram();
+const { init, userId, fetchProfile, setBgColor } = useTelegram();
 useTheme();
 const game = useGameStore();
 
@@ -111,6 +111,40 @@ if (typeof window !== "undefined") {
 onMounted(() => {
   void runBoot();
 });
+
+// ── Telegram chrome colour sync ─────────────────────────────────────────
+//
+// Telegram paints its title pill ("Mini Poly" + close chevron) and the
+// safe-area strips with a single colour we set via setHeaderColor /
+// setBackgroundColor / setBottomBarColor. If we leave them on the wrong
+// hue, the title text and close button silently lose contrast — the
+// designer flagged exactly this on Home (#0d68db blue background, but
+// the header was a leftover beige #f0e4c8 from the old parchment
+// theme). This watcher keeps the chrome locked to whatever the
+// currently-mounted view paints onto <body>:
+//   - Home / Rooms / Splash / Friends / Shop / History  → #0d68db blue
+//   - Create                                            → #faf3e2 cream
+//   - Room while a match is running (phase ≠ lobby/ended) → #9fe101 green
+//   - Room in lobby/ended                                → #0d68db blue
+const ROUTE_BG: Record<string, string> = {
+  home:    "#0d68db",
+  rooms:   "#0d68db",
+  shop:    "#0d68db",
+  friends: "#0d68db",
+  history: "#0d68db",
+  create:  "#faf3e2",
+  // `room` is computed dynamically below from game.room?.phase.
+};
+const tgChromeColor = computed(() => {
+  const name = route.name?.toString() ?? "home";
+  if (name === "room") {
+    const phase = game.room?.phase;
+    const inActiveGame = !!phase && phase !== "lobby" && phase !== "ended";
+    return inActiveGame ? "#9fe101" : "#0d68db";
+  }
+  return ROUTE_BG[name] ?? "#0d68db";
+});
+watch(tgChromeColor, (color) => setBgColor(color), { immediate: true });
 
 const activeScreen = computed(() => route.name?.toString() ?? "home");
 
