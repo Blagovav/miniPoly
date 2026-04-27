@@ -175,12 +175,14 @@ const L = computed(() => isRu.value
       copied: "Скопировано!",
       players: "Игроки",
       yourToken: "Твоя фишка",
-      ready: "Готов",
-      notReady: "Не готов",
-      choosing: "Выбирает…",
+      ready: "ГОТОВ",
+      notReady: "НЕ ГОТОВ",
+      choosing: "Готовится",
+      readyStatus: "Готов",
       emptySeat: "Свободное место",
-      start: "Начать игру",
-      minPlayers: "Нужно минимум 2 готовых игрока",
+      start: "НАЧАТЬ ПАРТИЮ",
+      minPlayers: "Готовых игроков нужно: 2",
+      canStart: "Партию можно начать",
       destroy: "Закрыть игру",
       offline: "offline",
       bot: "Бот",
@@ -194,12 +196,14 @@ const L = computed(() => isRu.value
       copied: "Copied!",
       players: "Players",
       yourToken: "Your token",
-      ready: "Ready",
-      notReady: "Not ready",
-      choosing: "Choosing…",
+      ready: "READY",
+      notReady: "NOT READY",
+      choosing: "Getting ready",
+      readyStatus: "Ready",
       emptySeat: "Empty seat",
-      start: "Start game",
-      minPlayers: "Need at least 2 ready players",
+      start: "START GAME",
+      minPlayers: "Ready players needed: 2",
+      canStart: "Ready to start",
       destroy: "Close game",
       offline: "offline",
       bot: "Bot",
@@ -252,60 +256,84 @@ const L = computed(() => isRu.value
       </button>
     </div>
 
-    <!-- ── Players section ─────────────────────────────────── -->
-    <div class="section-label">{{ L.players }}</div>
+    <!-- ── Players section (Figma 73:3483 — header w/ N/max badge) ── -->
+    <div class="players-head">
+      <div class="section-label">{{ L.players }}</div>
+      <span class="players-count">{{ activePlayers.length }}/{{ room.maxPlayers }}</span>
+    </div>
     <div class="players">
       <div
         v-for="(p, idx) in room.players"
         :key="p.id"
-        class="row player-row"
-        :class="{
-          'player-row--me': p.id === myPlayerId,
-          'player-row--bot': p.isBot,
-        }"
+        class="player-row"
+        :class="{ 'player-row--me': p.id === myPlayerId }"
       >
-        <Sigil :name="p.name" :color="colorForIndex(idx)" :size="36" />
+        <span
+          v-if="p.isBot"
+          class="player-row__avatar player-row__avatar--bot"
+          aria-hidden="true"
+        >
+          <Icon name="users" :size="22" color="#fff"/>
+        </span>
+        <Sigil
+          v-else
+          class="player-row__avatar"
+          :name="p.name"
+          :color="colorForIndex(idx)"
+          :size="40"
+        />
         <div class="player-row__body">
-          <div class="row gap-6 player-row__head">
-            <span class="player-row__name">{{ p.name }}</span>
-            <Icon v-if="room.hostId === p.id" name="crown" :size="14" color="var(--gold)" />
-            <span v-if="p.isBot" class="bot-chip">{{ L.bot }}</span>
-            <span v-else-if="!p.connected" class="offline-chip">{{ L.offline }}</span>
+          <div class="player-row__name">
+            {{ p.name }}
+            <Icon v-if="room.hostId === p.id" name="crown" :size="12" color="var(--gold)"/>
           </div>
-          <div class="player-row__status">
-            {{ p.ready ? L.ready : L.choosing }}
+          <div
+            class="player-row__status"
+            :class="{ 'player-row__status--ready': p.ready, 'player-row__status--off': !p.connected && !p.isBot }"
+          >
+            <template v-if="!p.connected && !p.isBot">{{ L.offline }}</template>
+            <template v-else-if="p.ready">{{ L.readyStatus }}</template>
+            <template v-else>{{ L.choosing }}</template>
           </div>
         </div>
         <button
           v-if="p.isBot && isHost && onRemoveBot"
-          class="kick-btn"
+          class="player-row__action player-row__action--kick"
           :title="L.kickBot"
           @click="onRemoveBot(p.id)"
         >
-          <Icon name="x" :size="14" color="var(--accent)" />
+          <Icon name="x" :size="14" color="#000"/>
         </button>
-        <div v-else class="ready-dot" :class="{ 'ready-dot--on': p.ready }">
-          <Icon
-            :name="p.ready ? 'check' : 'x'"
-            :size="16"
-            :color="p.ready ? '#fff' : 'var(--ink-4)'"
-          />
-        </div>
+        <span
+          v-else-if="p.ready"
+          class="player-row__action player-row__action--check"
+          aria-hidden="true"
+        >
+          <Icon name="check" :size="14" color="#fff"/>
+        </span>
       </div>
 
       <!-- Empty-seat placeholder rows: host can fill with a bot, others see a dashed slot. -->
       <template v-for="i in emptySeats" :key="'empty-' + i">
         <button
           v-if="i === 1 && canAddBot"
-          class="row seat-empty seat-empty--addable"
+          type="button"
+          class="seat-empty seat-empty--addable"
           @click="onAddBot"
         >
-          <Icon name="plus" :size="18" color="var(--primary)" />
-          <span>{{ L.addBot }}</span>
+          <span class="seat-empty__avatar" aria-hidden="true">
+            <Icon name="users" :size="22" color="var(--ink-3)"/>
+          </span>
+          <span class="seat-empty__name">{{ L.addBot }}</span>
+          <span class="seat-empty__plus" aria-hidden="true">
+            <Icon name="plus" :size="14" color="#fff"/>
+          </span>
         </button>
-        <div v-else class="row seat-empty">
-          <Icon name="plus" :size="18" color="var(--ink-4)" />
-          {{ L.emptySeat }}
+        <div v-else class="seat-empty">
+          <span class="seat-empty__avatar" aria-hidden="true">
+            <Icon name="users" :size="22" color="var(--ink-4)"/>
+          </span>
+          <span class="seat-empty__name seat-empty__name--muted">{{ L.emptySeat }}</span>
         </div>
       </template>
     </div>
@@ -339,38 +367,65 @@ const L = computed(() => isRu.value
       </button>
     </div>
 
-    <!-- ── Actions ──────────────────────────────────────── -->
+    <!-- ── Actions (Figma 73:3483 / 93:8389) ───────────────── -->
     <div class="lobby-actions">
+      <p
+        class="lobby-hint"
+        :class="{ 'lobby-hint--ok': canStart }"
+      >
+        {{ canStart ? L.canStart : L.minPlayers }}
+      </p>
+
       <button
         v-if="me"
-        class="btn"
-        :class="me.ready ? 'btn-ghost' : 'btn-primary'"
+        type="button"
+        class="lobby-cta"
+        :class="me.ready ? 'lobby-cta--unready' : 'lobby-cta--ready'"
         @click="onReady"
       >
-        <Icon
-          v-if="me.ready"
-          name="check"
-          :size="16"
-          color="var(--emerald)"
-        />
-        {{ me.ready ? L.notReady : L.ready }}
+        <span class="lobby-cta__text">{{ me.ready ? L.notReady : L.ready }}</span>
+        <svg
+          class="lobby-cta__deco"
+          viewBox="0 0 98 32.5"
+          preserveAspectRatio="none"
+          fill="none"
+          aria-hidden="true"
+        >
+          <path
+            opacity="0.2"
+            d="M98 9.5V32.5C98 32.5 97 6 89.5 4C82 2 0 0 0 0H88.5C96 0 98 3.5 98 9.5Z"
+            fill="white"
+          />
+        </svg>
       </button>
 
       <button
-        class="btn"
-        :class="canStart ? 'btn-primary' : 'btn-ghost'"
+        type="button"
+        class="lobby-cta"
+        :class="canStart ? 'lobby-cta--start' : 'lobby-cta--start-off'"
         :disabled="!canStart"
         @click="onStart"
       >
-        <Icon name="dice" :size="16" :color="canStart ? '#fff' : 'var(--ink-3)'" />
-        {{ L.start }}
+        <span class="lobby-cta__text">{{ L.start }}</span>
+        <svg
+          class="lobby-cta__deco"
+          viewBox="0 0 98 32.5"
+          preserveAspectRatio="none"
+          fill="none"
+          aria-hidden="true"
+        >
+          <path
+            opacity="0.2"
+            d="M98 9.5V32.5C98 32.5 97 6 89.5 4C82 2 0 0 0 0H88.5C96 0 98 3.5 98 9.5Z"
+            fill="white"
+          />
+        </svg>
       </button>
-
-      <p v-if="!canStart" class="waiting-hint">{{ L.minPlayers }}</p>
 
       <button
         v-if="isHost"
-        class="btn btn-wax destroy-btn"
+        type="button"
+        class="lobby-destroy"
         @click="onDestroyRoom"
       >
         {{ L.destroy }}
@@ -531,207 +586,294 @@ const L = computed(() => isRu.value
   color: #000;
   margin: 0;
 }
+.players-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.players-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px 12px;
+  background: #fff;
+  border: 1px solid rgba(0, 0, 0, 0.16);
+  border-radius: 100px;
+  font-family: 'Unbounded', sans-serif;
+  font-weight: 700;
+  font-size: 12px;
+  line-height: 14px;
+  color: #000;
+}
 
-/* ── Players list ── */
+/* ── Players list (Figma 73:3611 player row) ── */
 .players {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 4px;
 }
 .player-row {
-  background: var(--card);
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  padding: 8px 10px;
-  gap: 10px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  background: #fff;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  border-radius: 18px;
 }
-.player-row--me {
-  background: rgba(90, 58, 154, 0.06);
-  border-color: var(--primary);
+.player-row--me { border-color: rgba(0, 0, 0, 0.24); }
+
+.player-row__avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
 }
+.player-row__avatar--bot {
+  background: #31e4c9;
+  box-shadow: inset 0 -2px 2px rgba(0, 0, 0, 0.18);
+}
+.player-row__avatar :deep(.sigil) {
+  width: 40px !important;
+  height: 40px !important;
+  font-size: 16px !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
 .player-row__body {
   flex: 1;
   min-width: 0;
-}
-.player-row__head {
   display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.player-row__name {
+  display: inline-flex;
   align-items: center;
   gap: 6px;
-}
-.gap-6 { gap: 6px; }
-.player-row__name {
-  font-family: var(--font-display);
-  font-size: 14px;
-  color: var(--ink);
+  font-family: 'Golos Text', sans-serif;
+  font-weight: 700;
+  font-size: 16px;
+  line-height: 20px;
+  color: #000;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 .player-row__status {
-  font-size: 11px;
-  color: var(--ink-3);
-  margin-top: 2px;
+  font-family: 'Golos Text', sans-serif;
+  font-weight: 500;
+  font-size: 12px;
+  line-height: 16px;
+  color: rgba(0, 0, 0, 0.6);
 }
-.offline-chip {
-  font-size: 10px;
-  padding: 1px 6px;
-  border: 1px solid rgba(139, 26, 26, 0.35);
-  border-radius: 999px;
-  color: var(--accent);
-  letter-spacing: 0.05em;
-}
-.bot-chip {
-  font-size: 10px;
-  padding: 1px 6px;
-  border: 1px solid rgba(90, 58, 154, 0.35);
-  border-radius: 999px;
-  color: var(--primary);
-  background: rgba(90, 58, 154, 0.08);
-  letter-spacing: 0.05em;
-  font-family: var(--font-mono);
-  text-transform: uppercase;
-}
-.player-row--bot {
-  border-style: dashed;
-  border-color: rgba(90, 58, 154, 0.4);
-}
+.player-row__status--ready { color: #43c22d; }
+.player-row__status--off   { color: #b32c2c; }
 
-.kick-btn {
-  width: 28px;
-  height: 28px;
+.player-row__action {
+  width: 24px;
+  height: 24px;
   border-radius: 50%;
-  background: transparent;
-  border: 1px solid rgba(139, 26, 26, 0.3);
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  border: 1px solid rgba(0, 0, 0, 0.16);
+  background: #fff;
+  display: grid;
+  place-items: center;
   cursor: pointer;
   flex-shrink: 0;
   padding: 0;
   transition: background 120ms;
 }
-.kick-btn:hover { background: rgba(139, 26, 26, 0.08); }
+.player-row__action:hover { background: rgba(0, 0, 0, 0.04); }
+.player-row__action--check {
+  background: #43c22d;
+  border-color: #43c22d;
+  cursor: default;
+}
 
-.ready-dot {
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
-  background: var(--card-alt);
-  border: 1px solid var(--line);
+/* ── Empty seat / Add bot row (Figma 93:8265) ── */
+.seat-empty {
   display: flex;
   align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-}
-.ready-dot--on {
-  background: var(--emerald);
-  border-color: var(--emerald);
-}
-
-.seat-empty {
+  gap: 12px;
+  padding: 12px 16px;
   background: transparent;
-  border: 1px dashed var(--line-strong);
-  border-radius: 10px;
-  padding: 10px 12px;
-  color: var(--ink-4);
-  font-style: italic;
-  font-size: 13px;
-  gap: 10px;
+  border: 1.4px dashed rgba(0, 0, 0, 0.4);
+  border-radius: 18px;
+  text-align: left;
+  font-family: 'Golos Text', sans-serif;
 }
 .seat-empty--addable {
-  color: var(--primary);
-  border-color: var(--primary);
-  font-style: normal;
   cursor: pointer;
-  font-family: var(--font-display);
-  font-weight: 500;
-  transition: background 120ms;
   width: 100%;
-  text-align: left;
+  transition: background 120ms;
 }
-.seat-empty--addable:hover { background: rgba(90, 58, 154, 0.06); }
+.seat-empty--addable:hover { background: rgba(0, 0, 0, 0.03); }
+.seat-empty__avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: #f0e9d9;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+}
+.seat-empty__name {
+  flex: 1;
+  min-width: 0;
+  font-family: 'Golos Text', sans-serif;
+  font-weight: 700;
+  font-size: 16px;
+  line-height: 20px;
+  color: #000;
+}
+.seat-empty__name--muted { color: rgba(0, 0, 0, 0.55); }
+.seat-empty__plus {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: #43c22d;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  box-shadow: inset 0 -2px 0 rgba(0, 0, 0, 0.15);
+}
 
-/* ── Token rail ── */
-/* padding on both axes: overflow-x: auto on .rail implicitly clips -y too,
-   and the selected token's 2px box-shadow ring would otherwise lose its top. */
+/* ── Token picker (Figma 93:8316 — 6 white squares) ── */
 .tokens-rail {
+  display: flex;
+  gap: 10px;
   padding: 4px 2px;
   flex-shrink: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
 }
+.tokens-rail::-webkit-scrollbar { display: none; }
 .token-btn {
-  width: 54px;
-  height: 54px;
+  width: 56px;
+  height: 56px;
   flex-shrink: 0;
-  background: linear-gradient(145deg, var(--card-alt), var(--bg-deep));
-  border: 1px solid var(--line);
-  border-radius: 10px;
+  background: #fff;
+  border: 1px solid rgba(0, 0, 0, 0.16);
+  border-radius: 12px;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
   padding: 0;
-  transition: transform 80ms, border-color 160ms, box-shadow 160ms;
-}
-.token-btn:hover:not(:disabled) {
-  transform: translateY(-1px);
-  border-color: var(--primary);
+  transition: transform 80ms, border-color 160ms;
 }
 .token-btn:active { transform: translateY(1px); }
 .token-btn--selected {
-  border-color: var(--primary);
-  box-shadow: 0 0 0 2px var(--primary), 0 4px 10px rgba(90, 58, 154, 0.25);
-}
-.token-btn--premium {
-  background: radial-gradient(circle at 50% 40%, #3a2d0e, #1a130d);
-  border-color: var(--gold);
-}
-.token-btn--premium.token-btn--selected {
-  box-shadow: 0 0 0 2px var(--gold), 0 4px 12px rgba(212, 168, 74, 0.4);
+  border: 2px solid #000;
 }
 .token-btn--taken { opacity: 0.35; cursor: not-allowed; }
 .token-medallion {
-  width: 38px;
-  height: 38px;
+  width: 32px;
+  height: 32px;
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
   overflow: hidden;
   box-shadow:
-    0 0 0 2px #fff,
-    0 3px 6px rgba(0, 0, 0, 0.35),
+    0 0 0 1.5px #fff,
+    0 2px 4px rgba(0, 0, 0, 0.25),
     inset 0 1px 2px rgba(255, 255, 255, 0.4);
+}
+.token-btn--premium {
+  background: radial-gradient(circle at 50% 40%, #3a2d0e, #1a130d);
+  border-color: var(--gold);
 }
 .token-btn--premium .token-medallion {
   box-shadow:
-    0 0 0 2px #fff,
-    0 0 14px rgba(212, 168, 74, 0.55),
-    0 4px 10px rgba(0, 0, 0, 0.4),
-    inset 0 1px 2px rgba(255, 255, 255, 0.5);
+    0 0 0 1.5px #fff,
+    0 0 10px rgba(212, 168, 74, 0.5),
+    inset 0 1px 2px rgba(255, 255, 255, 0.45);
 }
 
-/* ── Action buttons ── */
+/* ── Action CTAs (Figma 93:8527 / 93:8349 / 93:8548 — ГОТОВ / НАЧАТЬ ПАРТИЮ) ── */
 .lobby-actions {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  padding-top: 4px;
+  gap: 8px;
+  padding-top: 8px;
   padding-bottom: calc(4px + var(--tg-safe-area-inset-bottom, 0px));
 }
-.lobby-actions .btn {
-  width: 100%;
-  padding: 11px;
-  font-size: 14px;
-}
-.waiting-hint {
+.lobby-hint {
+  margin: 0;
   text-align: center;
-  color: var(--ink-3);
-  font-size: 12px;
-  margin: 2px 0 0;
+  font-family: 'Unbounded', sans-serif;
+  font-weight: 500;
+  font-size: 14px;
+  line-height: 16px;
+  color: rgba(0, 0, 0, 0.4);
 }
-.destroy-btn {
+.lobby-hint--ok { color: #43c22d; }
+
+.lobby-cta {
+  position: relative;
+  width: 100%;
+  height: 56px;
+  padding: 0 18px;
+  border: 2px solid #000;
+  border-radius: 18px;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: inset 0 -6px 0 0 rgba(0, 0, 0, 0.22);
+  transition: transform 80ms ease, filter 120ms ease;
+}
+.lobby-cta:active:not(:disabled) {
+  transform: translateY(2px);
+  box-shadow: inset 0 -2px 0 0 rgba(0, 0, 0, 0.22);
+}
+.lobby-cta:disabled { cursor: not-allowed; }
+
+.lobby-cta--ready    { background: #2283f3; }
+.lobby-cta--unready  { background: #f34822; }
+.lobby-cta--start    { background: #43c22d; }
+.lobby-cta--start-off { background: #b5b5b5; }
+
+.lobby-cta__text {
+  position: relative;
+  z-index: 1;
+  font-family: 'Golos Text', 'Unbounded', sans-serif;
+  font-weight: 900;
+  font-size: 22px;
+  line-height: 26px;
+  color: #fff;
+  text-shadow: 1px 1px 0 rgba(0, 0, 0, 0.6);
+  letter-spacing: 0.01em;
+}
+.lobby-cta__deco {
+  position: absolute;
+  top: 4px;
+  right: 8px;
+  width: 98px;
+  height: 32.5px;
+  pointer-events: none;
+}
+
+.lobby-destroy {
   margin-top: 4px;
-  font-size: 13px;
+  width: 100%;
   padding: 10px;
+  background: transparent;
+  border: 1px solid rgba(0, 0, 0, 0.16);
+  border-radius: 12px;
+  font-family: 'Unbounded', sans-serif;
+  font-weight: 500;
+  font-size: 13px;
+  color: rgba(0, 0, 0, 0.55);
+  cursor: pointer;
+  transition: background 120ms;
 }
+.lobby-destroy:hover { background: rgba(0, 0, 0, 0.04); }
 </style>

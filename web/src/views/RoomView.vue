@@ -161,26 +161,27 @@ const isPreRoll = computed(() => phase.value === "preRoll");
 watch(
   () => phase.value,
   (p) => {
+    const inLobby = !p || p === "lobby";
     const inActiveGame = !!p && p !== "lobby" && p !== "ended";
     setClosingConfirmation(inActiveGame);
     // Toggle the figma-green body class so Telegram's safe-area strips
     // above/below the board don't leak the parchment var(--bg). Same trick
-    // HomeView uses with home-figma-root.
+    // HomeView uses with home-figma-root. The lobby variant paints the
+    // page cream (#faf3e2) so safe-areas match the Figma 73:3483 lobby.
     const root = document.documentElement;
     const body = document.body;
-    if (inActiveGame) {
-      root.classList.add("room-figma-root");
-      body.classList.add("room-figma-root");
-    } else {
-      root.classList.remove("room-figma-root");
-      body.classList.remove("room-figma-root");
-    }
+    root.classList.toggle("room-figma-root", inActiveGame);
+    body.classList.toggle("room-figma-root", inActiveGame);
+    root.classList.toggle("lobby-figma-root", inLobby);
+    body.classList.toggle("lobby-figma-root", inLobby);
   },
   { immediate: true },
 );
 onUnmounted(() => {
   document.documentElement.classList.remove("room-figma-root");
   document.body.classList.remove("room-figma-root");
+  document.documentElement.classList.remove("lobby-figma-root");
+  document.body.classList.remove("lobby-figma-root");
 });
 
 const winner = computed(() =>
@@ -756,11 +757,11 @@ void t;
       </div>
       <button
         v-if="isHostMe && game.room?.phase === 'lobby'"
-        class="topbar__menu"
+        class="topbar__menu topbar__menu--close"
         :aria-label="t('actions.back')"
         @click="handleMenu"
       >
-        <Icon name="x" :size="18" color="#000" />
+        <Icon name="x" :size="18" color="#fff" />
       </button>
     </div>
 
@@ -1151,6 +1152,11 @@ void t;
 }
 .topbar--figma .topbar__back:active,
 .topbar--figma .topbar__menu:active { transform: scale(0.92); }
+/* Red close-room button (Figma 73:3483 — imgBtnBack1). */
+.topbar--figma .topbar__menu--close {
+  background: #f34822;
+  box-shadow: inset 0 -3px 0 rgba(0, 0, 0, 0.18), 0 1px 2px rgba(0, 0, 0, 0.08);
+}
 
 .topbar--figma .title { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
 .topbar--figma .title h1 {
@@ -1912,6 +1918,20 @@ body.room-figma-root #app,
 body.room-figma-root .app-root,
 body.room-figma-root .app-main,
 body.room-figma-root .room {
+  background: transparent !important;
+}
+
+/* Lobby phase paints the page cream (#faf3e2) so Telegram safe-areas match
+   the Figma 73:3483 / 93:8389 lobby — same trick CreateView uses. */
+html.lobby-figma-root,
+body.lobby-figma-root {
+  background-color: #faf3e2 !important;
+  background-image: none !important;
+}
+body.lobby-figma-root #app,
+body.lobby-figma-root .app-root,
+body.lobby-figma-root .app-main,
+body.lobby-figma-root .room {
   background: transparent !important;
 }
 </style>
