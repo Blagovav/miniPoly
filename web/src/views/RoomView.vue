@@ -1315,6 +1315,11 @@ void t;
   display: flex;
   align-items: center;
   justify-content: center;
+  /* Anchor `.voice-dot` (position: absolute) to THIS button instead of
+     letting it bubble up the DOM and stick to the right edge of the
+     whole topbar — that's where it was landing because no ancestor
+     between had `position: relative`. */
+  position: relative;
 }
 .room-topbar__nav-btn img {
   width: 58px;
