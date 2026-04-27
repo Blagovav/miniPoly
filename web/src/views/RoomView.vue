@@ -1334,14 +1334,14 @@ void t;
    green (transmitting), amber (connecting), orange (error). */
 .voice-dot {
   position: absolute;
-  top: 2px;
-  right: 2px;
-  width: 18px;
-  height: 18px;
+  top: 4px;
+  right: 4px;
+  width: 14px;
+  height: 14px;
   border-radius: 50%;
   background: #b3b3b3;
-  border: 3px solid #fff;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.4);
+  border: 2px solid #fff;
+  box-shadow: 0 1.5px 3px rgba(0, 0, 0, 0.35);
   pointer-events: none;
   transition: background-color 180ms ease;
 }
