@@ -1,313 +1,192 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from "vue";
+import { computed, onMounted, onUnmounted, ref } from "vue";
 import { useI18n } from "vue-i18n";
 import { useRouter } from "vue-router";
-import { SHOP_ITEMS } from "../shop/items";
 import { useInventoryStore } from "../stores/inventory";
 import { useTelegram } from "../composables/useTelegram";
+import { SHOP_ITEMS } from "../shop/items";
+import {
+  SHOP_CAPS, SHOP_MAPS, SHOP_CHESTS,
+  RARITY_LABEL_RU, RARITY_LABEL_EN, RARITY_BADGE_BG,
+  type CapEntry, type MapEntry, type ChestEntry,
+} from "../shop/cosmetics";
+import CosmeticsCaps from "../components/CosmeticsCaps.vue";
+import CosmeticsMaps from "../components/CosmeticsMaps.vue";
 import Icon from "../components/Icon.vue";
-import TokenArt from "../components/TokenArt.vue";
-import BoardPreview from "../components/BoardPreview.vue";
 import PurchaseSuccessModal, { type PurchaseData } from "../components/PurchaseSuccessModal.vue";
 import PurchaseFailModal, { type PurchaseFailData } from "../components/PurchaseFailModal.vue";
-import { BOARDS, RARITY_META, type BoardDef } from "../utils/boards";
-import { tokenArtFor, lighten, PLAYER_COLORS } from "../utils/palette";
+import type { Rarity } from "../components/RarityGlow.vue";
 
-type ShopItem = (typeof SHOP_ITEMS)[number];
-type TabId = "tokens" | "maps" | "houses" | "banners" | "dice";
+type FilterId = "all" | "chests" | "caps" | "maps" | "houses" | "banners" | "dice";
 
 const { locale } = useI18n();
 const router = useRouter();
 const inv = useInventoryStore();
 const { haptic, notify, tg, userId } = useTelegram();
 
-// Подтянем купленные за Stars при входе в магазин.
-onMounted(() => inv.syncServerUnlocks(userId.value));
+const isRu = computed(() => locale.value === "ru");
 
-// Purchase result modals
+onMounted(() => {
+  inv.syncServerUnlocks(userId.value);
+  // Same body-level treatment as HomeView so safe-area strips stay blue.
+  document.documentElement.classList.add("shop-figma-root");
+  document.body.classList.add("shop-figma-root");
+});
+onUnmounted(() => {
+  document.documentElement.classList.remove("shop-figma-root");
+  document.body.classList.remove("shop-figma-root");
+});
+
+const L = computed(() => isRu.value
+  ? {
+      title: "Магазин",
+      filterAll: "Все товары",
+      filterChests: "Сундуки Удачи",
+      filterCaps: "Фишки",
+      filterMaps: "Карты",
+      filterHouses: "Цвета и дома",
+      filterBanners: "Знамёна",
+      filterDice: "Кости",
+      sectionChests: "Сундуки Удачи",
+      sectionCaps: "Фишки",
+      sectionMaps: "Карты",
+      sectionHouses: "Цвета и дома",
+      sectionBanners: "Знамёна",
+      sectionDice: "Кости",
+      seeAll: "Смотреть все →",
+      hideOwned: "Скрыть купленные",
+      equipped: "Надето",
+      equip: "Надеть",
+      inChest: "В сундуке →",
+      lookInside: "Посмотреть что внутри",
+      comingSoon: "Скоро",
+      free: "Бесплатно",
+    }
+  : {
+      title: "Shop",
+      filterAll: "All goods",
+      filterChests: "Lucky Chests",
+      filterCaps: "Tokens",
+      filterMaps: "Maps",
+      filterHouses: "Colors & Houses",
+      filterBanners: "Banners",
+      filterDice: "Dice",
+      sectionChests: "Lucky Chests",
+      sectionCaps: "Tokens",
+      sectionMaps: "Maps",
+      sectionHouses: "Colors & Houses",
+      sectionBanners: "Banners",
+      sectionDice: "Dice",
+      seeAll: "See all →",
+      hideOwned: "Hide owned",
+      equipped: "Owned",
+      equip: "Equip",
+      inChest: "In chest →",
+      lookInside: "See what's inside",
+      comingSoon: "Coming soon",
+      free: "Free",
+    });
+
+const filter = ref<FilterId>("all");
+const hideOwned = ref(false);
+
+const filters = computed(() => [
+  { id: "all" as FilterId,      label: L.value.filterAll },
+  { id: "chests" as FilterId,   label: L.value.filterChests },
+  { id: "caps" as FilterId,     label: L.value.filterCaps },
+  { id: "maps" as FilterId,     label: L.value.filterMaps },
+  { id: "houses" as FilterId,   label: L.value.filterHouses },
+  { id: "banners" as FilterId,  label: L.value.filterBanners },
+  { id: "dice" as FilterId,     label: L.value.filterDice },
+]);
+
+const ownedSet = computed(() => inv.owned);
+
+function isOwned(id: string) { return ownedSet.value.has(id); }
+
+function isCapEquipped(id: string) {
+  // Cap ids start with "cap-"; equipped token uses original "token-" namespace.
+  // Until a migration unifies them we just compare directly so the UI shows
+  // "Надеть" when owned but not the active token.
+  return inv.equippedToken === id;
+}
+
+function rarityLabel(r: Rarity): string {
+  return (isRu.value ? RARITY_LABEL_RU : RARITY_LABEL_EN)[r];
+}
+function rarityBadge(r: Rarity): string { return RARITY_BADGE_BG[r]; }
+
+function pickName(n: { en: string; ru: string }) {
+  return isRu.value ? n.ru : n.en;
+}
+
+const visibleCaps = computed<CapEntry[]>(() =>
+  hideOwned.value
+    ? SHOP_CAPS.filter((c) => !isOwned(c.id))
+    : [...SHOP_CAPS],
+);
+
+const visibleMaps = computed<MapEntry[]>(() =>
+  hideOwned.value
+    ? SHOP_MAPS.filter((m) => !isOwned(m.id))
+    : [...SHOP_MAPS],
+);
+
+/** First N caps shown under "Все товары" preview row. */
+const capsPreview = computed<CapEntry[]>(() => SHOP_CAPS.slice(0, 4));
+
+const heroChest = computed<ChestEntry | undefined>(() => SHOP_CHESTS[0]);
+
+// ── Modals -----------------------------------------------------------------
 const successData = ref<PurchaseData | null>(null);
 const failData = ref<PurchaseFailData | null>(null);
 const successOpen = computed(() => !!successData.value);
 const failOpen = computed(() => !!failData.value);
 
-const isRu = computed(() => locale.value === "ru");
-const L = computed(() => isRu.value
-  ? {
-      title: "Магазин",
-      sub: "Фишки и бусты",
-      buy: "Купить",
-      equipped: "В игре",
-      equip: "Надеть",
-      owned: "В наличии",
-      free: "Открыто",
-      notEnough: "Не хватает монет",
-      rarityCommon: "Обычная",
-      rarityRare: "Редкая",
-      rarityEpic: "Эпическая",
-      rarityLegendary: "Легенда",
-      emptyMaps: "Карты скоро",
-      emptyDice: "Кости скоро",
-      mapOwned: "В игре",
-      mapBuy: "Купить",
-    }
-  : {
-      title: "Shop",
-      sub: "Tokens & boosts",
-      buy: "Buy",
-      equipped: "Owned",
-      equip: "Equip",
-      owned: "Owned",
-      free: "Unlocked",
-      notEnough: "Not enough coins",
-      rarityCommon: "Common",
-      rarityRare: "Rare",
-      rarityEpic: "Epic",
-      rarityLegendary: "Legendary",
-      emptyMaps: "Maps coming soon",
-      emptyDice: "Dice coming soon",
-      mapOwned: "Owned",
-      mapBuy: "Buy",
-    });
+// ── Actions ---------------------------------------------------------------
+function goBack() { haptic("light"); router.back(); }
 
-const tab = ref<TabId>("tokens");
-
-const tabs = computed(() => [
-  { id: "tokens" as TabId, label: isRu.value ? "Фишки" : "Tokens" },
-  { id: "maps" as TabId, label: isRu.value ? "Карты" : "Maps" },
-  { id: "houses" as TabId, label: isRu.value ? "Цвета дома" : "Houses" },
-  { id: "banners" as TabId, label: isRu.value ? "Знамёна" : "Banners" },
-  { id: "dice" as TabId, label: isRu.value ? "Кости" : "Dice" },
-]);
-
-// Map tab → underlying SHOP_ITEMS kind (or null if tab has no data yet).
-function kindForTab(t: TabId): ShopItem["kind"] | null {
-  if (t === "tokens") return "token";
-  if (t === "houses") return "theme";
-  if (t === "banners") return "emote";
-  return null; // maps & dice not yet in SHOP_ITEMS
-}
-
-const items = computed<ShopItem[]>(() => {
-  const kind = kindForTab(tab.value);
-  if (!kind) return [];
-  return SHOP_ITEMS.filter((i) => i.kind === kind);
-});
-
-function isOwned(id: string) {
-  return inv.owned.has(id);
-}
-
-function isEquipped(id: string, kind: ShopItem["kind"]) {
-  if (kind === "token") return inv.equippedToken === id;
-  if (kind === "theme") return inv.equippedTheme === id;
-  return false;
-}
-
-// Rarity derived from price (no rarity field on SHOP_ITEMS).
-function rarityOf(item: ShopItem): "common" | "rare" | "epic" | "legendary" {
-  if (item.starsPrice) {
-    if (item.starsPrice >= 100) return "legendary";
-    return "epic";
-  }
-  if (item.price === 0) return "common";
-  if (item.price >= 1500) return "legendary";
-  if (item.price >= 800) return "epic";
-  if (item.price >= 400) return "rare";
-  return "common";
-}
-
-function rarityLabel(r: ReturnType<typeof rarityOf>): string {
-  if (r === "rare") return L.value.rarityRare;
-  if (r === "epic") return L.value.rarityEpic;
-  if (r === "legendary") return L.value.rarityLegendary;
-  return L.value.rarityCommon;
-}
-
-function rarityColor(r: ReturnType<typeof rarityOf>): string {
-  if (r === "rare") return "var(--primary)";
-  if (r === "epic") return "#9a3aa3";
-  if (r === "legendary") return "var(--gold)";
-  return "var(--ink-3)";
-}
-
-function itemName(item: ShopItem): string {
-  return item.name[locale.value as "en" | "ru"];
-}
-
-function boardLabel(b: BoardDef): string {
-  return isRu.value ? b.ru : b.name;
-}
-function boardRarityLabel(b: BoardDef): string {
-  const m = RARITY_META[b.rarity];
-  return isRu.value ? m.ru : m.en;
-}
-function boardRarityColor(b: BoardDef): string {
-  return RARITY_META[b.rarity].color;
-}
-function isBoardOwned(b: BoardDef): boolean {
-  if (b.rarity === "free") return true;
-  if (b.owned === true) return true;
-  return inv.owned.has(`board-${b.id}`);
-}
-function boardCtaBg(b: BoardDef): string {
-  if (isBoardOwned(b)) return "var(--bg-deep)";
-  if (b.rarity === "legendary" || b.rarity === "epic") return "var(--gold)";
-  return "var(--primary)";
-}
-
-async function buyBoard(b: BoardDef) {
-  if (isBoardOwned(b)) return;
-  // Stars — через invoice
-  if (b.unit === "★") {
-    if (!userId.value) { notify("error"); return; }
-    try {
-      const base = (import.meta.env.VITE_API_URL as string) || "";
-      const res = await fetch(`${base}/api/stars/invoice`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          tgUserId: userId.value,
-          itemId: `board-${b.id}`,
-          title: isRu.value ? b.ru : b.name,
-          stars: b.price,
-        }),
-      });
-      const data = await res.json();
-      if (!data.link) { notify("error"); return; }
-      const tgApp: any = tg.value as any;
-      if (tgApp?.openInvoice) {
-        tgApp.openInvoice(data.link, async (status: string) => {
-          if (status === "paid") {
-            notify("success");
-            haptic("heavy");
-            await inv.syncServerUnlocks(userId.value);
-          } else if (status !== "pending") {
-            notify("error");
-          }
-        });
-      } else {
-        window.open(data.link, "_blank");
-      }
-    } catch {
-      notify("error");
-    }
-    return;
-  }
-  // Монетная покупка
-  if (inv.coins < b.price) {
-    notify("error");
-    failData.value = {
-      name: b.name, ru: b.ru,
-      price: b.price, unit: "◈",
-      balance: inv.coins, reason: "funds",
-    };
-    return;
-  }
-  const ok = inv.buy(`board-${b.id}`, b.price);
-  if (ok) {
-    haptic("medium");
-    notify("success");
-  } else {
-    notify("error");
-  }
-}
-
-function goBack() {
-  haptic("light");
-  router.back();
-}
-
-function purchaseDataOf(item: ShopItem): PurchaseData {
-  return {
-    id: item.id,
-    name: item.name.en,
-    ru: item.name.ru,
-    price: item.price,
-    unit: "◈",
-    kind: item.kind === "emote" ? "banner" : (item.kind as "token" | "theme"),
-    balanceAfter: `${inv.coins} ◈`,
-  };
-}
-
-function onPrimaryAction(item: ShopItem) {
-  // Owned → equip / already equipped
-  if (isOwned(item.id)) {
-    if (item.kind === "token" || item.kind === "theme") {
-      if (isEquipped(item.id, item.kind)) return;
-      inv.equip(item.id, item.kind);
-      haptic("light");
-      notify("success");
-    }
-    return;
-  }
-  // Not owned → buy with coins
-  if (item.price > 0) {
-    if (!canAffordCoins(item)) {
-      failData.value = {
-        name: item.name.en, ru: item.name.ru,
-        price: item.price, unit: "◈",
-        balance: inv.coins, reason: "funds",
-      };
-      notify("error");
-      return;
-    }
-    const ok = inv.buy(item.id, item.price);
-    if (ok) {
-      haptic("medium");
-      notify("success");
-      successData.value = purchaseDataOf(item);
-    } else {
-      notify("error");
-      failData.value = {
-        name: item.name.en, ru: item.name.ru,
-        price: item.price, unit: "◈",
-        balance: inv.coins, reason: "generic",
-      };
-    }
-    return;
-  }
-  // Free items that are somehow not owned — just grant.
-  const ok = inv.buy(item.id, 0);
-  if (ok) {
+function onCapAction(cap: CapEntry) {
+  if (isOwned(cap.id)) {
+    if (isCapEquipped(cap.id)) return;
+    inv.equip(cap.id, "token");
     haptic("light");
     notify("success");
-    successData.value = purchaseDataOf(item);
-  }
-}
-
-function equipFromSuccess() {
-  const d = successData.value;
-  if (!d) return;
-  if (d.id && (d.kind === "token" || d.kind === "theme")) {
-    inv.equip(d.id, d.kind);
-    haptic("light");
-  }
-  successData.value = null;
-}
-
-async function buyWithStars(item: ShopItem) {
-  if (!item.starsPrice || !userId.value) {
-    notify("error");
     return;
   }
+  if (cap.chestOnly) {
+    // "В сундуке →" — switch to chests filter so user can find it.
+    filter.value = "chests";
+    haptic("light");
+    return;
+  }
+  if (cap.starsPrice) {
+    void buyWithStars(cap.id, pickName(cap.name), cap.starsPrice);
+    return;
+  }
+  // Free cap → grant.
+  const ok = inv.buy(cap.id, 0);
+  if (ok) { haptic("light"); notify("success"); }
+}
+
+function onMapAction(map: MapEntry) {
+  if (isOwned(map.id)) return;
+  if (map.starsPrice) {
+    void buyWithStars(map.id, pickName(map.name), map.starsPrice);
+  }
+}
+
+async function buyWithStars(itemId: string, title: string, stars: number) {
+  if (!userId.value) { notify("error"); return; }
   try {
     const base = (import.meta.env.VITE_API_URL as string) || "";
     const res = await fetch(`${base}/api/stars/invoice`, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        tgUserId: userId.value,
-        itemId: item.id,
-        title: item.name[locale.value as "en" | "ru"],
-        stars: item.starsPrice,
-      }),
+      body: JSON.stringify({ tgUserId: userId.value, itemId, title, stars }),
     });
     const data = await res.json();
-    if (!data.link) {
-      notify("error");
-      alert("Не удалось создать счёт. Попробуй позже.");
-      return;
-    }
+    if (!data.link) { notify("error"); return; }
     const tgApp: any = tg.value as any;
     if (tgApp?.openInvoice) {
       tgApp.openInvoice(data.link, async (status: string) => {
@@ -315,7 +194,7 @@ async function buyWithStars(item: ShopItem) {
           notify("success");
           haptic("heavy");
           await inv.syncServerUnlocks(userId.value);
-        } else if (status === "failed" || status === "cancelled") {
+        } else if (status !== "pending") {
           notify("error");
         }
       });
@@ -327,225 +206,391 @@ async function buyWithStars(item: ShopItem) {
   }
 }
 
-function primaryLabel(item: ShopItem): string {
-  if (isOwned(item.id)) {
-    if (item.kind === "token" || item.kind === "theme") {
-      return isEquipped(item.id, item.kind) ? L.value.equipped : L.value.equip;
+function openChest() {
+  // Stub for now — eventually opens chest preview / spend modal.
+  haptic("medium");
+  filter.value = "chests";
+}
+
+// ── Existing items.ts fallback for Houses/Banners ------------------------
+const housesItems = computed(() => SHOP_ITEMS.filter((i) => i.kind === "theme"));
+const bannersItems = computed(() => SHOP_ITEMS.filter((i) => i.kind === "emote"));
+
+function onLegacyAction(itemId: string, kind: "theme" | "emote", price: number, starsPrice: number | undefined, en: string, ru: string) {
+  if (isOwned(itemId)) {
+    if (kind === "theme" && inv.equippedTheme !== itemId) {
+      inv.equip(itemId, "theme");
+      haptic("light");
+      notify("success");
     }
-    return L.value.owned;
+    return;
   }
-  return L.value.buy;
-}
-
-function canAffordCoins(item: ShopItem) {
-  return inv.coins >= item.price;
-}
-
-// Medallion gradient for token preview — uses house-red palette for common,
-// gold for premium (mirrors the Vue reference port exactly).
-function discStyle(item: ShopItem) {
-  if (item.starsPrice) {
-    return {
-      background: "radial-gradient(circle at 32% 28%, #f5d98a, #d4a84a 55%, #8b6914)",
-      boxShadow:
-        "0 0 0 2px #fff, 0 0 14px rgba(212,168,74,0.55), 0 4px 10px rgba(0,0,0,0.4), inset 0 1px 2px rgba(255,255,255,0.5)",
+  if (starsPrice) {
+    void buyWithStars(itemId, isRu.value ? ru : en, starsPrice);
+    return;
+  }
+  if (inv.coins < price) {
+    notify("error");
+    failData.value = { name: en, ru, price, unit: "◈", balance: inv.coins, reason: "funds" };
+    return;
+  }
+  const ok = inv.buy(itemId, price);
+  if (ok) {
+    haptic("medium");
+    notify("success");
+    successData.value = {
+      id: itemId, name: en, ru,
+      price, unit: "◈",
+      kind: kind === "emote" ? "banner" : "theme",
+      balanceAfter: `${inv.coins} ◈`,
     };
   }
-  const base = PLAYER_COLORS.you;
-  return {
-    background: `radial-gradient(circle at 32% 28%, ${lighten(base, 0.45)}, ${base} 60%, ${lighten(base, -0.25)})`,
-    boxShadow:
-      "0 0 0 2px #fff, 0 3px 6px rgba(0,0,0,0.35), inset 0 1px 2px rgba(255,255,255,0.4)",
-  };
+}
+
+// ── Button label / class resolvers (used in template) ─────────────────────
+function capBtnLabel(cap: CapEntry): string {
+  if (isOwned(cap.id)) return isCapEquipped(cap.id) ? L.value.equipped : L.value.equip;
+  if (cap.chestOnly) return L.value.inChest;
+  if (cap.starsPrice != null) return String(cap.starsPrice);
+  return L.value.free;
+}
+function capBtnClass(cap: CapEntry) {
+  if (isOwned(cap.id) && isCapEquipped(cap.id)) return "shop2__btn--equipped";
+  if (isOwned(cap.id)) return "shop2__btn--equip";
+  if (cap.chestOnly) return "shop2__btn--grad";
+  if (cap.starsPrice != null) return "shop2__btn--stars";
+  return "shop2__btn--equip";
+}
+
+function mapBtnLabel(m: MapEntry): string {
+  if (isOwned(m.id)) return L.value.equipped;
+  if (m.starsPrice != null) return String(m.starsPrice);
+  return L.value.free;
+}
+function mapBtnClass(m: MapEntry) {
+  if (isOwned(m.id)) return "shop2__btn--equipped";
+  if (m.starsPrice != null) return "shop2__btn--stars";
+  return "shop2__btn--equip";
+}
+
+function legacyBtnLabel(i: typeof SHOP_ITEMS[number], kind: "theme" | "emote"): string {
+  if (isOwned(i.id)) {
+    if (kind === "theme") return inv.equippedTheme === i.id ? L.value.equipped : L.value.equip;
+    return L.value.equipped;
+  }
+  if (i.starsPrice) return `★ ${i.starsPrice}`;
+  if (i.price === 0) return L.value.free;
+  return `◈ ${i.price}`;
+}
+function legacyBtnClass(i: typeof SHOP_ITEMS[number]) {
+  if (isOwned(i.id)) {
+    if (i.kind === "theme" && inv.equippedTheme !== i.id) return "shop2__btn--equip";
+    return "shop2__btn--equipped";
+  }
+  if (i.starsPrice) return "shop2__btn--stars";
+  return "shop2__btn--equip";
 }
 </script>
 
 <template>
-  <div class="app shop">
-    <!-- Topbar -->
-    <div class="topbar">
-      <button class="icon-btn" aria-label="back" @click="goBack">
-        <Icon name="back" :size="18"/>
+  <div class="shop2">
+    <!-- ── Topbar ── -->
+    <div class="shop2__topbar">
+      <button class="shop2__back" :aria-label="L.title" @click="goBack">
+        <Icon name="back" :size="22" color="#000"/>
       </button>
-      <div class="title">
-        <h1>{{ L.title }}</h1>
-        <div class="sub">{{ L.sub }}</div>
-      </div>
-      <div class="coins-chip">
-        <Icon name="coin" :size="14" color="var(--gold)"/>
-        <span class="money">{{ inv.coins }}</span>
-        <span class="coins-chip__sep">·</span>
-        <Icon name="star" :size="13" color="var(--gold)"/>
-        <span class="money">42</span>
+      <h1 class="shop2__title">{{ L.title }}</h1>
+    </div>
+
+    <!-- ── Filter chips (horizontal scroll) ── -->
+    <div class="shop2__filters">
+      <div class="shop2__filters-track">
+        <button
+          v-for="f in filters"
+          :key="f.id"
+          class="shop2__chip"
+          :class="{ 'shop2__chip--active': filter === f.id }"
+          @click="filter = f.id; haptic('light')"
+        >
+          {{ f.label }}
+        </button>
       </div>
     </div>
 
-    <div class="content">
-      <!-- Tabs (5) -->
-      <div class="shop-tabs">
-        <button
-          v-for="tt in tabs"
-          :key="tt.id"
-          class="shop-tab"
-          :class="{ active: tab === tt.id }"
-          @click="tab = tt.id"
-        >
-          {{ tt.label }}
-        </button>
-      </div>
-
-      <!-- Empty state for Dice tab (not wired to catalog yet) -->
-      <div v-if="tab === 'dice'" class="coming-soon">
-        <Icon name="dice" :size="36" color="var(--ink-3)"/>
-        <p>{{ L.emptyDice }}</p>
-      </div>
-
-      <!-- Maps tab — heraldic boards with rarity, BoardPreview -->
-      <div v-else-if="tab === 'maps'" class="shop-grid">
-        <div
-          v-for="b in BOARDS"
-          :key="b.id"
-          class="shop-card map-card"
-          :class="{ legendary: b.rarity === 'legendary', owned: isBoardOwned(b) }"
-        >
-          <div v-if="isBoardOwned(b)" class="badge badge--owned">
-            <Icon name="check" :size="10" color="#fff"/>
-            <span>{{ L.mapOwned.toUpperCase() }}</span>
-          </div>
-          <div v-else-if="b.rarity === 'legendary'" class="badge badge--premium">
-            <span>★ PRO</span>
-          </div>
-
-          <div class="map-card__preview" :style="{ borderColor: b.palette.gold }">
-            <BoardPreview :board="b" :size="140"/>
-          </div>
-
-          <div class="item-name">{{ boardLabel(b) }}</div>
-          <div class="item-rarity" :style="{ color: boardRarityColor(b) }">
-            {{ boardRarityLabel(b) }}
-          </div>
-
-          <div class="row between card-foot">
-            <div
-              class="price"
-              :class="{ 'price--epic': b.rarity === 'legendary' || b.rarity === 'epic' }"
-            >
-              <template v-if="isBoardOwned(b)">—</template>
-              <template v-else>{{ b.unit === '★' ? '★ ' + b.price : '◈ ' + b.price }}</template>
+    <div class="shop2__content">
+      <!-- ╔═══ ALL: chest hero + caps preview ═══╗ -->
+      <template v-if="filter === 'all'">
+        <h2 class="shop2__section-title">{{ L.sectionChests }}</h2>
+        <div v-if="heroChest" class="shop2__chest" :style="{ borderColor: rarityBadge(heroChest.rarity) }">
+          <div class="shop2__chest-content">
+            <span class="shop2__rarity" :style="{ background: rarityBadge(heroChest.rarity) }">
+              {{ rarityLabel(heroChest.rarity) }}
+            </span>
+            <h3 class="shop2__chest-name">{{ pickName(heroChest.name) }}</h3>
+            <div class="shop2__chest-row">
+              <div
+                v-for="ct in heroChest.contains"
+                :key="ct"
+                class="shop2__chest-chip"
+              >
+                <CosmeticsCaps :type="ct" rarity="epic" :size="22"/>
+              </div>
+              <div class="shop2__chest-chip shop2__chest-chip--more">
+                +{{ heroChest.containsExtra }}
+              </div>
             </div>
-            <button
-              class="btn cta"
-              :disabled="isBoardOwned(b)"
-              :style="{ background: boardCtaBg(b), color: isBoardOwned(b) ? 'var(--ink-3)' : '#fff' }"
-              @click="buyBoard(b)"
-            >
-              <span>{{ isBoardOwned(b) ? L.mapOwned : L.mapBuy }}</span>
+            <button class="shop2__btn-grad shop2__chest-cta" @click="openChest">
+              <span>{{ L.lookInside }}</span>
             </button>
+          </div>
+          <div class="shop2__chest-art" aria-hidden="true">
+            <span class="shop2__chest-emoji">📦</span>
           </div>
         </div>
-      </div>
 
-      <!-- Grid of item cards -->
-      <div v-else class="shop-grid">
+        <div class="shop2__section-head">
+          <h2 class="shop2__section-title">{{ L.sectionCaps }}</h2>
+          <button class="shop2__see-all" @click="filter = 'caps'; haptic('light')">
+            {{ L.seeAll }}
+          </button>
+        </div>
+
+        <div class="shop2__grid">
+          <article
+            v-for="cap in capsPreview"
+            :key="cap.id"
+            class="shop2__card"
+          >
+            <div class="shop2__preview">
+              <CosmeticsCaps :type="cap.type" :rarity="cap.rarity" :size="72"/>
+            </div>
+            <div class="shop2__meta">
+              <span class="shop2__rarity" :style="{ background: rarityBadge(cap.rarity) }">
+                {{ rarityLabel(cap.rarity) }}
+              </span>
+              <h3 class="shop2__name">{{ pickName(cap.name) }}</h3>
+            </div>
+            <button
+              class="shop2__btn"
+              :class="capBtnClass(cap)"
+              @click="onCapAction(cap)"
+            >
+              <Icon
+                v-if="cap.starsPrice && !isOwned(cap.id) && !cap.chestOnly"
+                name="star"
+                :size="14"
+                color="#fff"
+              />
+              <span>{{ capBtnLabel(cap) }}</span>
+            </button>
+          </article>
+        </div>
+      </template>
+
+      <!-- ╔═══ CHESTS ═══╗ -->
+      <template v-else-if="filter === 'chests'">
+        <h2 class="shop2__section-title">{{ L.sectionChests }}</h2>
         <div
-          v-for="item in items"
-          :key="item.id"
-          class="shop-card"
-          :class="{
-            premium: !!item.starsPrice,
-            owned: isOwned(item.id),
-            equipped: isEquipped(item.id, item.kind as any),
-          }"
+          v-for="ch in SHOP_CHESTS"
+          :key="ch.id"
+          class="shop2__chest"
+          :style="{ borderColor: rarityBadge(ch.rarity) }"
         >
-          <!-- Owned badge (top-left) -->
-          <div v-if="isOwned(item.id)" class="badge badge--owned">
-            <Icon name="check" :size="10" color="#fff"/>
-            <span>{{ isEquipped(item.id, item.kind as any) ? L.equipped.toUpperCase() : L.owned.toUpperCase() }}</span>
-          </div>
-          <!-- Premium (Stars) badge (top-right) -->
-          <div v-else-if="item.starsPrice" class="badge badge--premium">
-            <span>★ PRO</span>
-          </div>
-
-          <!-- Preview: token medallion / theme tile / banner emoji -->
-          <div
-            v-if="item.kind === 'token'"
-            class="preview preview--token"
-            :class="{ 'preview--premium': !!item.starsPrice }"
-          >
-            <div class="token-disc" :style="discStyle(item)">
-              <TokenArt :id="tokenArtFor(item.id)" :size="42" color="#fff" shadow="rgba(0,0,0,0.55)"/>
+          <div class="shop2__chest-content">
+            <span class="shop2__rarity" :style="{ background: rarityBadge(ch.rarity) }">
+              {{ rarityLabel(ch.rarity) }}
+            </span>
+            <h3 class="shop2__chest-name">{{ pickName(ch.name) }}</h3>
+            <div class="shop2__chest-row">
+              <div
+                v-for="ct in ch.contains"
+                :key="ct"
+                class="shop2__chest-chip"
+              >
+                <CosmeticsCaps :type="ct" rarity="epic" :size="22"/>
+              </div>
+              <div class="shop2__chest-chip shop2__chest-chip--more">
+                +{{ ch.containsExtra }}
+              </div>
             </div>
-            <template v-if="item.starsPrice">
-              <span class="spark spark--1"/>
-              <span class="spark spark--2"/>
-              <span class="spark spark--3"/>
-            </template>
-          </div>
-          <div
-            v-else-if="item.kind === 'theme'"
-            class="preview preview--theme"
-          >
-            <span class="theme-emoji">{{ item.icon }}</span>
-          </div>
-          <div
-            v-else
-            class="preview preview--emote"
-          >
-            <span class="emote-emoji">{{ item.icon }}</span>
-          </div>
-
-          <!-- Name -->
-          <div class="item-name">{{ itemName(item) }}</div>
-          <!-- Rarity -->
-          <div class="item-rarity" :style="{ color: rarityColor(rarityOf(item)) }">
-            {{ rarityLabel(rarityOf(item)) }}
-          </div>
-
-          <!-- Price + CTA row -->
-          <div class="row between card-foot">
-            <div class="price" :class="{ 'price--stars': !!item.starsPrice, 'price--epic': rarityOf(item) === 'epic' || rarityOf(item) === 'legendary' }">
-              <template v-if="isOwned(item.id)">—</template>
-              <template v-else-if="item.starsPrice">★ {{ item.starsPrice }}</template>
-              <template v-else-if="item.price === 0">{{ L.free }}</template>
-              <template v-else>◈ {{ item.price }}</template>
-            </div>
-
-            <!-- Primary CTA: Equip / Equipped / Buy (coins) -->
-            <button
-              v-if="!item.starsPrice || isOwned(item.id)"
-              class="btn cta"
-              :class="{
-                'btn-primary': !isOwned(item.id),
-                'btn-emerald': isOwned(item.id) && !isEquipped(item.id, item.kind as any) && (item.kind === 'token' || item.kind === 'theme'),
-                'btn-ghost': isEquipped(item.id, item.kind as any) || (isOwned(item.id) && item.kind === 'emote'),
-              }"
-              :disabled="isEquipped(item.id, item.kind as any) || (isOwned(item.id) && item.kind === 'emote')"
-              @click="onPrimaryAction(item)"
-            >
-              <Icon v-if="isEquipped(item.id, item.kind as any)" name="check" :size="12" color="currentColor"/>
-              <span>{{ primaryLabel(item) }}</span>
+            <button class="shop2__btn-grad shop2__chest-cta" @click="openChest">
+              <span>{{ L.lookInside }}</span>
             </button>
-
-            <!-- Stars CTA for premium, unowned items -->
-            <button
-              v-else
-              class="btn btn-wax cta cta--stars"
-              @click="buyWithStars(item)"
-            >
-              <Icon name="star" :size="12" color="#fff"/>
-              <span>{{ item.starsPrice }}</span>
-            </button>
+          </div>
+          <div class="shop2__chest-art" aria-hidden="true">
+            <span class="shop2__chest-emoji">📦</span>
           </div>
         </div>
-      </div>
+      </template>
+
+      <!-- ╔═══ CAPS ═══╗ -->
+      <template v-else-if="filter === 'caps'">
+        <div class="shop2__section-head">
+          <h2 class="shop2__section-title">{{ L.sectionCaps }}</h2>
+          <button
+            class="shop2__toggle"
+            :class="{ 'shop2__toggle--on': hideOwned }"
+            @click="hideOwned = !hideOwned; haptic('light')"
+          >
+            <span>{{ L.hideOwned }}</span>
+            <span class="shop2__toggle-mark">
+              <Icon v-if="hideOwned" name="check" :size="12" color="#000"/>
+            </span>
+          </button>
+        </div>
+
+        <div class="shop2__grid">
+          <article
+            v-for="cap in visibleCaps"
+            :key="cap.id"
+            class="shop2__card"
+          >
+            <div class="shop2__preview">
+              <CosmeticsCaps :type="cap.type" :rarity="cap.rarity" :size="72"/>
+            </div>
+            <div class="shop2__meta">
+              <span class="shop2__rarity" :style="{ background: rarityBadge(cap.rarity) }">
+                {{ rarityLabel(cap.rarity) }}
+              </span>
+              <h3 class="shop2__name">{{ pickName(cap.name) }}</h3>
+            </div>
+            <button
+              class="shop2__btn"
+              :class="capBtnClass(cap)"
+              @click="onCapAction(cap)"
+            >
+              <Icon
+                v-if="cap.starsPrice && !isOwned(cap.id) && !cap.chestOnly"
+                name="star"
+                :size="14"
+                color="#fff"
+              />
+              <span>{{ capBtnLabel(cap) }}</span>
+            </button>
+          </article>
+        </div>
+      </template>
+
+      <!-- ╔═══ MAPS ═══╗ -->
+      <template v-else-if="filter === 'maps'">
+        <div class="shop2__section-head">
+          <h2 class="shop2__section-title">{{ L.sectionMaps }}</h2>
+          <button
+            class="shop2__toggle"
+            :class="{ 'shop2__toggle--on': hideOwned }"
+            @click="hideOwned = !hideOwned; haptic('light')"
+          >
+            <span>{{ L.hideOwned }}</span>
+            <span class="shop2__toggle-mark">
+              <Icon v-if="hideOwned" name="check" :size="12" color="#000"/>
+            </span>
+          </button>
+        </div>
+
+        <div class="shop2__grid">
+          <article
+            v-for="m in visibleMaps"
+            :key="m.id"
+            class="shop2__card shop2__card--map"
+          >
+            <div class="shop2__preview shop2__preview--map">
+              <CosmeticsMaps :type="m.type" :rarity="m.rarity" :size="100"/>
+            </div>
+            <div class="shop2__meta">
+              <span class="shop2__rarity" :style="{ background: rarityBadge(m.rarity) }">
+                {{ rarityLabel(m.rarity) }}
+              </span>
+              <h3 class="shop2__name shop2__name--two">{{ pickName(m.name) }}</h3>
+            </div>
+            <button
+              class="shop2__btn"
+              :class="mapBtnClass(m)"
+              @click="onMapAction(m)"
+            >
+              <Icon
+                v-if="m.starsPrice && !isOwned(m.id)"
+                name="star"
+                :size="14"
+                color="#fff"
+              />
+              <span>{{ mapBtnLabel(m) }}</span>
+            </button>
+          </article>
+        </div>
+      </template>
+
+      <!-- ╔═══ HOUSES ═══╗ -->
+      <template v-else-if="filter === 'houses'">
+        <h2 class="shop2__section-title">{{ L.sectionHouses }}</h2>
+        <div class="shop2__grid">
+          <article
+            v-for="i in housesItems"
+            :key="i.id"
+            class="shop2__card"
+          >
+            <div class="shop2__preview">
+              <span class="shop2__theme-emoji">{{ i.icon }}</span>
+            </div>
+            <div class="shop2__meta">
+              <span class="shop2__rarity" :style="{ background: i.starsPrice ? '#dd43c8' : (i.price >= 800 ? '#357ddb' : '#8d8d8d') }">
+                {{ i.starsPrice ? rarityLabel('epic') : rarityLabel(i.price >= 800 ? 'rare' : 'common') }}
+              </span>
+              <h3 class="shop2__name">{{ pickName(i.name) }}</h3>
+            </div>
+            <button
+              class="shop2__btn"
+              :class="legacyBtnClass(i)"
+              @click="onLegacyAction(i.id, 'theme', i.price, i.starsPrice, i.name.en, i.name.ru)"
+            >
+              <span>{{ legacyBtnLabel(i, 'theme') }}</span>
+            </button>
+          </article>
+        </div>
+      </template>
+
+      <!-- ╔═══ BANNERS ═══╗ -->
+      <template v-else-if="filter === 'banners'">
+        <h2 class="shop2__section-title">{{ L.sectionBanners }}</h2>
+        <div class="shop2__grid">
+          <article
+            v-for="i in bannersItems"
+            :key="i.id"
+            class="shop2__card"
+          >
+            <div class="shop2__preview">
+              <span class="shop2__theme-emoji">{{ i.icon }}</span>
+            </div>
+            <div class="shop2__meta">
+              <span class="shop2__rarity" :style="{ background: i.price >= 200 ? '#357ddb' : '#8d8d8d' }">
+                {{ rarityLabel(i.price >= 200 ? 'rare' : 'common') }}
+              </span>
+              <h3 class="shop2__name">{{ pickName(i.name) }}</h3>
+            </div>
+            <button
+              class="shop2__btn"
+              :class="legacyBtnClass(i)"
+              @click="onLegacyAction(i.id, 'emote', i.price, i.starsPrice, i.name.en, i.name.ru)"
+            >
+              <span>{{ legacyBtnLabel(i, 'emote') }}</span>
+            </button>
+          </article>
+        </div>
+      </template>
+
+      <!-- ╔═══ DICE (empty) ═══╗ -->
+      <template v-else>
+        <h2 class="shop2__section-title">{{ L.sectionDice }}</h2>
+        <div class="shop2__empty">
+          <Icon name="dice" :size="48" color="rgba(255,255,255,0.5)"/>
+          <p>{{ L.comingSoon }}</p>
+        </div>
+      </template>
     </div>
 
     <PurchaseSuccessModal
       :open="successOpen"
       :data="successData"
       :on-close="() => (successData = null)"
-      :on-equip="successData?.kind === 'token' || successData?.kind === 'theme' ? equipFromSuccess : undefined"
     />
     <PurchaseFailModal
       :open="failOpen"
@@ -556,255 +601,451 @@ function discStyle(item: ShopItem) {
 </template>
 
 <style scoped>
-.app {
+.shop2 {
   position: relative;
   display: flex;
   flex-direction: column;
-  min-height: 100dvh;
-  background: var(--bg);
+  flex: 1;
+  min-height: 0;
+  background: transparent;
+  color: #fff;
+  font-family: 'Golos Text', var(--font-body);
+  overflow: hidden;
 }
 
-.icon-btn :deep(svg) { color: var(--ink-2); }
-
-/* Coins chip in the topbar */
-.coins-chip {
-  display: inline-flex;
+/* ── Topbar ── */
+.shop2__topbar {
+  position: relative;
+  z-index: 5;
+  display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 6px 12px;
-  background: var(--card);
-  border: 1px solid var(--line);
-  border-radius: 999px;
+  gap: 16px;
+  padding: 6px 24px 8px;
   flex-shrink: 0;
 }
-.coins-chip .money {
-  font-family: var(--font-mono);
-  font-size: 12px;
-  color: var(--ink);
-  font-variant-numeric: tabular-nums;
-  font-weight: 600;
-}
-.coins-chip__sep {
-  color: var(--line-strong);
-  font-size: 12px;
-}
-
-/* Maps tab card overrides */
-.map-card { padding: 10px; }
-.map-card.legendary { border-color: var(--gold); box-shadow: 0 0 12px rgba(212, 168, 74, 0.25); }
-.map-card__preview {
-  border-radius: 8px;
-  overflow: hidden;
-  border: 2px solid var(--gold);
-  margin-bottom: 10px;
-  line-height: 0;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  width: 100%;
-  aspect-ratio: 1 / 1;
-}
-.map-card__preview :deep(svg) {
-  width: 100%;
-  height: 100%;
-}
-
-/* Tabs (5 narrow) */
-.shop-tabs {
-  display: flex;
-  gap: 4px;
-  background: var(--card);
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  padding: 3px;
-  margin-bottom: 14px;
-  position: sticky;
-  top: 0;
-  z-index: 10;
-  box-shadow: 0 4px 12px -4px rgba(42, 29, 16, 0.15);
-}
-.shop-tab {
-  flex: 1;
-  padding: 8px 4px;
-  background: transparent;
-  color: var(--ink-2);
+.shop2__back {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: #fff;
   border: none;
-  border-radius: 6px;
-  font-family: var(--font-body);
-  font-size: 12px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: background 160ms, color 160ms;
-  white-space: nowrap;
-}
-.shop-tab.active {
-  background: var(--primary);
-  color: #fff;
-}
-
-/* Coming-soon stub for Maps / Dice */
-.coming-soon {
+  padding: 0;
   display: flex;
-  flex-direction: column;
   align-items: center;
-  gap: 10px;
-  padding: 48px 20px;
-  background: var(--card);
-  border: 1px dashed var(--line-strong);
-  border-radius: 10px;
-  color: var(--ink-3);
-  text-align: center;
+  justify-content: center;
+  cursor: pointer;
+  flex-shrink: 0;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.16);
+  transition: transform 120ms ease;
 }
-.coming-soon p {
+.shop2__back:active { transform: scale(0.93); }
+.shop2__title {
   margin: 0;
-  font-size: 13px;
-  font-family: var(--font-body);
-  letter-spacing: 0.04em;
+  font-family: 'Unbounded', sans-serif;
+  font-weight: 900;
+  font-size: 18px;
+  line-height: 20px;
+  color: #fff;
+  text-shadow: 1px 1px 0 #000;
 }
 
-/* Grid */
-.shop-grid {
+/* ── Filters: horizontal scroll w/ fade mask ── */
+.shop2__filters {
+  flex-shrink: 0;
+  background: #1362c7;
+  position: relative;
+  z-index: 4;
+}
+.shop2__filters-track {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 4px 24px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -webkit-mask-image: linear-gradient(
+    to right,
+    transparent 0,
+    #000 16px,
+    #000 calc(100% - 16px),
+    transparent 100%
+  );
+          mask-image: linear-gradient(
+    to right,
+    transparent 0,
+    #000 16px,
+    #000 calc(100% - 16px),
+    transparent 100%
+  );
+}
+.shop2__filters-track::-webkit-scrollbar { display: none; }
+.shop2__chip {
+  flex-shrink: 0;
+  padding: 8px 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  background: transparent;
+  color: #fff;
+  font-family: 'Unbounded', sans-serif;
+  font-weight: 700;
+  font-size: 14px;
+  line-height: 16px;
+  letter-spacing: 0;
+  cursor: pointer;
+  white-space: nowrap;
+  text-shadow: 0.2px 0.2px 0 #000;
+  transition: background 120ms, color 120ms;
+}
+.shop2__chip--active {
+  background: #fff;
+  color: #000;
+  border-color: #fff;
+  text-shadow: none;
+}
+
+/* ── Content area ── */
+.shop2__content {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 32px 24px 32px;
+  position: relative;
+  z-index: 3;
+}
+.shop2__content::-webkit-scrollbar { width: 4px; }
+.shop2__content::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.3);
+  border-radius: 2px;
+}
+
+/* ── Section heading ── */
+.shop2__section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.shop2__section-title {
+  margin: 0 0 16px;
+  font-family: 'Unbounded', sans-serif;
+  font-weight: 700;
+  font-size: 24px;
+  line-height: 26px;
+  color: #fff;
+  text-shadow: 1px 1px 0 #000;
+}
+.shop2__section-head .shop2__section-title { margin: 0; }
+.shop2__see-all {
+  background: #fff;
+  color: #000;
+  border: none;
+  padding: 5px 8px;
+  border-radius: 999px;
+  font-family: 'Unbounded', sans-serif;
+  font-weight: 700;
+  font-size: 10px;
+  line-height: 12px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+/* ── Grid ── */
+.shop2__grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 10px;
+  gap: 8px;
+  margin-bottom: 8px;
 }
 
-/* Card */
-.shop-card {
-  background: var(--card);
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  padding: 12px;
-  position: relative;
-  overflow: hidden;
+/* ── Card ── */
+.shop2__card {
+  background: #fff;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  border-radius: 16px;
+  padding: 8px;
   display: flex;
   flex-direction: column;
+  gap: 8px;
+  color: #000;
 }
-.shop-card.premium { border-color: var(--gold); }
-.shop-card.equipped { border-color: var(--gold); box-shadow: 0 0 0 1px var(--gold); }
+.shop2__preview {
+  height: 76px;
+  background: #000;
+  border-radius: 14px;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.shop2__preview--map { height: 100px; }
 
-/* Badges */
-.badge {
-  position: absolute;
-  top: 6px;
-  z-index: 2;
+.shop2__meta {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 4px;
+}
+.shop2__rarity {
   display: inline-flex;
   align-items: center;
-  gap: 3px;
-  font-size: 9px;
-  padding: 2px 6px;
-  border-radius: 3px;
-  letter-spacing: 0.1em;
-  font-weight: 700;
-  line-height: 1;
-}
-.badge--owned {
-  left: 6px;
-  background: var(--emerald);
+  justify-content: center;
+  align-self: flex-start;
+  padding: 3px 8px;
+  border-radius: 999px;
+  font-family: 'Unbounded', sans-serif;
+  font-weight: 500;
+  font-size: 10px;
+  line-height: 12px;
   color: #fff;
+  white-space: nowrap;
 }
-.badge--premium {
-  right: 6px;
-  background: var(--gold);
-  color: #1a1000;
-}
-.badge :deep(svg) { display: block; }
-
-/* Preview area */
-.preview {
-  border-radius: 8px;
-  border: 1px solid var(--line);
-  margin-bottom: 10px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  position: relative;
-  overflow: hidden;
-}
-.preview--token {
-  height: 86px;
-  background: linear-gradient(145deg, var(--card-alt), var(--bg-deep));
-}
-.preview--token.preview--premium {
-  background: radial-gradient(circle at 50% 40%, #3a2d0e, #1a130d);
-}
-.token-disc {
-  width: 58px;
-  height: 58px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  overflow: hidden;
-}
-
-.preview--theme {
-  height: 68px;
-  background: linear-gradient(135deg, var(--bg-deep), var(--card-alt));
-}
-.theme-emoji {
-  font-size: 34px;
-  line-height: 1;
-}
-
-.preview--emote {
-  height: 68px;
-  background: linear-gradient(145deg, var(--card-alt), var(--bg-deep));
-}
-.emote-emoji {
-  font-size: 36px;
-  line-height: 1;
-}
-
-.spark {
-  position: absolute;
-  border-radius: 50%;
-  background: #d4a84a;
-}
-.spark--1 { top: 8px; left: 12px; width: 3px; height: 3px; opacity: 0.7; }
-.spark--2 { top: 18px; right: 16px; width: 2px; height: 2px; opacity: 0.6; background: #f5d98a; }
-.spark--3 { bottom: 14px; left: 20px; width: 2px; height: 2px; opacity: 0.5; }
-
-/* Text */
-.item-name {
-  font-family: var(--font-display);
-  font-size: 14px;
-  color: var(--ink);
-  line-height: 1.15;
+.shop2__name {
+  margin: 0;
+  font-family: 'Golos Text', sans-serif;
+  font-weight: 700;
+  font-size: 16px;
+  line-height: 18px;
+  color: #000;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.item-rarity {
-  font-size: 9px;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  font-weight: 700;
-  margin-top: 2px;
+.shop2__name--two {
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
 }
 
-/* Foot row */
-.card-foot { margin-top: 8px; gap: 6px; }
-.price {
-  font-family: var(--font-mono);
+/* ── Buy button (4 visual states) ── */
+.shop2__btn {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  height: 24px;
+  padding: 4px 10px;
+  border: none;
+  border-radius: 999px;
+  font-family: 'Unbounded', sans-serif;
+  font-weight: 700;
   font-size: 12px;
-  color: var(--ink-2);
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
+  line-height: 16px;
+  cursor: pointer;
+  white-space: nowrap;
+  margin-top: auto;
+}
+.shop2__btn:active { filter: brightness(0.95); transform: translateY(1px); }
+.shop2__btn--stars {
+  background: linear-gradient(to left, #e069d0 0%, #718fff 100%);
+  color: #fff;
+}
+.shop2__btn--equip {
+  background: #56e63e;
+  color: #000;
+}
+.shop2__btn--equipped {
+  background: rgba(0, 0, 0, 0.2);
+  color: rgba(0, 0, 0, 0.6);
+  cursor: default;
+}
+.shop2__btn--grad {
+  background: linear-gradient(101deg, #005eff 0%, #6f4bff 100%);
+  color: #fff;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.16);
+  box-shadow: inset 0 2px 8px rgba(255, 255, 255, 0.32);
+}
+
+/* ── Hide-owned toggle pill ── */
+.shop2__toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 26px;
+  padding: 3px 8px;
+  background: #fff;
+  border: none;
+  border-radius: 999px;
+  font-family: 'Unbounded', sans-serif;
+  font-weight: 700;
+  font-size: 10px;
+  line-height: 12px;
+  color: #000;
+  cursor: pointer;
   flex-shrink: 0;
 }
-.price--stars { color: var(--gold); }
-.price--epic { color: var(--gold); }
-
-.cta {
-  padding: 5px 11px;
-  font-size: 11px;
-  border-radius: 999px;
-  line-height: 1;
-  min-height: 0;
-  font-weight: 600;
-  white-space: nowrap;
-  gap: 4px;
+.shop2__toggle-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 0.93px solid rgba(0, 0, 0, 0.4);
+  background: transparent;
 }
-.cta--stars { padding: 5px 10px; }
+.shop2__toggle--on .shop2__toggle-mark {
+  background: #56e63e;
+  border-color: #56e63e;
+}
+
+/* ── Chest hero ── */
+.shop2__chest {
+  position: relative;
+  display: flex;
+  align-items: stretch;
+  gap: 12px;
+  background: #000;
+  border: 1px solid #e069d0;
+  border-radius: 24px;
+  padding: 16px;
+  padding-right: 0;
+  margin-bottom: 32px;
+  overflow: hidden;
+}
+.shop2__chest-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+.shop2__chest-name {
+  margin: 0;
+  font-family: 'Golos Text', sans-serif;
+  font-weight: 700;
+  font-size: 22px;
+  line-height: 24px;
+  color: #fff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.shop2__chest-row {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+.shop2__chest-chip {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  border: 0.4px solid rgba(255, 255, 255, 0.1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  flex-shrink: 0;
+  overflow: hidden;
+}
+.shop2__chest-chip--more {
+  background: #fff;
+  color: #000;
+  border-radius: 999px;
+  border-color: transparent;
+  font-family: 'Unbounded', sans-serif;
+  font-weight: 800;
+  font-size: 10px;
+  line-height: 16px;
+}
+.shop2__chest-cta {
+  margin-top: 2px;
+  height: 40px;
+  width: 100%;
+  border-radius: 999px;
+  font-family: 'Unbounded', sans-serif;
+  font-weight: 800;
+  font-size: 12px;
+  line-height: 14px;
+  background: linear-gradient(104deg, #005eff 0%, #6f4bff 100%);
+  color: #fff;
+  border: none;
+  cursor: pointer;
+  box-shadow: inset 0 2px 8px rgba(255, 255, 255, 0.32);
+}
+.shop2__chest-art {
+  position: relative;
+  flex-shrink: 0;
+  width: 132px;
+  height: 158px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+/* While the designer's chest art (image 170/171/172 from Figma node 100:10408)
+   is not yet exported into web/figma-src/shop/chests/, render an oversized
+   chest emoji as visual stand-in. Replace .shop2__chest-emoji with an <img>
+   referencing /figma/shop/chests/business.webp once the asset lands. */
+.shop2__chest-emoji {
+  font-size: 96px;
+  line-height: 1;
+  filter: drop-shadow(0 4px 8px rgba(255, 200, 80, 0.4));
+}
+
+.shop2__btn-grad {
+  background: linear-gradient(104deg, #005eff 0%, #6f4bff 100%);
+  color: #fff;
+  border: none;
+  cursor: pointer;
+  box-shadow: inset 0 2px 8px rgba(255, 255, 255, 0.32);
+}
+.shop2__btn-grad:active { filter: brightness(0.95); }
+
+/* ── Theme/banner placeholder previews (Houses/Banners) ── */
+.shop2__theme-emoji {
+  font-size: 48px;
+  line-height: 1;
+}
+
+/* ── Empty state (Dice) ── */
+.shop2__empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  padding: 64px 24px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px dashed rgba(255, 255, 255, 0.3);
+  border-radius: 18px;
+}
+.shop2__empty p {
+  margin: 0;
+  font-family: 'Unbounded', sans-serif;
+  font-weight: 700;
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.7);
+  text-shadow: 1px 1px 0 #000;
+}
+
+@media (min-width: 900px) {
+  .shop2__content { padding: 32px 40px; }
+}
+</style>
+
+<style>
+/* Body-level blue + pattern matches HomeView so the topbar's safe-area
+   strip stays blue instead of the default parchment cream. The 55% blue
+   overlay is the same trick HomeView uses so the icon pattern reads at
+   ~45% strength without an extra layer. */
+html.shop-figma-root,
+body.shop-figma-root {
+  background-color: #0d68db !important;
+  background-image:
+    linear-gradient(rgba(13, 104, 219, 0.55), rgba(13, 104, 219, 0.55)),
+    url('/figma/home/bg-pattern.webp') !important;
+  background-size: auto, cover !important;
+  background-position: center, center !important;
+  background-repeat: no-repeat, no-repeat !important;
+  background-attachment: fixed, fixed !important;
+}
+body.shop-figma-root #app,
+body.shop-figma-root .app-root,
+body.shop-figma-root .app-main,
+body.shop-figma-root .shop2 {
+  background: transparent !important;
+}
 </style>
