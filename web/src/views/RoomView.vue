@@ -459,11 +459,38 @@ const currentPlayerId = computed(() => {
   if (!game.room) return null;
   return game.room.players[game.room.currentTurn]?.id ?? null;
 });
+/**
+ * What `currentTurn` SHOULD look like to the user at this exact moment.
+ *
+ * The server bumps `room.currentTurn` the instant a player's action
+ * resolves on the server side — for a bot this is well before its
+ * pawn has even started walking on the client. Reading
+ * `r.currentTurn` directly would slide the turn-banner to the next
+ * player while the previous bot is still mid-roll/walk, which the
+ * playtester (rightly) called out as confusing: "another player
+ * just rolled the dice, but the slider already shows my turn".
+ *
+ * Fix: while a dice/move animation is in flight, freeze the
+ * displayed turn on whoever is actually animating. The FLIP
+ * transition then plays at the moment that *feels* like the
+ * handoff (pawn lands → animatingPlayerId clears → slider slides),
+ * not the moment the server posted the update.
+ */
+const displayedTurnIndex = computed<number>(() => {
+  const r = game.room;
+  if (!r || r.players.length === 0) return 0;
+  if (game.animatingPlayerId) {
+    const i = r.players.findIndex((p) => p.id === game.animatingPlayerId);
+    if (i >= 0) return i;
+  }
+  return r.currentTurn;
+});
+
 const turnSlots = computed<{ key: string; player: Player; role: "prev" | "current" | "next" }[]>(() => {
   const r = game.room;
   if (!r || r.players.length === 0) return [];
   const n = r.players.length;
-  const i = r.currentTurn;
+  const i = displayedTurnIndex.value;
   const prev = r.players[(i - 1 + n) % n];
   const cur  = r.players[i];
   const next = r.players[(i + 1) % n];
