@@ -16,8 +16,8 @@ import { BOARD } from "../../../shared/board";
 import type { Player, RoomState } from "../../../shared/types";
 import BoardTile from "./BoardTile.vue";
 import { useGameStore } from "../stores/game";
-import { ORDERED_PLAYER_COLORS, tokenArtFor, lighten } from "../utils/palette";
-import TokenArt from "./TokenArt.vue";
+import { ORDERED_PLAYER_COLORS, lighten } from "../utils/palette";
+import { capTypeFor } from "../shop/cosmetics";
 
 const props = defineProps<{ room: RoomState }>();
 const game = useGameStore();
@@ -249,17 +249,17 @@ void lighten;
             :style="{
               left: `${pt.xPct}%`,
               top: `${pt.yPct}%`,
-              background: `radial-gradient(circle at 30% 30%, rgba(255,255,255,0.45), ${pt.color} 70%)`,
-              color: pt.color,
+              '--token-shadow': pt.color,
               transform: `translate(-50%, -50%) translate(${pt.offsetX}px, ${pt.offsetY}px)`,
             }"
             :title="pt.player.name"
           >
-            <TokenArt
-              :id="tokenArtFor(pt.player.token || pt.player.id)"
-              :size="18"
-              color="#fff"
-              :shadow="pt.color"
+            <div class="token__base" :style="{ background: pt.color }" />
+            <img
+              class="token__cap"
+              :src="`/figma/shop/caps/${capTypeFor(pt.player.token)}.webp`"
+              :alt="pt.player.name"
+              draggable="false"
             />
           </div>
         </template>
@@ -407,42 +407,57 @@ void lighten;
 }
 .token {
   position: absolute;
-  width: clamp(18px, 3.2vmin, 26px);
-  height: clamp(18px, 3.2vmin, 26px);
-  border-radius: 50%;
+  width: clamp(30px, 5.2vmin, 42px);
+  height: clamp(30px, 5.2vmin, 42px);
   display: grid;
-  place-items: center;
-  color: #fff;
-  box-shadow:
-    0 0 0 1px rgba(42, 29, 16, 0.55),
-    0 0 0 2px rgba(247, 238, 218, 0.9),
-    0 4px 10px rgba(42, 29, 16, 0.45),
-    inset 0 1px 1px rgba(255, 255, 255, 0.4),
-    inset 0 -1px 1px rgba(0, 0, 0, 0.2);
+  place-items: end center;
+  pointer-events: none;
   transition:
     left 0.18s cubic-bezier(0.4, 0, 0.2, 1),
     top 0.18s cubic-bezier(0.4, 0, 0.2, 1),
     transform 0.18s cubic-bezier(0.4, 0, 0.2, 1);
   will-change: left, top, transform;
 }
+/* Player-color "ground shadow" pinned to the bottom of the cell — gives
+   instant player identification when several pieces share the same cap. */
+.token__base {
+  grid-row: 1;
+  grid-column: 1;
+  align-self: end;
+  width: 70%;
+  height: 18%;
+  border-radius: 50%;
+  filter: blur(2px);
+  opacity: 0.7;
+  box-shadow:
+    0 0 0 1px rgba(42, 29, 16, 0.45),
+    0 1px 3px rgba(0, 0, 0, 0.5);
+}
+.token__cap {
+  grid-row: 1;
+  grid-column: 1;
+  width: 110%;
+  height: 110%;
+  object-fit: contain;
+  align-self: stretch;
+  justify-self: center;
+  filter: drop-shadow(0 3px 4px rgba(42, 29, 16, 0.55));
+  user-select: none;
+  -webkit-user-drag: none;
+}
 .token--active { z-index: 7; }
 .token--animating {
   animation: token-hop 0.18s ease-in-out;
   z-index: 8;
-  box-shadow:
-    0 0 0 1px rgba(42, 29, 16, 0.55),
-    0 0 0 2px #f7eeda,
-    0 0 16px currentColor,
-    0 6px 14px rgba(42, 29, 16, 0.5),
-    inset 0 1px 1px rgba(255, 255, 255, 0.5);
 }
-.token--friend {
-  box-shadow:
-    0 0 0 1px rgba(42, 29, 16, 0.55),
-    0 0 0 2px var(--gold-soft, #d4a84a),
-    0 4px 10px rgba(42, 29, 16, 0.45),
-    inset 0 1px 1px rgba(255, 255, 255, 0.4),
-    inset 0 -1px 1px rgba(0, 0, 0, 0.2);
+.token--animating .token__cap {
+  filter:
+    drop-shadow(0 3px 4px rgba(42, 29, 16, 0.55))
+    drop-shadow(0 0 8px var(--token-shadow));
+}
+.token--friend .token__base {
+  background: var(--gold-soft, #d4a84a) !important;
+  opacity: 0.85;
 }
 @keyframes token-hop {
   0% { transform: translate(-50%, -50%) scale(1); }
@@ -451,8 +466,8 @@ void lighten;
 }
 .token-ring {
   position: absolute;
-  width: clamp(26px, 4.8vmin, 38px);
-  height: clamp(26px, 4.8vmin, 38px);
+  width: clamp(38px, 6.4vmin, 52px);
+  height: clamp(38px, 6.4vmin, 52px);
   border-radius: 50%;
   border: 2px solid var(--ring-color);
   opacity: 0.55;

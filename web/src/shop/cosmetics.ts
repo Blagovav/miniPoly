@@ -100,3 +100,33 @@ export const RARITY_BADGE_BG: Record<Rarity, string> = {
   epic:   "#dd43c8",
   exotic: "#db3535",
 };
+
+const CAP_BY_ID = new Map<string, CapEntry>(SHOP_CAPS.map((c) => [c.id, c]));
+
+/** Legacy `token-*` ids predate the redesigned shop — map them to the
+ *  closest cap figurine so existing inventories don't suddenly fall back
+ *  to the default. `token-crown` had no direct equivalent; the hat reads
+ *  as the closest "fancy/regal" piece. */
+const LEGACY_TOKEN_TO_CAP: Record<string, CapType> = {
+  "token-car": "car",
+  "token-dog": "dog",
+  "token-hat": "hat",
+  "token-cat": "cat",
+  "token-ufo": "ufo",
+  "token-crown": "hat",
+};
+
+const ALL_CAP_TYPES: readonly CapType[] = SHOP_CAPS.map((c) => c.type);
+
+/** Resolve any equipped-token id (`cap-*`, legacy `token-*`, or empty)
+ *  to a CapType the board can render as the actual game piece. Unknown
+ *  ids hash deterministically across the 11 caps so legacy premium
+ *  tokens (e.g. `token-dragon`) still get a distinct stable figurine. */
+export function capTypeFor(token: string | undefined | null): CapType {
+  if (!token) return "car";
+  if (CAP_BY_ID.has(token)) return CAP_BY_ID.get(token)!.type;
+  if (LEGACY_TOKEN_TO_CAP[token]) return LEGACY_TOKEN_TO_CAP[token];
+  let h = 0;
+  for (let i = 0; i < token.length; i++) h = (h * 31 + token.charCodeAt(i)) | 0;
+  return ALL_CAP_TYPES[Math.abs(h) % ALL_CAP_TYPES.length];
+}

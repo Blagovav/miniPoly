@@ -11,11 +11,11 @@ import { useInventoryStore } from "../stores/inventory";
 import { useTelegram } from "../composables/useTelegram";
 import Icon from "./Icon.vue";
 import Sigil from "./Sigil.vue";
-import TokenArt from "./TokenArt.vue";
+import { capTypeFor } from "../shop/cosmetics";
 import BoardPreview from "./BoardPreview.vue";
 import BoardSelectModal from "./BoardSelectModal.vue";
 import { findBoard } from "../utils/boards";
-import { ORDERED_PLAYER_COLORS, lighten, tokenArtFor } from "../utils/palette";
+import { ORDERED_PLAYER_COLORS, lighten } from "../utils/palette";
 
 const props = defineProps<{
   room: RoomState;
@@ -362,7 +362,12 @@ const L = computed(() => isRu.value
               : `radial-gradient(circle at 32% 28%, ${lighten(myColor, 0.45)}, ${myColor} 60%, ${lighten(myColor, -0.25)})`,
           }"
         >
-          <TokenArt :id="tokenArtFor(tk.id)" :size="30" color="#fff" shadow="rgba(0,0,0,0.55)" />
+          <img
+            class="token-medallion__cap"
+            :src="`/figma/shop/caps/${capTypeFor(tk.id)}.webp`"
+            :alt="isRu ? tk.name.ru : tk.name.en"
+            draggable="false"
+          />
         </span>
       </button>
     </div>
@@ -779,11 +784,19 @@ const L = computed(() => isRu.value
   display: flex;
   align-items: center;
   justify-content: center;
-  overflow: hidden;
+  overflow: visible;
   box-shadow:
     0 0 0 1.5px #fff,
     0 2px 4px rgba(0, 0, 0, 0.25),
     inset 0 1px 2px rgba(255, 255, 255, 0.4);
+}
+.token-medallion__cap {
+  width: 140%;
+  height: 140%;
+  object-fit: contain;
+  pointer-events: none;
+  -webkit-user-drag: none;
+  filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.45));
 }
 .token-btn--premium {
   background: radial-gradient(circle at 50% 40%, #3a2d0e, #1a130d);
