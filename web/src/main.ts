@@ -13,7 +13,7 @@ import RoomsView from "./views/RoomsView.vue";
 import ShopView from "./views/ShopView.vue";
 import CreateView from "./views/CreateView.vue";
 
-import FriendsView from "./views/FriendsView.vue";
+import ProfileView from "./views/ProfileView.vue";
 import HistoryView from "./views/HistoryView.vue";
 
 const router = createRouter({
@@ -23,7 +23,10 @@ const router = createRouter({
     { path: "/rooms", component: RoomsView, name: "rooms" },
     { path: "/create", component: CreateView, name: "create" },
     { path: "/shop", component: ShopView, name: "shop" },
-    { path: "/friends", component: FriendsView, name: "friends" },
+    // Profile and Friends share the same view — Friends entry opens the same
+    // page with the Friends tab pre-selected, Profile defaults to Cosmetics.
+    { path: "/profile", component: ProfileView, name: "profile", props: { defaultTab: "cosmetics" } },
+    { path: "/friends", component: ProfileView, name: "friends", props: { defaultTab: "friends" } },
     { path: "/history", component: HistoryView, name: "history" },
     { path: "/room/:id", component: RoomView, name: "room", props: true },
   ],

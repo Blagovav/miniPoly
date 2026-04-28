@@ -82,7 +82,9 @@ export const useInventoryStore = defineStore("inventory", () => {
   }
 
   function equip(itemId: string, kind: "token" | "theme"): void {
-    if (!state.value.owned.includes(itemId)) return;
+    const localOwned = state.value.owned.includes(itemId);
+    const remoteOwned = state.value.serverUnlocks.includes(itemId);
+    if (!localOwned && !remoteOwned) return;
     state.value.equipped[kind] = itemId;
   }
 
