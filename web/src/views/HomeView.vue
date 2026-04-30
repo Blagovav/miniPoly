@@ -1,12 +1,13 @@
 <script setup lang="ts">
-import { computed, ref, onMounted, onUnmounted } from "vue";
+import { computed, ref, onMounted, onUnmounted, watch } from "vue";
 import { useI18n } from "vue-i18n";
-import { useRouter } from "vue-router";
+import { useRoute, useRouter } from "vue-router";
 import { useInventoryStore } from "../stores/inventory";
 import { useTelegram } from "../composables/useTelegram";
 
 const { locale } = useI18n();
 const router = useRouter();
+const route = useRoute();
 const inv = useInventoryStore();
 const { haptic, notify, userName, setUserName, tg } = useTelegram();
 
@@ -29,6 +30,10 @@ const L = computed(() => isRu.value
       rejoinBtn: "Вернуться",
       rejoinForget: "Забыть",
       saveName: "Сохранить",
+      inviteErrorTitle: "Приглашение больше неактуально",
+      inviteErrorSub: "Закроется автоматически",
+      playerLeftTitle: "Игрок покинул партию",
+      playerLeftSub: "Закроется автоматически",
     }
   : {
       greeting: "Welcome!",
@@ -47,6 +52,10 @@ const L = computed(() => isRu.value
       rejoinBtn: "Return",
       rejoinForget: "Forget",
       saveName: "Save",
+      inviteErrorTitle: "This invite is no longer valid",
+      inviteErrorSub: "Will close automatically",
+      playerLeftTitle: "A player left the match",
+      playerLeftSub: "Will close automatically",
     });
 
 // ── Daily bonus toast (unchanged from prior design) ──
@@ -121,6 +130,55 @@ function startEditName() {
 function saveName() { setUserName(nameDraft.value); editingName.value = false; }
 
 function go(name: string) { haptic("light"); router.push({ name }); }
+
+// ── Auto-close status popups ──────────────────────────────────────────
+// Both share the same parchment card layout (Figma 133:15574 / 133:5992)
+// — only mascot + copy differ. Each is triggered by a router query flag
+// set by RoomView when the server cuts us out of a session, and each
+// auto-dismisses after 4s. The user can also tap the backdrop to close
+// early. Two distinct flags so future code can pick which scenario fits.
+type StatusPopup = "invitedError" | "playerLeft";
+const statusPopup = ref<StatusPopup | null>(null);
+let statusTimer: number | null = null;
+
+function clearStatusTimer() {
+  if (statusTimer !== null) {
+    clearTimeout(statusTimer);
+    statusTimer = null;
+  }
+}
+
+function closeStatusPopup() {
+  statusPopup.value = null;
+  clearStatusTimer();
+  if (route.query.invitedError || route.query.playerLeft) {
+    void router.replace({ name: "home" });
+  }
+}
+
+function fireStatusPopup(kind: StatusPopup) {
+  statusPopup.value = kind;
+  clearStatusTimer();
+  statusTimer = window.setTimeout(closeStatusPopup, 4000);
+}
+
+watch(
+  () => [route.query.invitedError, route.query.playerLeft] as const,
+  ([invited, left]) => {
+    if (invited === "1") fireStatusPopup("invitedError");
+    else if (left === "1") fireStatusPopup("playerLeft");
+  },
+  { immediate: true },
+);
+
+onUnmounted(() => clearStatusTimer());
+
+const statusPopupTitle = computed(() =>
+  statusPopup.value === "playerLeft" ? L.value.playerLeftTitle : L.value.inviteErrorTitle,
+);
+const statusPopupSub = computed(() =>
+  statusPopup.value === "playerLeft" ? L.value.playerLeftSub : L.value.inviteErrorSub,
+);
 </script>
 
 <template>
@@ -211,6 +269,27 @@ function go(name: string) { haptic("light"); router.push({ name }); }
         <div>
           <div class="bonus-toast__title">{{ L.daily }}</div>
           <div class="bonus-toast__val">+{{ bonusAmount }} ◈</div>
+        </div>
+      </div>
+    </transition>
+
+    <!-- ── Auto-close status popups (Figma 133:15574 / 133:5992). Rendered
+         over the welcome screen because there's nothing left to show on the
+         room route once we've been cut out. The confused-mascot illustration
+         shipped with the invited-error popup works for both cases — the head/
+         shoulders crop is the same. -->
+    <transition name="bonus">
+      <div
+        v-if="statusPopup"
+        class="invite-error-backdrop"
+        @click.self="closeStatusPopup"
+      >
+        <div class="invite-error-card">
+          <div class="invite-error-art" aria-hidden="true">
+            <img src="/figma/lobby/confused-mascot.webp" alt="" />
+          </div>
+          <h2 class="invite-error-title">{{ statusPopupTitle }}</h2>
+          <p class="invite-error-sub">{{ statusPopupSub }}</p>
         </div>
       </div>
     </transition>
@@ -546,6 +625,68 @@ function go(name: string) { haptic("light"); router.push({ name }); }
 .bonus-enter-from, .bonus-leave-to {
   transform: translate(-50%, -30px);
   opacity: 0;
+}
+
+/* ── Dead-invite popup (Figma 133:15574). Centred parchment card with the
+   confused-mascot illustration on top, title underneath, and a quiet
+   "auto-close" hint at the bottom. No buttons — it's a status notice,
+   not a prompt. */
+.invite-error-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 300;
+  background: rgba(0, 0, 0, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+.invite-error-card {
+  width: 100%;
+  max-width: 345px;
+  background: #faf3e2;
+  border-radius: 18px;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+}
+.invite-error-art {
+  width: 100%;
+  height: 160px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+.invite-error-art img {
+  width: 240px;
+  height: 240px;
+  object-fit: contain;
+  /* Crop the mascot vertically so the head + shrug fits the 160px box
+     without resizing the figure itself — matches the figma mask. */
+  margin-top: 24px;
+  pointer-events: none;
+  user-select: none;
+}
+.invite-error-title {
+  margin: 0;
+  font-family: 'Unbounded', sans-serif;
+  font-weight: 700;
+  font-size: 18px;
+  line-height: 26px;
+  color: #000;
+  text-align: center;
+}
+.invite-error-sub {
+  margin: 0;
+  font-family: 'Unbounded', sans-serif;
+  font-weight: 700;
+  font-size: 12px;
+  line-height: 14px;
+  color: rgba(0, 0, 0, 0.4);
+  text-align: center;
 }
 
 @media (min-width: 900px) {

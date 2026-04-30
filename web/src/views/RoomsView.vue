@@ -86,6 +86,15 @@ function setFilter(i: number) {
   activeFilter.value = i;
 }
 
+// Scroll-aware header shadow — same pattern as RoomView.
+const scrollEl = ref<HTMLDivElement | null>(null);
+const scrolled = ref(false);
+function onScroll() {
+  const el = scrollEl.value;
+  if (!el) return;
+  scrolled.value = el.scrollTop > 4;
+}
+
 // Deterministic color for a host name so the sigil is stable across renders.
 function colorFor(name: string): string {
   let hash = 0;
@@ -109,7 +118,7 @@ onUnmounted(() => {
 
 <template>
   <div class="app rooms-v2">
-    <div class="rooms-v2__header">
+    <div class="rooms-v2__header" :class="{ 'rooms-v2__header--scrolled': scrolled }">
       <div class="rooms-v2__navbar">
         <button class="rooms-v2__back" :aria-label="'back'" @click="goBack">
           <svg viewBox="0 0 24 24" width="18" height="18" fill="none" aria-hidden="true">
@@ -137,7 +146,7 @@ onUnmounted(() => {
       </div>
     </div>
 
-    <div class="rooms-v2__scroll">
+    <div class="rooms-v2__scroll" ref="scrollEl" @scroll.passive="onScroll">
       <div v-if="!loading && filteredRooms.length === 0" class="rooms-v2__empty">
         <img
           class="rooms-v2__empty-art"
@@ -234,6 +243,14 @@ onUnmounted(() => {
   flex-shrink: 0;
   padding: 16px 24px 20px;
   background: #0d68db;
+  transition: background-color 200ms ease, box-shadow 200ms ease, border-radius 200ms ease;
+}
+/* Scroll-aware: shadow + rounded bottom appear once scroll starts.
+   At rest the header blends with the body's matching #0d68db so the
+   visual divide only kicks in when content has actually scrolled. */
+.rooms-v2__header--scrolled {
+  border-bottom-left-radius: 18px;
+  border-bottom-right-radius: 18px;
   box-shadow: 0 4px 8px rgba(0, 0, 0, 0.16);
 }
 .rooms-v2__navbar {
