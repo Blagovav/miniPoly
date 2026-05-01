@@ -7,6 +7,7 @@ import { useTheme } from "./composables/useTheme";
 import { useGameStore } from "./stores/game";
 import Icon from "./components/Icon.vue";
 import LoadingScreen from "./components/LoadingScreen.vue";
+import MaintenanceScreen from "./components/MaintenanceScreen.vue";
 import RouteLoader from "./components/RouteLoader.vue";
 import TourOverlay from "./components/TourOverlay.vue";
 import {
@@ -151,6 +152,20 @@ watch(tgChromeColor, (color) => setBgColor(color), { immediate: true });
 
 const activeScreen = computed(() => route.name?.toString() ?? "home");
 
+// ── Maintenance gate (Figma 133:14968) ─────────────────────────────────
+// Two ways to flip it:
+//   - VITE_MAINTENANCE=1 at build time → ships maintenance-on for that
+//     build, used when we want a hard "down for engineers" lock during
+//     a deploy window.
+//   - ?maintenance=1 in the URL → designer/QA preview without rebuild.
+// No server-side trigger yet; if/when we extend /health with a flag we
+// can fold it in here without touching the router.
+const maintenanceMode = computed(() => {
+  if ((import.meta.env.VITE_MAINTENANCE as string | undefined) === "1") return true;
+  if (route.query.maintenance === "1") return true;
+  return false;
+});
+
 const navItems = computed(() => [
   { id: "home",    label: locale.value === "ru" ? "Главная"  : "Home",    icon: "home" as const,   route: "home" },
   { id: "rooms",   label: locale.value === "ru" ? "Игры"     : "Games",   icon: "users" as const,  route: "rooms" },
@@ -166,6 +181,7 @@ function go(routeName: string) {
 
 <template>
   <LoadingScreen v-if="booting" />
+  <MaintenanceScreen v-else-if="maintenanceMode" />
   <div v-else class="app-root">
     <!-- Desktop sidebar: shown only on wide screens (>= 900px via CSS) -->
     <aside class="desktop-sidebar">

@@ -127,15 +127,19 @@ function onCloseClick() {
   props.onClose();
 }
 
-// ── Restart flow (Figma 133:5203 / 133:3980 / 133:4390 / 133:4794) ──────
-// Tapping "СЫГРАТЬ СНОВА" opens a host-only choice popup ("Партия готова"):
-// configure → returns to /create, start-now → flips the modal into a
-// "ready check" state that mirrors the lobby's readiness UX (green check
-// per ready player + grey/green НАЧАТЬ button). The ready state is
-// driven by the existing player.ready field — server protocol for an
-// in-place restart isn't wired up yet, so the actions emit upward and let
-// the parent decide where to route.
-type UiState = "results" | "choice" | "ready-check";
+// ── Restart flow (Figma 133:3980 / 133:4390 / 133:4794 / 133:5203) ──────
+// Host taps "СЫГРАТЬ СНОВА" → modal flips straight into a "ready check"
+// state mirroring the lobby's readiness UX (green check pill per ready
+// player + grey/green НАЧАТЬ button). When every player has flipped
+// ready=true, the host sees an extra "Партия готова" prompt overlaid on
+// top (Figma 133:5203 / popup-info 133:5597) offering two routes:
+//   - НАСТРОИТЬ ИГРУ → bounces to /create so the host can change rules
+//   - НАЧАТЬ СРАЗУ   → forwards onPlayAgain (same as the underlying НАЧАТЬ)
+// The prompt is gated on all-ready because reconfiguration invalidates
+// the readiness pass anyway, so showing it earlier just adds a click.
+// Server protocol for an in-place restart isn't wired up yet — actions
+// emit upward and the parent decides where to route.
+type UiState = "results" | "ready-check";
 const uiState = ref<UiState>("results");
 
 watch(
@@ -144,6 +148,13 @@ watch(
     if (!open) uiState.value = "results";
   },
 );
+
+// "Партия готова" overlay visibility — auto-shown the moment all players
+// have toggled ready while the host is in ready-check. The host can
+// dismiss it (tap outside) and still use the underlying НАЧАТЬ button;
+// if anyone un-readies and then everyone re-readies, it pops back up.
+const allReadyPromptShown = ref(false);
+const allReadyPromptDismissed = ref(false);
 
 const isHost = computed(() =>
   !!props.hostId && !!props.myId && props.hostId === props.myId,
@@ -179,11 +190,14 @@ const readyHint = computed(() => {
 });
 
 function onPlayAgainClick() {
-  // Host's "СЫГРАТЬ СНОВА" opens the choice popup (configure / start-now).
-  // Non-host falls back to the legacy onPlayAgain emit so the existing
-  // /rooms route still fires for them.
+  // Host's "СЫГРАТЬ СНОВА" jumps straight into ready-check. The choice
+  // popup ("Партия готова") only matters once everyone is ready — see
+  // the watcher below. Non-host falls back to the legacy onPlayAgain
+  // emit so the existing /rooms route still fires for them.
   if (isHost.value) {
-    uiState.value = "choice";
+    allReadyPromptDismissed.value = false;
+    allReadyPromptShown.value = false;
+    uiState.value = "ready-check";
     return;
   }
   if (props.onPlayAgain) props.onPlayAgain();
@@ -191,7 +205,7 @@ function onPlayAgainClick() {
 }
 
 function onChoiceConfigure() {
-  uiState.value = "results";
+  allReadyPromptShown.value = false;
   // "Настроить игру" — host wants to tweak settings. Parent gets to pick
   // the destination (typically /create) so we don't hardcode router here.
   if (props.onConfigure) props.onConfigure();
@@ -199,13 +213,22 @@ function onChoiceConfigure() {
   else props.onClose();
 }
 function onChoiceStartNow() {
-  // Switch to the ready-check state. The actual server-side restart isn't
-  // implemented yet — when it lands, parent should reset room.phase to
-  // "lobby" and players will start flipping ready=true.
-  uiState.value = "ready-check";
+  // Identical to the underlying НАЧАТЬ — forwards onPlayAgain so the
+  // parent can swap room.phase back to "lobby" / kick a fresh round.
+  allReadyPromptShown.value = false;
+  if (props.onPlayAgain) props.onPlayAgain();
+  else props.onClose();
+}
+function onChoiceDismiss() {
+  // User tapped the scrim. Don't re-show on the same all-ready streak;
+  // they'll trigger it again if anyone un-readies and re-readies.
+  allReadyPromptShown.value = false;
+  allReadyPromptDismissed.value = true;
 }
 function onCancelRestart() {
   uiState.value = "results";
+  allReadyPromptShown.value = false;
+  allReadyPromptDismissed.value = false;
 }
 function onStartGame() {
   // "НАЧАТЬ" — host commits to launching the next match. Forwarded to the
@@ -217,6 +240,25 @@ function onStartGame() {
 function onReadyToggleClick() {
   if (props.onReadyToggle) props.onReadyToggle();
 }
+
+// Auto-surface the "Партия готова" prompt once everyone's ready. Reset
+// the dismissed flag the moment readiness drops, so the prompt re-fires
+// on the next clean all-ready streak. Only the host ever sees it.
+watch(
+  () => [uiState.value, isHost.value, allReady.value] as const,
+  ([state, host, ready]) => {
+    if (state !== "ready-check" || !host) {
+      allReadyPromptShown.value = false;
+      return;
+    }
+    if (!ready) {
+      allReadyPromptShown.value = false;
+      allReadyPromptDismissed.value = false;
+      return;
+    }
+    if (!allReadyPromptDismissed.value) allReadyPromptShown.value = true;
+  },
+);
 </script>
 
 <template>
@@ -369,14 +411,15 @@ function onReadyToggleClick() {
           </template>
         </div>
 
-        <!-- ── "Партия готова" choice popup (Figma 133:5203). Bottom-anchored
-             card the host sees after tapping СЫГРАТЬ СНОВА — picks between
-             configuring a fresh lobby or kicking off a ready check immediately. -->
+        <!-- ── "Партия готова" choice popup (Figma 133:5203 / popup-info
+             133:5597). Bottom-anchored card overlaid on the ready-check
+             once every player has flipped ready. Host can tap outside to
+             dismiss and use the underlying НАЧАТЬ instead. -->
         <transition name="cor-choice">
           <div
-            v-if="uiState === 'choice'"
+            v-if="allReadyPromptShown"
             class="cor-choice-backdrop"
-            @click.self="onCancelRestart"
+            @click.self="onChoiceDismiss"
           >
             <div class="cor-choice-card">
               <div class="cor-choice-text">

@@ -9,7 +9,7 @@ const { locale } = useI18n();
 const router = useRouter();
 const route = useRoute();
 const inv = useInventoryStore();
-const { haptic, notify, userName, setUserName, tg } = useTelegram();
+const { haptic, notify, userName, setUserName, tg, initData } = useTelegram();
 
 const isRu = computed(() => locale.value === "ru");
 const L = computed(() => isRu.value
@@ -26,14 +26,19 @@ const L = computed(() => isRu.value
       settingsAria: "Настройки",
       playerFallback: "Игрок",
       rejoinEyebrow: "Активная партия",
-      rejoinMsg: "Ты не вышел из партии — вернуться к игре?",
-      rejoinBtn: "Вернуться",
+      rejoinMsg: "У вас есть незавершенная партия. Вы можете вернуться, нажав кнопку ниже",
+      rejoinBtn: "ВЕРНУТЬСЯ",
+      rejoinLeave: "ПОКИНУТЬ",
       rejoinForget: "Забыть",
       saveName: "Сохранить",
       inviteErrorTitle: "Приглашение больше неактуально",
       inviteErrorSub: "Закроется автоматически",
       playerLeftTitle: "Игрок покинул партию",
       playerLeftSub: "Закроется автоматически",
+      leaveConfirmTitle: "Выйти из партии?",
+      leaveConfirmSub: "Вам будет засчитано поражение",
+      leaveConfirmYes: "ВЫЙТИ",
+      leaveConfirmNo: "ВЕРНУТЬСЯ К ИГРЕ",
     }
   : {
       greeting: "Welcome!",
@@ -48,14 +53,19 @@ const L = computed(() => isRu.value
       settingsAria: "Settings",
       playerFallback: "Player",
       rejoinEyebrow: "Active match",
-      rejoinMsg: "You didn't leave the match — want to return?",
-      rejoinBtn: "Return",
+      rejoinMsg: "You have an unfinished match. Tap below to return.",
+      rejoinBtn: "RETURN",
+      rejoinLeave: "FORFEIT",
       rejoinForget: "Forget",
       saveName: "Save",
       inviteErrorTitle: "This invite is no longer valid",
       inviteErrorSub: "Will close automatically",
       playerLeftTitle: "A player left the match",
       playerLeftSub: "Will close automatically",
+      leaveConfirmTitle: "Leave the match?",
+      leaveConfirmSub: "You'll be credited a loss",
+      leaveConfirmYes: "LEAVE",
+      leaveConfirmNo: "BACK TO GAME",
     });
 
 // ── Daily bonus toast (unchanged from prior design) ──
@@ -115,6 +125,60 @@ function forgetRoom() {
     localStorage.removeItem("activeRoomTs");
   } catch {}
   activeRoomId.value = null;
+}
+
+// ── Forfeit-from-home (Figma 133:14910) ───────────────────────────────
+// Tapping ПОКИНУТЬ on the rejoin card opens a confirm popup; confirming
+// fires a one-shot WS round-trip — connect, join, leave, close — so the
+// server actually marks us as gone (and the rest of the lobby gets the
+// player-left broadcast). Without this the user just clears their
+// localStorage and the server keeps us seated until the 3-min reconnect
+// grace expires, leaving everyone else staring at a ghost.
+const leaveConfirmOpen = ref(false);
+function openLeaveConfirm() {
+  if (!activeRoomId.value) return;
+  haptic("light");
+  leaveConfirmOpen.value = true;
+}
+function closeLeaveConfirm() {
+  leaveConfirmOpen.value = false;
+}
+function forfeitRoom() {
+  const id = activeRoomId.value;
+  if (!id) return;
+  haptic("heavy");
+  leaveConfirmOpen.value = false;
+
+  // Fire-and-forget WS handshake. We don't block the user on the network
+  // round-trip — the banner clears immediately and the server processes
+  // the leave whenever the bytes arrive. Any failure (server down, race
+  // with cleanup) just leaves the player in their stale slot, which is
+  // exactly the prior behaviour, so no need to surface errors.
+  try {
+    const wsUrl = (import.meta.env.VITE_WS_URL as string) ||
+      `${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/ws`;
+    const ws = new WebSocket(wsUrl);
+    const close = () => {
+      try { ws.close(); } catch {}
+    };
+    ws.onopen = () => {
+      ws.send(JSON.stringify({
+        type: "join",
+        roomId: id,
+        tgInitData: initData.value,
+        name: userName.value || "Player",
+      }));
+      ws.send(JSON.stringify({ type: "leave" }));
+      // Give the server ~400ms to flush the leave before we tear the
+      // socket down — closing too early can drop the second frame on
+      // some browsers.
+      setTimeout(close, 400);
+    };
+    ws.onerror = close;
+    setTimeout(close, 3000);
+  } catch { /* ignore — best-effort cleanup */ }
+
+  forgetRoom();
 }
 
 // Inline name edit — surfaces only in dev (no real TG profile) so the user
@@ -184,27 +248,6 @@ const statusPopupSub = computed(() =>
 <template>
   <div class="app home-v2">
     <div class="home-v2__content">
-      <transition name="rejoin-fade">
-        <div v-if="activeRoomId" class="home-v2__rejoin">
-          <div class="home-v2__rejoin-body">
-            <div class="home-v2__rejoin-eyebrow">
-              {{ L.rejoinEyebrow }} · {{ activeRoomId }}
-            </div>
-            <div class="home-v2__rejoin-msg">{{ L.rejoinMsg }}</div>
-          </div>
-          <button class="home-v2__rejoin-go" @click="rejoinRoom">
-            {{ L.rejoinBtn }}
-          </button>
-          <button
-            class="home-v2__rejoin-forget"
-            @click="forgetRoom"
-            :aria-label="L.rejoinForget"
-          >
-            ✕
-          </button>
-        </div>
-      </transition>
-
       <div class="home-v2__hero">
         <div class="home-v2__mascot-clip" aria-hidden="true">
           <img class="home-v2__mascot" src="/figma/home/mascot.webp" alt="" />
@@ -231,6 +274,33 @@ const statusPopupSub = computed(() =>
       </div>
 
       <div class="home-v2__cards">
+        <!-- Active match card (Figma 133:14865 / 133:14910). Shown only when
+             the rejoin localStorage hint is fresh; replaces the slim banner
+             that used to live above the greeting. Two CTAs match the figma
+             button row — red "ПОКИНУТЬ" opens a forfeit confirm popup, green
+             "ВЕРНУТЬСЯ" jumps straight back into /room/:id. -->
+        <transition name="rejoin-fade">
+          <div v-if="activeRoomId" class="home-v2__active-match">
+            <div class="home-v2__active-match-text">
+              <p class="home-v2__active-match-title">{{ L.rejoinEyebrow }}</p>
+              <p class="home-v2__active-match-sub">{{ L.rejoinMsg }}</p>
+            </div>
+            <div class="home-v2__active-match-row">
+              <button
+                class="home-v2__active-match-btn home-v2__active-match-btn--leave"
+                @click="openLeaveConfirm"
+              >
+                {{ L.rejoinLeave }}
+              </button>
+              <button
+                class="home-v2__active-match-btn home-v2__active-match-btn--return"
+                @click="rejoinRoom"
+              >
+                {{ L.rejoinBtn }}
+              </button>
+            </div>
+          </div>
+        </transition>
         <button class="home-v2__card home-v2__card--create" @click="go('create')">
           <img class="home-v2__card-art" src="/figma/home/dice.webp" alt="" />
           <div class="home-v2__card-title">{{ L.createT }}</div>
@@ -290,6 +360,41 @@ const statusPopupSub = computed(() =>
           </div>
           <h2 class="invite-error-title">{{ statusPopupTitle }}</h2>
           <p class="invite-error-sub">{{ statusPopupSub }}</p>
+        </div>
+      </div>
+    </transition>
+
+    <!-- ── Forfeit confirm (Figma 133:14910 popup-info 133:14952). Mirrors
+         the in-game lobby-modal but bottom-anchored so it pops up from the
+         home rejoin card. ВЫЙТИ → forfeitRoom (one-shot WS leave + clear
+         localStorage); ВЕРНУТЬСЯ К ИГРЕ → just close the popup. -->
+    <transition name="leave-confirm">
+      <div
+        v-if="leaveConfirmOpen"
+        class="leave-confirm-backdrop"
+        @click.self="closeLeaveConfirm"
+      >
+        <div class="leave-confirm-card">
+          <div class="leave-confirm-text">
+            <h2 class="leave-confirm-title">{{ L.leaveConfirmTitle }}</h2>
+            <p class="leave-confirm-sub">{{ L.leaveConfirmSub }}</p>
+          </div>
+          <div class="leave-confirm-buttons">
+            <button
+              type="button"
+              class="leave-confirm-btn leave-confirm-btn--leave"
+              @click="forfeitRoom"
+            >
+              {{ L.leaveConfirmYes }}
+            </button>
+            <button
+              type="button"
+              class="leave-confirm-btn leave-confirm-btn--return"
+              @click="closeLeaveConfirm"
+            >
+              {{ L.leaveConfirmNo }}
+            </button>
+          </div>
         </div>
       </div>
     </transition>
@@ -428,62 +533,65 @@ const statusPopupSub = computed(() =>
   cursor: pointer;
 }
 
-/* ── Rejoin banner ── */
-.home-v2__rejoin {
+/* ── Active-match rejoin card (Figma 133:14865 / 133:14910). Lives at the
+   top of the home cards stack; matches the figma 15px padding + 12px gap
+   between the title block and the button row. */
+.home-v2__active-match {
+  background: #faf3e2;
+  border-radius: 18px;
+  padding: 15px;
   display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-bottom: 16px;
-  padding: 10px 10px 10px 14px;
-  background: #feffff;
-  border-radius: 14px;
+  flex-direction: column;
+  gap: 16px;
+  color: #000;
   box-shadow:
     0 4px 8px rgba(0, 0, 0, 0.16),
-    inset 0 0 8px rgba(0, 0, 0, 0.06);
-  color: #000;
+    inset 0 0 8px rgba(0, 0, 0, 0.16);
 }
-.home-v2__rejoin-body { flex: 1; min-width: 0; line-height: 1.25; }
-.home-v2__rejoin-eyebrow {
+.home-v2__active-match-text {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.home-v2__active-match-title {
+  margin: 0;
   font-family: 'Unbounded', sans-serif;
   font-weight: 700;
-  font-size: 10px;
-  letter-spacing: 0.14em;
-  color: #0d68db;
-  text-transform: uppercase;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  font-size: 18px;
+  line-height: 24px;
+  color: #000;
 }
-.home-v2__rejoin-msg {
+.home-v2__active-match-sub {
+  margin: 0;
   font-family: 'Golos Text', sans-serif;
   font-weight: 500;
-  font-size: 13px;
-  color: #000;
-  margin-top: 2px;
+  font-size: 14px;
+  line-height: 16px;
+  color: rgba(0, 0, 0, 0.6);
 }
-.home-v2__rejoin-go {
-  background: #0d68db;
-  color: #fff;
+.home-v2__active-match-row {
+  display: flex;
+  gap: 4px;
+}
+.home-v2__active-match-btn {
+  flex: 1;
+  height: 40px;
+  padding: 8px 10px;
+  border: 1px solid rgba(0, 0, 0, 0.2);
+  border-radius: 12px;
   font-family: 'Golos Text', sans-serif;
-  font-weight: 700;
-  font-size: 13px;
-  padding: 8px 14px;
-  border: none;
-  border-radius: 999px;
+  font-weight: 900;
+  font-size: 18px;
+  line-height: 20px;
+  color: #fff;
+  text-shadow: 1px 1px 0 rgba(0, 0, 0, 0.8);
   cursor: pointer;
-  flex-shrink: 0;
+  transition: transform 120ms ease, filter 120ms ease;
 }
-.home-v2__rejoin-forget {
-  width: 24px; height: 24px;
-  border-radius: 50%;
-  border: 1px solid rgba(0, 0, 0, 0.14);
-  background: #fff;
-  color: #000;
-  font-size: 11px;
-  cursor: pointer;
-  padding: 0;
-  flex-shrink: 0;
-}
+.home-v2__active-match-btn:active { transform: scale(0.98); }
+.home-v2__active-match-btn--leave  { background: #f34822; }
+.home-v2__active-match-btn--return { background: #43c22d; }
+
 .rejoin-fade-enter-active, .rejoin-fade-leave-active {
   transition: opacity 220ms ease, transform 220ms ease;
 }
@@ -492,11 +600,101 @@ const statusPopupSub = computed(() =>
   transform: translateY(-6px);
 }
 
+/* ── Leave-confirm popup (Figma 133:14910 popup-info 133:14952). Bottom-
+   anchored parchment card with red ВЫЙТИ + green ВЕРНУТЬСЯ К ИГРЕ. The
+   buttons reuse the in-game lobby-modal silhouette but rendered locally
+   so HomeView stays self-contained. */
+.leave-confirm-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 320;
+  background: rgba(0, 0, 0, 0.4);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: 24px;
+  padding-bottom: calc(24px + var(--tg-safe-area-inset-bottom, 0px));
+}
+.leave-confirm-card {
+  width: 100%;
+  max-width: 345px;
+  background: #faf3e2;
+  border-radius: 18px;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+.leave-confirm-text {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  text-align: center;
+}
+.leave-confirm-title {
+  margin: 0;
+  font-family: 'Unbounded', sans-serif;
+  font-weight: 700;
+  font-size: 22px;
+  line-height: 24px;
+  color: #000;
+}
+.leave-confirm-sub {
+  margin: 0;
+  font-family: 'Unbounded', sans-serif;
+  font-weight: 500;
+  font-size: 14px;
+  line-height: 20px;
+  color: #000;
+}
+.leave-confirm-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.leave-confirm-btn {
+  position: relative;
+  width: 100%;
+  height: 56px;
+  border: 2px solid #000;
+  border-radius: 18px;
+  font-family: 'Golos Text', 'Unbounded', sans-serif;
+  font-weight: 900;
+  font-size: 22px;
+  line-height: 26px;
+  color: #fff;
+  text-shadow: 1.4px 1.4px 0 rgba(0, 0, 0, 0.6);
+  box-shadow: inset 0 -6px 0 rgba(0, 0, 0, 0.2);
+  cursor: pointer;
+  transition: transform 120ms ease, box-shadow 120ms ease;
+}
+.leave-confirm-btn:active {
+  transform: translateY(2px);
+  box-shadow: inset 0 -3px 0 rgba(0, 0, 0, 0.2);
+}
+.leave-confirm-btn--leave  { background: #f34822; }
+.leave-confirm-btn--return { background: #43c22d; }
+.leave-confirm-enter-active, .leave-confirm-leave-active {
+  transition: opacity 200ms ease;
+}
+.leave-confirm-enter-active .leave-confirm-card,
+.leave-confirm-leave-active .leave-confirm-card {
+  transition: transform 220ms cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+.leave-confirm-enter-from, .leave-confirm-leave-to { opacity: 0; }
+.leave-confirm-enter-from .leave-confirm-card,
+.leave-confirm-leave-to .leave-confirm-card {
+  transform: translateY(24px);
+}
+
 /* ── Primary cards ── */
 .home-v2__cards {
   display: flex;
   flex-direction: column;
-  gap: 24px;
+  /* Figma 133:14869 — 12px between active-match / create / join cards.
+     Without an active match the gap reads visually as 24px because the
+     create card's mascot art overlaps the empty space. */
+  gap: 12px;
   margin-top: 40px;
 }
 .home-v2__card {
