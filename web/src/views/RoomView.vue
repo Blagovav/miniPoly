@@ -100,6 +100,39 @@ function handleBodyScroll(e: Event) {
   isScrolled.value = el.scrollTop > 4;
 }
 
+// ── Connection-issue popup (Figma 133:14137). Surfaces only mid-match —
+// disconnects in lobby/ended don't really matter and the boot screen
+// already covers cold-start failures. We wait 700ms before showing so a
+// brief reconnect cycle (server restart, mobile handoff) doesn't flash
+// the modal at the user. The popup auto-dismisses the moment the WS
+// reconnects; useWs already retries on a 1.5s loop in the background.
+const connectionLost = ref(false);
+let connectionLostTimer: number | null = null;
+watch(
+  () => ws.connected.value,
+  (isConnected) => {
+    if (isConnected) {
+      if (connectionLostTimer !== null) {
+        clearTimeout(connectionLostTimer);
+        connectionLostTimer = null;
+      }
+      connectionLost.value = false;
+      return;
+    }
+    const phaseNow = game.room?.phase;
+    const inActiveMatch = !!phaseNow && phaseNow !== "lobby" && phaseNow !== "ended";
+    if (!inActiveMatch) return;
+    if (connectionLostTimer !== null) clearTimeout(connectionLostTimer);
+    connectionLostTimer = window.setTimeout(() => {
+      connectionLost.value = true;
+    }, 700);
+  },
+);
+onUnmounted(() => {
+  if (connectionLostTimer !== null) clearTimeout(connectionLostTimer);
+  connectionLost.value = false;
+});
+
 // Join on mount AND on every WS reconnect. The server treats our new
 // socket as anonymous until it sees a `join` — without re-joining on
 // reconnect, messages like `addBot` / `roll` silently drop because
@@ -128,11 +161,12 @@ onMounted(() => {
   game.loadFriends(userId.value);
 });
 
-// Room doesn't exist / already closed — show an explicit "game over" modal
-// instead of silently redirecting, so the user understands why they bounced.
-// Also wipes the rejoin hint so the home banner doesn't keep pointing at the
-// dead room.
-const gameEndedModal = ref(false);
+// Room doesn't exist / already closed — bounce the user back to home with
+// a query flag so HomeView can surface the new "Приглашение больше
+// неактуально" auto-close popup (Figma 133:15574). The popup is rendered
+// over the welcome screen, not over a dead lobby, so the redirect happens
+// immediately. Also wipes the rejoin hint so the home banner doesn't
+// keep pointing at the dead room.
 watch(
   () => game.lastError,
   (err) => {
@@ -141,14 +175,10 @@ watch(
         localStorage.removeItem("activeRoomId");
         localStorage.removeItem("activeRoomTs");
       } catch {}
-      gameEndedModal.value = true;
+      router.replace({ name: "home", query: { invitedError: "1" } });
     }
   },
 );
-function closeGameEnded() {
-  gameEndedModal.value = false;
-  router.replace({ name: "home" });
-}
 
 // ── Computed phase flags & friends/winner ───────────────
 const phase = computed(() => game.room?.phase);
@@ -183,10 +213,6 @@ onUnmounted(() => {
   document.documentElement.classList.remove("lobby-figma-root");
   document.body.classList.remove("lobby-figma-root");
 });
-
-const winner = computed(() =>
-  game.room?.winnerId ? game.room.players.find((p) => p.id === game.room?.winnerId) ?? null : null,
-);
 
 const playerCount = computed(() => game.room?.players.length ?? 0);
 const isHostMe = computed(() => {
@@ -263,16 +289,46 @@ function selectToken(tokenId: string) {
   ws.send({ type: "selectToken", tokenId });
 }
 
-function leaveRoom() {
-  const inGame = game.room && game.room.phase !== "lobby" && game.room.phase !== "ended";
-  if (inGame) {
-    const ok = confirm(
-      locale.value === "ru"
-        ? "Выйти из партии? Ты вылетишь из игры и потеряешь собственность."
-        : "Leave the game? You'll forfeit your properties.",
-    );
-    if (!ok) return;
+// ── Confirm-modal state (Figma 133:15211 host destroy / 133:15948 player
+// leave / 133:13821 + 133:14512 mid-match leave). The native browser
+// confirm() bounced users out of the lobby/game look — the redesign
+// replaces it with a parchment popup that matches the rest of the chrome.
+const leaveConfirmOpen = ref(false);
+const destroyConfirmOpen = ref(false);
+
+// Subtitle copy diverges between lobby (no subtitle), in-game non-host
+// ("you'll forfeit"), and in-game host ("you'll forfeit AND host transfers").
+// Cancel button also flips: lobby keeps a quiet blue "ОТМЕНА"; mid-match
+// surfaces a green "ВЕРНУТЬСЯ К ИГРЕ" because the player is being asked to
+// throw away progress, so the safe-default action wants to read positive.
+const leaveCancelInGame = computed(
+  () => !!game.room && game.room.phase !== "lobby" && game.room.phase !== "ended",
+);
+const leaveCancelLabel = computed(() => {
+  if (leaveCancelInGame.value) {
+    return locale.value === "ru" ? "ВЕРНУТЬСЯ К ИГРЕ" : "BACK TO GAME";
   }
+  return locale.value === "ru" ? "ОТМЕНА" : "CANCEL";
+});
+const leaveSubtitle = computed(() => {
+  if (!leaveCancelInGame.value) return "";
+  if (isHostMe.value) {
+    // Host's mid-match exit dissolves the room for everyone (Figma 133:12388)
+    // — there's no host-handoff anymore, the design decided the leader's
+    // departure ends the session for all players. Server-side this maps to
+    // destroyRoom rather than leave.
+    return locale.value === "ru"
+      ? "Будучи лидером лобби, ваш выход распустит игру и отправит игроков в меню"
+      : "As host, leaving will dissolve the game and send everyone to the menu";
+  }
+  return locale.value === "ru"
+    ? "Вам будет засчитано поражение"
+    : "You'll forfeit the match";
+});
+
+function leaveRoom() {
+  // Direct leave (back arrow, in-game forfeit) — modal-gated paths use
+  // openLeaveConfirm() instead.
   haptic("medium");
   ws.send({ type: "leave" });
   try {
@@ -282,14 +338,35 @@ function leaveRoom() {
   setTimeout(() => router.replace({ name: "home" }), 100);
 }
 
+function openLeaveConfirm() {
+  haptic("light");
+  leaveConfirmOpen.value = true;
+}
+function confirmLeave() {
+  leaveConfirmOpen.value = false;
+  // Host mid-match (Figma 133:12388) destroys the whole room rather than
+  // performing a graceful host-handoff — the new design treats the leader's
+  // exit as the end of the session. Lobby host doesn't reach here (they go
+  // through the destroyConfirm modal instead); guests always do plain leave.
+  if (isHostMe.value && leaveCancelInGame.value) {
+    destroyRoom();
+  } else {
+    leaveRoom();
+  }
+}
+
 function destroyRoom() {
-  const ok = confirm(
-    locale.value === "ru" ? "Закрыть комнату для всех?" : "Close room for everyone?",
-  );
-  if (!ok) return;
   haptic("heavy");
   ws.send({ type: "destroyRoom" });
   setTimeout(() => router.replace({ name: "home" }), 100);
+}
+function openDestroyConfirm() {
+  haptic("light");
+  destroyConfirmOpen.value = true;
+}
+function confirmDestroy() {
+  destroyConfirmOpen.value = false;
+  destroyRoom();
 }
 
 function addBot() {
@@ -372,12 +449,15 @@ const cardHistoryOpen = ref(false);
 function openCardHistory() { cardHistoryOpen.value = true; haptic("light"); }
 function closeCardHistory() { cardHistoryOpen.value = false; }
 
-// Right-side topbar button action — acts as host close in lobby, else leave.
+// Right-side topbar button action — opens the matching confirm modal:
+//   host in lobby   → "Распутить партию?" (Figma 133:15211)
+//   guest in lobby  → "Выйти из партии?"  (Figma 133:15948)
+//   in-game         → leave-game forfeit modal
 function handleMenu() {
   if (isHostMe.value && game.room?.phase === "lobby") {
-    destroyRoom();
+    openDestroyConfirm();
   } else {
-    leaveRoom();
+    openLeaveConfirm();
   }
 }
 
@@ -782,8 +862,11 @@ void t;
         <h1>{{ locale === 'ru' ? 'Комната' : 'Room' }} {{ id }}</h1>
         <div class="sub">{{ subtitle }}</div>
       </div>
+      <!-- Red × is shown for everyone in the lobby — host destroys the
+           room, invited player leaves. Both pathways open a confirm modal
+           (Figma 133:15211 / 133:15948) instead of firing immediately. -->
       <button
-        v-if="isHostMe && game.room?.phase === 'lobby'"
+        v-if="game.room?.phase === 'lobby'"
         class="topbar__menu topbar__menu--close"
         :aria-label="t('actions.back')"
         @click="handleMenu"
@@ -840,10 +923,16 @@ void t;
         >
           <img src="/figma/room/nav-home.webp" alt="" />
         </button>
-        <button class="room-topbar__menu-btn" aria-label="menu" @click="handleMenu">
-          <span class="room-topbar__menu-bar" />
-          <span class="room-topbar__menu-bar" />
-          <span class="room-topbar__menu-bar" />
+        <!-- Red × leaves the match (Figma 133:13821 / 133:14512). Hamburger
+             was the old design's "menu" stand-in but the only entry it had
+             was leave-game, so the redesign cuts straight to a close icon
+             that opens the leave-confirm modal. -->
+        <button
+          class="room-topbar__menu-btn room-topbar__menu-btn--close"
+          :aria-label="locale === 'ru' ? 'Выйти' : 'Leave'"
+          @click="handleMenu"
+        >
+          <Icon name="x" :size="18" color="#fff" />
         </button>
       </div>
     </div>
@@ -864,7 +953,6 @@ void t;
       :on-ready="ready"
       :on-start="start"
       :on-select-token="selectToken"
-      :on-destroy-room="destroyRoom"
       :on-add-bot="addBot"
       :on-remove-bot="removeBot"
     />
@@ -1059,14 +1147,24 @@ void t;
         </button>
       </div>
 
-      <!-- ── Winner overlay (end of game) — Coronation modal ── -->
+      <!-- ── End-of-game results modal (Figma 132:1746 + restart flow
+           133:5203 / 133:3980 / 133:4390 / 133:4794) ──
+           - Configure → /create (host wants to tweak rules)
+           - PlayAgain → /rooms (legacy quick-rematch route — falls back here
+             when the host hits НАЧАТЬ in the ready-check state too, since
+             there's no in-place restart RPC yet).
+           - ReadyToggle → emits a `ready` WS message so the existing lobby
+             readiness state powers the ready-check pills. -->
       <CoronationModal
-        :open="isEnded && !!winner"
-        :winner-name="winner?.name || ''"
-        :winner-color="ORDERED_PLAYER_COLORS[(game.room?.players?.findIndex(p => p.id === winner?.id) ?? 0)]"
-        :treasury="winner?.cash"
-        :rank-delta="120"
+        :open="isEnded"
+        :players="game.room?.players ?? []"
+        :my-id="game.myPlayerId"
+        :host-id="game.room?.hostId ?? null"
+        :properties="game.room?.properties ?? {}"
         :on-close="() => router.replace({ name: 'home' })"
+        :on-play-again="() => router.replace({ name: 'rooms' })"
+        :on-configure="() => router.replace({ name: 'create' })"
+        :on-ready-toggle="ready"
       />
     </template>
 
@@ -1078,26 +1176,137 @@ void t;
       :message="locale === 'ru' ? 'Загружаем игру…' : 'Loading the game…'"
     />
 
-    <!-- ── Dead-room modal: server said "not found". Shown instead of the
-         2s silent redirect so the user understands why they bounced. ── -->
-    <div v-if="gameEndedModal" class="game-ended-backdrop" @click.self="closeGameEnded">
-      <div class="game-ended-card">
-        <div class="game-ended-icon">🏁</div>
-        <h2 class="game-ended-title">
-          {{ locale === 'ru' ? 'Партия завершена' : 'Game over' }}
-        </h2>
-        <p class="game-ended-msg">
-          {{
-            locale === 'ru'
-              ? 'Эта партия уже закрыта — возможно, хост закрыл комнату или все игроки вышли.'
-              : 'This match has already ended — the host closed the room or all players left.'
-          }}
-        </p>
-        <button class="game-ended-btn" @click="closeGameEnded">
-          {{ locale === 'ru' ? 'НА ГЛАВНУЮ' : 'HOME' }}
-        </button>
+    <!-- ── Confirm modals (Figma 133:15211 / 133:15948).
+         Same sticky-bottom geometry the lobby's invite modal uses so the
+         confirm cards "rise" from the bottom edge and feel anchored to
+         the action that triggered them rather than floating in the
+         middle of the viewport. -->
+    <transition name="lobby-modal">
+      <div
+        v-if="destroyConfirmOpen"
+        class="lobby-modal-backdrop"
+        @click.self="destroyConfirmOpen = false"
+      >
+        <div class="lobby-modal lobby-modal--confirm">
+          <div class="lobby-modal__head">
+            <h2 class="lobby-modal__title">
+              {{ locale === 'ru' ? 'Распустить партию?' : 'Disband the room?' }}
+            </h2>
+            <p class="lobby-modal__subtitle">
+              {{
+                locale === 'ru'
+                  ? 'Настройки сохранятся для будущих партий'
+                  : 'Your settings will be saved for future games'
+              }}
+            </p>
+          </div>
+          <div class="lobby-modal__buttons">
+            <button
+              type="button"
+              class="lobby-cta lobby-cta--cancel"
+              @click="destroyConfirmOpen = false"
+            >
+              <span class="lobby-cta__text">{{ locale === 'ru' ? 'ОТМЕНА' : 'CANCEL' }}</span>
+              <svg
+                class="lobby-cta__deco"
+                viewBox="0 0 98 32.5"
+                preserveAspectRatio="none"
+                fill="none"
+                aria-hidden="true"
+              >
+                <path
+                  opacity="0.2"
+                  d="M98 9.5V32.5C98 32.5 97 6 89.5 4C82 2 0 0 0 0H88.5C96 0 98 3.5 98 9.5Z"
+                  fill="white"
+                />
+              </svg>
+            </button>
+            <button
+              type="button"
+              class="lobby-cta lobby-cta--unready"
+              @click="confirmDestroy"
+            >
+              <span class="lobby-cta__text">{{ locale === 'ru' ? 'РАСПУСТИТЬ' : 'DISBAND' }}</span>
+              <svg
+                class="lobby-cta__deco"
+                viewBox="0 0 98 32.5"
+                preserveAspectRatio="none"
+                fill="none"
+                aria-hidden="true"
+              >
+                <path
+                  opacity="0.2"
+                  d="M98 9.5V32.5C98 32.5 97 6 89.5 4C82 2 0 0 0 0H88.5C96 0 98 3.5 98 9.5Z"
+                  fill="white"
+                />
+              </svg>
+            </button>
+          </div>
+        </div>
       </div>
-    </div>
+    </transition>
+
+    <transition name="lobby-modal">
+      <div
+        v-if="leaveConfirmOpen"
+        class="lobby-modal-backdrop"
+        @click.self="leaveConfirmOpen = false"
+      >
+        <div class="lobby-modal lobby-modal--confirm">
+          <div class="lobby-modal__head">
+            <h2 class="lobby-modal__title">
+              {{ locale === 'ru' ? 'Выйти из партии?' : 'Leave the game?' }}
+            </h2>
+            <p v-if="leaveSubtitle" class="lobby-modal__subtitle">
+              {{ leaveSubtitle }}
+            </p>
+          </div>
+          <div class="lobby-modal__buttons">
+            <button
+              type="button"
+              class="lobby-cta lobby-cta--unready"
+              @click="confirmLeave"
+            >
+              <span class="lobby-cta__text">{{ locale === 'ru' ? 'ВЫЙТИ' : 'LEAVE' }}</span>
+              <svg
+                class="lobby-cta__deco"
+                viewBox="0 0 98 32.5"
+                preserveAspectRatio="none"
+                fill="none"
+                aria-hidden="true"
+              >
+                <path
+                  opacity="0.2"
+                  d="M98 9.5V32.5C98 32.5 97 6 89.5 4C82 2 0 0 0 0H88.5C96 0 98 3.5 98 9.5Z"
+                  fill="white"
+                />
+              </svg>
+            </button>
+            <button
+              type="button"
+              class="lobby-cta"
+              :class="leaveCancelInGame ? 'lobby-cta--start' : 'lobby-cta--cancel'"
+              @click="leaveConfirmOpen = false"
+            >
+              <span class="lobby-cta__text">{{ leaveCancelLabel }}</span>
+              <svg
+                class="lobby-cta__deco"
+                viewBox="0 0 98 32.5"
+                preserveAspectRatio="none"
+                fill="none"
+                aria-hidden="true"
+              >
+                <path
+                  opacity="0.2"
+                  d="M98 9.5V32.5C98 32.5 97 6 89.5 4C82 2 0 0 0 0H88.5C96 0 98 3.5 98 9.5Z"
+                  fill="white"
+                />
+              </svg>
+            </button>
+          </div>
+        </div>
+      </div>
+    </transition>
 
     <!-- ── Global overlays (chat, card, auction, tile, profile, trade) ── -->
     <Chat v-if="game.room" :on-send="sendChat" />
@@ -1128,6 +1337,26 @@ void t;
       :on-submit="submitTrade"
     />
     <TxnToast v-if="game.room" />
+
+    <!-- ── Connection-issue popup (Figma 133:14137). Mascot + status text
+         sits on top of the still-visible board so the user can see the
+         frozen state behind. Auto-dismisses on reconnect; no buttons —
+         it's a status notice, not a prompt. -->
+    <transition name="bonus">
+      <div v-if="connectionLost" class="conn-issue-backdrop">
+        <div class="conn-issue-card">
+          <div class="conn-issue-art" aria-hidden="true">
+            <img src="/figma/lobby/connection-mascot.webp" alt="" />
+          </div>
+          <h2 class="conn-issue-title">
+            {{ locale === 'ru' ? 'Проблемы с сетью' : 'Network issues' }}
+          </h2>
+          <p class="conn-issue-sub">
+            {{ locale === 'ru' ? 'Переподключаемся...' : 'Reconnecting…' }}
+          </p>
+        </div>
+      </div>
+    </transition>
   </div>
 </template>
 
@@ -1381,18 +1610,16 @@ void t;
   border: none;
   cursor: pointer;
   display: flex;
-  flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 3px;
   padding: 0;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.15);
 }
-.room-topbar__menu-bar {
-  width: 16px;
-  height: 2px;
-  background: #000;
-  border-radius: 2px;
+.room-topbar__menu-btn--close {
+  background: #f34822;
+  box-shadow:
+    inset 0 -3px 0 rgba(0, 0, 0, 0.18),
+    0 2px 4px rgba(0, 0, 0, 0.18);
 }
 .room-topbar__menu-btn:active { transform: scale(0.92); }
 
@@ -1863,66 +2090,172 @@ void t;
   object-fit: contain;
 }
 
-/* ── Dead-room modal ── */
-.game-ended-backdrop {
+/* ── Confirm modals (Figma 133:15211 host destroy / 133:15948 player leave).
+   Same parchment look as the lobby's invite modal — same backdrop tint,
+   same dock-to-bottom geometry, same 56px parchment-button language so
+   the two confirm flows feel like extensions of the lobby chrome rather
+   than alien browser dialogs. */
+.lobby-modal-backdrop {
   position: fixed;
   inset: 0;
+  background: rgba(0, 0, 0, 0.4);
   z-index: 200;
-  background: rgba(0, 0, 0, 0.55);
-  backdrop-filter: blur(4px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  padding: 24px 24px calc(16px + var(--tg-safe-area-inset-bottom, 0px));
+}
+.lobby-modal {
+  position: relative;
+  width: 100%;
+  max-width: 345px;
+  background: #faf3e2;
+  border-radius: 18px;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+.lobby-modal__head {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  text-align: center;
+}
+.lobby-modal__title {
+  margin: 0;
+  font-family: 'Unbounded', sans-serif;
+  font-weight: 700;
+  font-size: 22px;
+  line-height: 24px;
+  color: #000;
+}
+.lobby-modal__subtitle {
+  margin: 0;
+  font-family: 'Unbounded', sans-serif;
+  font-weight: 500;
+  font-size: 14px;
+  line-height: 20px;
+  color: #000;
+}
+.lobby-modal__buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  align-items: center;
+}
+.lobby-modal__buttons .lobby-cta {
+  width: 297px;
+  height: 56px;
+  position: relative;
+  border: 2px solid #000;
+  border-radius: 18px;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: inset 0 -6px 0 0 rgba(0, 0, 0, 0.22);
+  transition: transform 80ms ease;
+}
+.lobby-modal__buttons .lobby-cta:active {
+  transform: translateY(2px);
+  box-shadow: inset 0 -2px 0 0 rgba(0, 0, 0, 0.22);
+}
+.lobby-modal__buttons .lobby-cta--unready { background: #f34822; }
+.lobby-modal__buttons .lobby-cta--cancel  { background: #2283f3; }
+.lobby-modal__buttons .lobby-cta--start   { background: #43c22d; }
+.lobby-modal__buttons .lobby-cta__text {
+  position: relative;
+  z-index: 1;
+  font-family: 'Golos Text', 'Unbounded', sans-serif;
+  font-weight: 900;
+  font-size: 22px;
+  line-height: 26px;
+  color: #fff;
+  text-shadow: 1.4px 1.4px 0 rgba(0, 0, 0, 0.6);
+  letter-spacing: 0.01em;
+}
+.lobby-modal__buttons .lobby-cta__deco {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 98px;
+  height: 32.5px;
+  pointer-events: none;
+}
+
+.lobby-modal-enter-active, .lobby-modal-leave-active {
+  transition: opacity 200ms ease;
+}
+.lobby-modal-enter-active .lobby-modal,
+.lobby-modal-leave-active .lobby-modal {
+  transition: transform 220ms cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+.lobby-modal-enter-from, .lobby-modal-leave-to { opacity: 0; }
+.lobby-modal-enter-from .lobby-modal,
+.lobby-modal-leave-to .lobby-modal {
+  transform: translateY(24px);
+}
+
+/* ── Connection-issue popup (Figma 133:14137) — same parchment-card
+   language as the other lobby modals so the user reads it as part of
+   the app chrome rather than a system-level browser warning. */
+.conn-issue-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 250;
+  background: rgba(0, 0, 0, 0.4);
   display: flex;
   align-items: center;
   justify-content: center;
   padding: 24px;
 }
-.game-ended-card {
+.conn-issue-card {
+  background: #faf3e2;
+  border-radius: 18px;
+  padding: 24px;
   width: 100%;
-  max-width: 340px;
-  background: #fff;
-  border: 2px solid #000;
-  border-radius: 22px;
-  padding: 28px 24px 24px;
-  text-align: center;
-  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.32);
-  font-family: 'Unbounded', 'Golos Text', sans-serif;
+  max-width: 345px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
 }
-.game-ended-icon {
-  font-size: 48px;
-  line-height: 1;
-  margin-bottom: 12px;
-}
-.game-ended-title {
-  margin: 0 0 10px;
-  font-weight: 900;
-  font-size: 20px;
-  color: #000;
-  letter-spacing: 0.01em;
-}
-.game-ended-msg {
-  margin: 0 0 20px;
-  font-weight: 500;
-  font-size: 14px;
-  line-height: 20px;
-  color: #4a4a4a;
-}
-.game-ended-btn {
+.conn-issue-art {
   width: 100%;
-  height: 52px;
-  border: 2px solid #000;
-  border-radius: 16px;
-  background: #a322f3;
-  color: #fff;
-  font-family: 'Golos Text', 'Unbounded', sans-serif;
-  font-weight: 900;
+  height: 160px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+.conn-issue-art img {
+  width: 240px;
+  height: 240px;
+  object-fit: contain;
+  margin-top: 24px;
+  pointer-events: none;
+  user-select: none;
+}
+.conn-issue-title {
+  margin: 0;
+  font-family: 'Unbounded', sans-serif;
+  font-weight: 700;
   font-size: 18px;
-  letter-spacing: 0.04em;
-  cursor: pointer;
-  box-shadow: inset 0 -5px 0 rgba(0, 0, 0, 0.2);
-  transition: transform 120ms ease;
+  line-height: 26px;
+  color: #000;
+  text-align: center;
 }
-.game-ended-btn:active {
-  transform: translateY(2px);
-  box-shadow: inset 0 -2px 0 rgba(0, 0, 0, 0.2);
+.conn-issue-sub {
+  margin: 0;
+  font-family: 'Unbounded', sans-serif;
+  font-weight: 700;
+  font-size: 12px;
+  line-height: 14px;
+  color: rgba(0, 0, 0, 0.4);
+  text-align: center;
 }
 </style>
 

@@ -42,6 +42,21 @@ export interface ChestEntry {
   /** Sample of cap/map types shown as preview chips on the chest card. */
   contains: CapType[];
   containsExtra: number;
+  /** Short blurb shown in the open-chest modal under the title. */
+  description?: BiName;
+  /** Path to the closed-chest illustration (192×192 webp). */
+  artClosed?: string;
+  /** Path to the open-chest illustration with light rays (covers ~268×192). */
+  artOpen?: string;
+  /** Quantity options + Star price for each. */
+  pricesByQty?: { qty: number; stars: number }[];
+  /** Default selected qty in the modal — index into pricesByQty. */
+  defaultQtyIdx?: number;
+  /** Cap items inside this chest with the chance to roll each. Sum can be
+   *  ≤ 100% — leftover rolls re-roll until a cap drops. */
+  items?: { capId: string; chance: number }[];
+  /** Map id awarded when the user has collected ALL `items` (set-bonus). */
+  setBonusMapId?: string;
 }
 
 /** Order matters — drives default grid order in the shop. */
@@ -73,8 +88,28 @@ export const SHOP_CHESTS: readonly ChestEntry[] = [
     id: "chest-business",
     rarity: "exotic",
     name: { ru: "Бизнес-Сундук", en: "Business Chest" },
+    description: {
+      ru: "Откройте сундук и получите редкую фишку. Соберите все, чтобы получить эксклюзивную карту.",
+      en: "Open the chest to claim a rare token. Collect them all to unlock an exclusive map.",
+    },
     contains: ["hat", "cat", "ship", "ufo"],
     containsExtra: 7,
+    artClosed: "/figma/shop/chests/business-closed.webp",
+    artOpen: "/figma/shop/chests/business-open.webp",
+    pricesByQty: [
+      { qty: 1, stars: 299 },
+      { qty: 3, stars: 799 },
+      { qty: 6, stars: 1499 },
+    ],
+    defaultQtyIdx: 0,
+    items: [
+      { capId: "cap-cat",  chance: 30 },
+      { capId: "cap-ufo",  chance: 25 },
+      { capId: "cap-dyno", chance: 20 },
+      { capId: "cap-duck", chance: 15 },
+      { capId: "cap-hat",  chance: 10 },
+    ],
+    setBonusMapId: "map-space-station",
   },
 ];
 

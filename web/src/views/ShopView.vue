@@ -12,6 +12,7 @@ import {
 } from "../shop/cosmetics";
 import CosmeticsCaps from "../components/CosmeticsCaps.vue";
 import CosmeticsMaps from "../components/CosmeticsMaps.vue";
+import ChestModal from "../components/ChestModal.vue";
 import Icon from "../components/Icon.vue";
 import PurchaseSuccessModal, { type PurchaseData } from "../components/PurchaseSuccessModal.vue";
 import PurchaseFailModal, { type PurchaseFailData } from "../components/PurchaseFailModal.vue";
@@ -25,6 +26,15 @@ const inv = useInventoryStore();
 const { haptic, notify, tg, userId } = useTelegram();
 
 const isRu = computed(() => locale.value === "ru");
+
+// Scroll-aware topbar shadow — same pattern as RoomView/CreateView/ProfileView.
+const scrollEl = ref<HTMLDivElement | null>(null);
+const scrolled = ref(false);
+function onScroll() {
+  const el = scrollEl.value;
+  if (!el) return;
+  scrolled.value = el.scrollTop > 4;
+}
 
 onMounted(() => {
   inv.syncServerUnlocks(userId.value);
@@ -155,7 +165,11 @@ function onCapAction(cap: CapEntry) {
     return;
   }
   if (cap.chestOnly) {
-    // "В сундуке →" — switch to chests filter so user can find it.
+    // "В сундуке →" — open the chest that contains this cap so the user can
+    // see drop chances + buy directly. Falls back to the chests filter if the
+    // catalogue doesn't pin this cap to a specific chest yet.
+    const chest = SHOP_CHESTS.find((c) => c.items?.some((it) => it.capId === cap.id));
+    if (chest) { openChest(chest); return; }
     filter.value = "chests";
     haptic("light");
     return;
@@ -206,11 +220,15 @@ async function buyWithStars(itemId: string, title: string, stars: number) {
   }
 }
 
-function openChest() {
-  // Stub for now — eventually opens chest preview / spend modal.
+// ── Chest modal -----------------------------------------------------------
+const chestModalChest = ref<ChestEntry | null>(null);
+const chestModalOpen = computed(() => chestModalChest.value !== null);
+
+function openChest(chest?: ChestEntry) {
   haptic("medium");
-  filter.value = "chests";
+  chestModalChest.value = chest ?? heroChest.value ?? null;
 }
+function closeChestModal() { chestModalChest.value = null; }
 
 // ── Existing items.ts fallback for Houses/Banners ------------------------
 const housesItems = computed(() => SHOP_ITEMS.filter((i) => i.kind === "theme"));
@@ -303,7 +321,7 @@ function legacyBtnClass(i: typeof SHOP_ITEMS[number]) {
     </div>
 
     <!-- ── Filter chips (horizontal scroll) ── -->
-    <div class="shop2__filters">
+    <div class="shop2__filters" :class="{ 'shop2__filters--scrolled': scrolled }">
       <div class="shop2__filters-track">
         <button
           v-for="f in filters"
@@ -317,7 +335,7 @@ function legacyBtnClass(i: typeof SHOP_ITEMS[number]) {
       </div>
     </div>
 
-    <div class="shop2__content">
+    <div class="shop2__content" ref="scrollEl" @scroll.passive="onScroll">
       <!-- ╔═══ ALL: chest hero + caps preview ═══╗ -->
       <template v-if="filter === 'all'">
         <h2 class="shop2__section-title">{{ L.sectionChests }}</h2>
@@ -339,12 +357,19 @@ function legacyBtnClass(i: typeof SHOP_ITEMS[number]) {
                 +{{ heroChest.containsExtra }}
               </div>
             </div>
-            <button class="shop2__btn-grad shop2__chest-cta" @click="openChest">
+            <button class="shop2__btn-grad shop2__chest-cta" @click="openChest(heroChest)">
               <span>{{ L.lookInside }}</span>
             </button>
           </div>
           <div class="shop2__chest-art" aria-hidden="true">
-            <span class="shop2__chest-emoji">📦</span>
+            <img
+              v-if="heroChest.artClosed"
+              class="shop2__chest-img"
+              :src="heroChest.artClosed"
+              alt=""
+              draggable="false"
+            />
+            <span v-else class="shop2__chest-emoji">📦</span>
           </div>
         </div>
 
@@ -413,12 +438,19 @@ function legacyBtnClass(i: typeof SHOP_ITEMS[number]) {
                 +{{ ch.containsExtra }}
               </div>
             </div>
-            <button class="shop2__btn-grad shop2__chest-cta" @click="openChest">
+            <button class="shop2__btn-grad shop2__chest-cta" @click="openChest(ch)">
               <span>{{ L.lookInside }}</span>
             </button>
           </div>
           <div class="shop2__chest-art" aria-hidden="true">
-            <span class="shop2__chest-emoji">📦</span>
+            <img
+              v-if="ch.artClosed"
+              class="shop2__chest-img"
+              :src="ch.artClosed"
+              alt=""
+              draggable="false"
+            />
+            <span v-else class="shop2__chest-emoji">📦</span>
           </div>
         </div>
       </template>
@@ -597,6 +629,11 @@ function legacyBtnClass(i: typeof SHOP_ITEMS[number]) {
       :data="failData"
       :on-close="() => (failData = null)"
     />
+    <ChestModal
+      :open="chestModalOpen"
+      :chest="chestModalChest"
+      @close="closeChestModal"
+    />
   </div>
 </template>
 
@@ -655,6 +692,14 @@ function legacyBtnClass(i: typeof SHOP_ITEMS[number]) {
   background: #1362c7;
   position: relative;
   z-index: 4;
+  transition: background-color 200ms ease, box-shadow 200ms ease, border-radius 200ms ease;
+}
+/* Scrolled state — bottom of the header zone (topbar + filters) detaches
+   from the content via rounded bottom corners + shadow, matching RoomView. */
+.shop2__filters--scrolled {
+  border-bottom-left-radius: 18px;
+  border-bottom-right-radius: 18px;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.16);
 }
 .shop2__filters-track {
   display: flex;
@@ -983,6 +1028,36 @@ function legacyBtnClass(i: typeof SHOP_ITEMS[number]) {
   font-size: 96px;
   line-height: 1;
   filter: drop-shadow(0 4px 8px rgba(255, 200, 80, 0.4));
+}
+/* Real chest illustration — overflows the 132×158 art slot slightly so the
+   tilt/shadow on the rendered piece doesn't get clipped by the rounded card
+   edge. The radial halo behind it is drawn here as a CSS layer rather than
+   shipping a second asset. */
+.shop2__chest-img {
+  position: relative;
+  width: 142px;
+  height: 142px;
+  object-fit: contain;
+  pointer-events: none;
+  user-select: none;
+  filter: drop-shadow(0 8px 16px rgba(255, 200, 80, 0.45));
+}
+.shop2__chest-art::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 180px;
+  height: 180px;
+  transform: translate(-50%, -50%);
+  background: radial-gradient(
+    circle,
+    rgba(219, 53, 53, 0.45) 0%,
+    rgba(219, 53, 53, 0.15) 35%,
+    transparent 65%
+  );
+  filter: blur(14px);
+  pointer-events: none;
 }
 
 .shop2__btn-grad {

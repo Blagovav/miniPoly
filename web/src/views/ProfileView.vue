@@ -5,12 +5,13 @@ import { useRouter } from "vue-router";
 import { useTelegram } from "../composables/useTelegram";
 import { useInventoryStore } from "../stores/inventory";
 import {
-  SHOP_CAPS, SHOP_MAPS,
+  SHOP_CAPS, SHOP_MAPS, SHOP_CHESTS,
   RARITY_LABEL_RU, RARITY_LABEL_EN, RARITY_BADGE_BG,
-  type CapEntry, type MapEntry,
+  type CapEntry, type MapEntry, type ChestEntry,
 } from "../shop/cosmetics";
 import CosmeticsCaps from "../components/CosmeticsCaps.vue";
 import CosmeticsMaps from "../components/CosmeticsMaps.vue";
+import ChestModal from "../components/ChestModal.vue";
 import Sigil from "../components/Sigil.vue";
 import Icon from "../components/Icon.vue";
 import { ORDERED_PLAYER_COLORS, lighten } from "../utils/palette";
@@ -197,6 +198,11 @@ async function buyWithStars(itemId: string, title: string, stars: number) {
   }
 }
 
+// Chest modal — opened when user taps "В сундуке →" on a chestOnly cap.
+const chestModalChest = ref<ChestEntry | null>(null);
+const chestModalOpen = computed(() => chestModalChest.value !== null);
+function closeChestModal() { chestModalChest.value = null; }
+
 function onCapAction(cap: CapEntry) {
   if (isOwned(cap.id)) {
     if (isCapEquipped(cap.id)) return;
@@ -206,6 +212,8 @@ function onCapAction(cap: CapEntry) {
   }
   if (cap.chestOnly) {
     haptic("light");
+    const chest = SHOP_CHESTS.find((c) => c.items?.some((it) => it.capId === cap.id));
+    if (chest) { chestModalChest.value = chest; return; }
     router.push({ name: "shop" });
     return;
   }
@@ -350,14 +358,13 @@ function colorForFriend(id: number) {
   return ORDERED_PLAYER_COLORS[Math.abs(hash) % ORDERED_PLAYER_COLORS.length];
 }
 
-// ─── Sticky compact header on scroll ─────────────────────────────────────
+// ─── Scroll-aware header shadow (matches RoomView/CreateView pattern) ────
 const scrollEl = ref<HTMLDivElement | null>(null);
 const sticky = ref(false);
 function onScroll() {
   const el = scrollEl.value;
   if (!el) return;
-  // Threshold roughly matches the hero (avatar + name + stats) height.
-  sticky.value = el.scrollTop > 220;
+  sticky.value = el.scrollTop > 4;
 }
 
 function goBack() { haptic("light"); router.back(); }
@@ -428,7 +435,7 @@ function userInitial() {
       </div>
 
       <!-- Tab toggle. Sticky so it docks under the topbar while scrolling. -->
-      <div class="profile__tabs-wrap" :class="{ 'profile__tabs-wrap--stuck': sticky }">
+      <div class="profile__tabs-wrap">
         <div class="profile__tabs">
           <button
             class="profile__tab"
@@ -646,6 +653,12 @@ function userInitial() {
         <span>{{ toast.text }}</span>
       </div>
     </transition>
+
+    <ChestModal
+      :open="chestModalOpen"
+      :chest="chestModalChest"
+      @close="closeChestModal"
+    />
   </div>
 </template>
 
@@ -662,7 +675,10 @@ function userInitial() {
   overflow: hidden;
 }
 
-/* ─── Topbar (always sticky on top) ─── */
+/* ─── Topbar — canonical scroll-aware pattern (matches RoomView):
+       at scroll=0 sits transparently in flow with the body's blue/pattern
+       showing through; on scroll>4px it picks up a rounded bottom + shadow
+       to read as a floating card detached from the top edge. */
 .profile__topbar {
   position: relative;
   z-index: 10;
@@ -671,10 +687,11 @@ function userInitial() {
   justify-content: space-between;
   padding: 6px 24px 8px;
   flex-shrink: 0;
-  transition: background 180ms ease, box-shadow 180ms ease;
+  transition: background-color 200ms ease, box-shadow 200ms ease, border-radius 200ms ease;
 }
 .profile__topbar--stuck {
-  background: #0d68db;
+  border-bottom-left-radius: 18px;
+  border-bottom-right-radius: 18px;
   box-shadow: 0 4px 8px rgba(0, 0, 0, 0.16);
 }
 .profile__icon-btn {
@@ -799,7 +816,10 @@ function userInitial() {
   letter-spacing: 0.02em;
 }
 
-/* ─── Tab toggle ─── */
+/* ─── Tab toggle — `position: sticky` so it docks at scroll-container top
+       once the hero (avatar/name/stats) scrolls past it. We don't add a
+       shadow here: the topbar already supplies the floating-card cue at the
+       very top of the viewport. */
 .profile__tabs-wrap {
   position: sticky;
   top: 0;
@@ -807,10 +827,6 @@ function userInitial() {
   margin: 0 -24px;
   padding: 8px 24px;
   background: transparent;
-  transition: background 180ms ease;
-}
-.profile__tabs-wrap--stuck {
-  background: #0d68db;
 }
 .profile__tabs {
   display: flex;
