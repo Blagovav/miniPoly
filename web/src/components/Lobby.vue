@@ -439,6 +439,13 @@ const L = computed(() => isRu.value
         >
           <Icon name="users" :size="22" color="#fff"/>
         </span>
+        <img
+          v-else-if="p.avatar"
+          class="player-row__avatar player-row__avatar--photo"
+          :src="p.avatar"
+          :alt="p.name"
+          referrerpolicy="no-referrer"
+        />
         <Sigil
           v-else
           class="player-row__avatar"
@@ -898,6 +905,10 @@ const L = computed(() => isRu.value
 .player-row__avatar--bot {
   background: #31e4c9;
   box-shadow: inset 0 -2px 2px rgba(0, 0, 0, 0.18);
+}
+.player-row__avatar--photo {
+  object-fit: cover;
+  background: #f0e9d9;
 }
 .player-row__avatar :deep(.sigil) {
   width: 40px !important;

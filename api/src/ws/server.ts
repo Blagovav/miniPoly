@@ -336,7 +336,11 @@ function handleVoiceSignal(conn: Conn, toId: string, payload: import("../../../s
 function authenticate(initData: string, name: string) {
   const auth = validateInitData(initData);
   if (!auth) return null;
-  return { tgUserId: auth.user.id, displayName: name || auth.user.first_name };
+  return {
+    tgUserId: auth.user.id,
+    displayName: name || auth.user.first_name,
+    photoUrl: auth.user.photo_url,
+  };
 }
 
 function handleCreate(conn: Conn, msg: ClientMessage & { type: "create" }): void {
@@ -346,7 +350,7 @@ function handleCreate(conn: Conn, msg: ClientMessage & { type: "create" }): void
     return;
   }
   const room = createRoom("pending", msg.isPublic ?? true, msg.maxPlayers ?? 6);
-  const player = addPlayer(room, auth.tgUserId, auth.displayName);
+  const player = addPlayer(room, auth.tgUserId, auth.displayName, auth.photoUrl);
   if (!player) {
     conn.send({ type: "error", message: "can't add player" });
     return;
@@ -376,7 +380,7 @@ function handleJoin(conn: Conn, msg: ClientMessage & { type: "join" }): void {
     conn.send({ type: "error", message: "room not found" });
     return;
   }
-  const player = addPlayer(room, auth.tgUserId, auth.displayName);
+  const player = addPlayer(room, auth.tgUserId, auth.displayName, auth.photoUrl);
   if (!player) {
     conn.send({ type: "error", message: "can't join (full or already started)" });
     return;

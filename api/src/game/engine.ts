@@ -83,6 +83,7 @@ export function addPlayer(
   if (existing) {
     existing.connected = true;
     if (name && name !== existing.name) existing.name = name;
+    if (avatar && avatar !== existing.avatar) existing.avatar = avatar;
     return existing;
   }
   if (room.phase !== "lobby") return null;
