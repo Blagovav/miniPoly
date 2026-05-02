@@ -313,13 +313,12 @@ const leaveCancelLabel = computed(() => {
 const leaveSubtitle = computed(() => {
   if (!leaveCancelInGame.value) return "";
   if (isHostMe.value) {
-    // Host's mid-match exit dissolves the room for everyone (Figma 133:12388)
-    // — there's no host-handoff anymore, the design decided the leader's
-    // departure ends the session for all players. Server-side this maps to
-    // destroyRoom rather than leave.
+    // Designer feedback 2026-05-02 #5.15 — host's mid-match exit hands the
+    // host role off to the next connected player; the room keeps running.
+    // Server's leaveActiveGame already calls reassignHostIfNeeded.
     return locale.value === "ru"
-      ? "Будучи лидером лобби, ваш выход распустит игру и отправит игроков в меню"
-      : "As host, leaving will dissolve the game and send everyone to the menu";
+      ? "Хост перейдёт другому игроку, вам будет засчитано поражение"
+      : "Host transfers to another player, you'll forfeit the match";
   }
   return locale.value === "ru"
     ? "Вам будет засчитано поражение"
@@ -344,15 +343,12 @@ function openLeaveConfirm() {
 }
 function confirmLeave() {
   leaveConfirmOpen.value = false;
-  // Host mid-match (Figma 133:12388) destroys the whole room rather than
-  // performing a graceful host-handoff — the new design treats the leader's
-  // exit as the end of the session. Lobby host doesn't reach here (they go
-  // through the destroyConfirm modal instead); guests always do plain leave.
-  if (isHostMe.value && leaveCancelInGame.value) {
-    destroyRoom();
-  } else {
-    leaveRoom();
-  }
+  // Designer feedback 2026-05-02 #5.15 — host's mid-match leave is now a
+  // plain leave, same as a guest's. Server's leaveActiveGame transfers the
+  // host role to the next connected player so the room keeps running for
+  // everyone else. (Lobby host still uses the destroyConfirm modal — that
+  // path retains "tear the room down" semantics by design.)
+  leaveRoom();
 }
 
 function destroyRoom() {

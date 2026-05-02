@@ -352,6 +352,10 @@ function handleCreate(conn: Conn, msg: ClientMessage & { type: "create" }): void
     return;
   }
   room.hostId = player.id;
+  // Designer feedback 2026-05-02 #3.8 — host is auto-ready from the moment
+  // the room is created so canStart can flip true once a second player
+  // joins, without the host needing a UI affordance they don't have.
+  player.ready = true;
   saveRoom(room);
 
   conn.roomId = room.id;
@@ -410,6 +414,16 @@ function findPlayer(room: RoomState, playerId: string) {
 function handleReady(conn: Conn): void {
   const ctx = getRoomAndPlayer(conn);
   if (!ctx || !ctx.p) return;
+  // Designer feedback 2026-05-02 #3.8 — host UI hides the ready toggle, so
+  // a stray `ready` message from an old client should not flip them out of
+  // ready. Server treats host as permanently ready while in lobby.
+  if (ctx.p.id === ctx.room.hostId) {
+    if (!ctx.p.ready) {
+      ctx.p.ready = true;
+      sendState(ctx.room.id);
+    }
+    return;
+  }
   ctx.p.ready = !ctx.p.ready;
   reassignHostIfNeeded(ctx.room);
   sendState(ctx.room.id);

@@ -270,6 +270,10 @@ export function reassignHostIfNeeded(room: RoomState): void {
   const next = room.players.find((p) => p.connected && !p.isBot);
   if (next) {
     room.hostId = next.id;
+    // Designer feedback 2026-05-02 #3.8 — host has no ready toggle in the
+    // redesign. Auto-flip the new host to ready so canStart logic isn't
+    // gated on a UI affordance the host can't see.
+    next.ready = true;
     log(room, { en: `${next.name} is now host`, ru: `${next.name} теперь хост` });
   }
 }
@@ -1090,6 +1094,12 @@ export function placeBid(
     en: `${p.name} bids $${room.auction.highBid}`,
     ru: `${p.name} ставит $${room.auction.highBid}`,
   });
+  // Designer feedback 2026-05-02 #5.17 — without this the auction stalled
+  // forever when only one active bidder remained (others bankrupt or
+  // already passed). passAuction triggered maybeEndAuction, placeBid did
+  // not, so a single-bidder bid never resolved and the room appeared
+  // frozen in `phase: "auction"` after the first raise landed.
+  maybeEndAuction(room);
   return { ok: true };
 }
 
