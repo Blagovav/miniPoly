@@ -235,7 +235,10 @@ onUnmounted(() => {
 
 .chat__list {
   flex: 1;
-  min-height: 0;
+  /* Designer feedback 2026-05-02 #5.19 — chat body min-height 264px so
+     short conversations don't squish the panel vertically. The old `0`
+     let the panel collapse to its header when only one message was in. */
+  min-height: 264px;
   overflow-y: auto;
   padding: 16px;
   display: flex;
