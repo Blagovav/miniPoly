@@ -289,10 +289,11 @@ onUnmounted(() => {
 }
 .rooms-v2__count-pill {
   position: absolute;
-  /* Aligned to the title's left edge — back-btn 44 + flex gap 16 = 60px
-     from the navbar's left, so the pill always sits flush under "Игры"
-     regardless of viewport width. */
-  left: 60px;
+  /* Figma 67:1298 — pill is centred horizontally under the navbar at
+     top:30. Designer feedback 2026-05-02 #4.1: prior left-anchored
+     placement (60px) didn't match the figma centred layout. */
+  left: 50%;
+  transform: translateX(-50%);
   top: 30px;
   padding: 3px 8px;
   background: #fff;
@@ -307,12 +308,22 @@ onUnmounted(() => {
 }
 
 .rooms-v2__filters {
+  /* Designer feedback 2026-05-02 #4.2: «Все игры / Друзья / Свободные»
+     wrapped to a second row at narrow viewports because the chips were
+     allowed to shrink-and-wrap. Hold them to a single line and let the
+     row scroll horizontally if the locale ever pushes them past the
+     viewport, scrollbar hidden. */
   display: flex;
-  gap: 8px;
+  gap: 6px;
   margin-top: 16px;
+  overflow-x: auto;
+  scrollbar-width: none;
 }
+.rooms-v2__filters::-webkit-scrollbar { display: none; }
 .rooms-v2__chip {
-  padding: 8px 12px;
+  flex-shrink: 0;
+  white-space: nowrap;
+  padding: 8px 10px;
   background: transparent;
   border: 1px solid rgba(255, 255, 255, 0.4);
   border-radius: 999px;
@@ -485,6 +496,9 @@ onUnmounted(() => {
   font-size: 24px;
   line-height: 30px;
   color: #fff;
+  /* Stroke + shadow combo to match the figma empty-state (59:65) +
+     designer pattern from PR-A's greeting (#4.3). */
+  -webkit-text-stroke: 1px #000;
   text-shadow: 1px 1px 0 #000;
 }
 .rooms-v2__empty-text p { margin: 0; }
