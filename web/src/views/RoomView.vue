@@ -1395,6 +1395,9 @@ void t;
   background: #faf3e2;
   transition: box-shadow 160ms ease;
 }
+/* Designer feedback 2026-05-02 #3.1/#5.6 — figma flat 44×44 white
+   circles, no outer drop-shadow. The inset bottom-shadow on the red
+   close keeps the depth cue. */
 .topbar--figma .topbar__back,
 .topbar--figma .topbar__menu {
   width: 44px;
@@ -1403,7 +1406,6 @@ void t;
   border: none;
   border-radius: 50%;
   background: #fff;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1413,13 +1415,17 @@ void t;
 }
 .topbar--figma .topbar__back:active,
 .topbar--figma .topbar__menu:active { transform: scale(0.92); }
-/* Red close-room button (Figma 73:3483 — imgBtnBack1). */
+/* Red close-room button (Figma 73:3483 — imgBtnBack1). Designer
+   feedback 2026-05-02 #3.3/#5.21 — close-X looks identical in lobby
+   and in-game topbars: only the inset bottom-shadow, no outer drop. */
 .topbar--figma .topbar__menu--close {
   background: #f34822;
-  box-shadow: inset 0 -3px 0 rgba(0, 0, 0, 0.18), 0 1px 2px rgba(0, 0, 0, 0.08);
+  box-shadow: inset 0 -3px 0 rgba(0, 0, 0, 0.18);
 }
 
-.topbar--figma .title { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+/* Designer feedback 2026-05-02 #3.2 — gap 1 → 6 so «Комната …» and
+   the player-count subtitle read as two distinct lines. */
+.topbar--figma .title { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
 .topbar--figma .title h1 {
   font-family: 'Unbounded', sans-serif;
   font-weight: 900;
@@ -1528,7 +1534,10 @@ void t;
   color: #000;
   font-family: 'Unbounded', sans-serif;
   font-weight: 500;
-  font-size: 13px;
+  /* Designer feedback 2026-05-02 #5.2 — bump from 13 → 14 so the
+     in-game player-count pill matches the 14px subtitle typography
+     used in the lobby topbar. */
+  font-size: 14px;
   line-height: 16px;
   padding: 3px 10px;
   border-radius: 999px;
@@ -1607,6 +1616,8 @@ void t;
   0%, 100% { filter: brightness(0.85); }
   50%      { filter: brightness(1.15); }
 }
+/* Designer feedback 2026-05-02 #3.1/#5.6 — figma flat circle, no outer
+   drop-shadow. */
 .room-topbar__menu-btn {
   width: 44px;
   height: 44px;
@@ -1618,13 +1629,12 @@ void t;
   align-items: center;
   justify-content: center;
   padding: 0;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.15);
 }
+/* Designer feedback 2026-05-02 #3.3/#5.21 — close-X consistent across
+   lobby + in-game topbars: only the inset bottom-shadow. */
 .room-topbar__menu-btn--close {
   background: #f34822;
-  box-shadow:
-    inset 0 -3px 0 rgba(0, 0, 0, 0.18),
-    0 2px 4px rgba(0, 0, 0, 0.18);
+  box-shadow: inset 0 -3px 0 rgba(0, 0, 0, 0.18);
 }
 .room-topbar__menu-btn:active { transform: scale(0.92); }
 
