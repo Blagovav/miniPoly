@@ -255,7 +255,7 @@ const statusPopupSub = computed(() =>
         <button
           class="home-v2__settings"
           :aria-label="L.settingsAria"
-          @click="startEditName"
+          @click="go('settings')"
         >
           <img src="/figma/home/settings.webp" alt="" />
         </button>

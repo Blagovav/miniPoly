@@ -15,6 +15,7 @@ import CreateView from "./views/CreateView.vue";
 
 import ProfileView from "./views/ProfileView.vue";
 import HistoryView from "./views/HistoryView.vue";
+import SettingsView from "./views/SettingsView.vue";
 
 const router = createRouter({
   history: createWebHistory(),
@@ -28,6 +29,7 @@ const router = createRouter({
     { path: "/profile", component: ProfileView, name: "profile", props: { defaultTab: "cosmetics" } },
     { path: "/friends", component: ProfileView, name: "friends", props: { defaultTab: "friends" } },
     { path: "/history", component: HistoryView, name: "history" },
+    { path: "/settings", component: SettingsView, name: "settings" },
     { path: "/room/:id", component: RoomView, name: "room", props: true },
   ],
 });

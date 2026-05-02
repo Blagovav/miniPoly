@@ -1,4 +1,5 @@
 import { ref, shallowRef, markRaw } from "vue";
+import { useSettings } from "./useSettings";
 
 interface TgWebApp {
   initData: string;
@@ -115,12 +116,14 @@ export function useTelegram() {
   }
 
   function haptic(style: "light" | "medium" | "heavy" = "light") {
+    if (!useSettings().value.vibration) return;
     try {
       tg.value?.HapticFeedback?.impactOccurred(style);
     } catch { /* Telegram WebApp not available — ignore */ }
   }
 
   function notify(type: "error" | "success" | "warning") {
+    if (!useSettings().value.vibration) return;
     try {
       tg.value?.HapticFeedback?.notificationOccurred(type);
     } catch { /* ignore */ }
