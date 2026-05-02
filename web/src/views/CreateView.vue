@@ -315,6 +315,8 @@ onUnmounted(() => {
   border-bottom-left-radius: 18px;
   border-bottom-right-radius: 18px;
 }
+/* Figma 73:2685 — flat 44×44 white circle, no shadow. Designer flagged
+   the prior soft-shadow look as off-spec (#2.1). */
 .create-v2__back {
   width: 44px;
   height: 44px;
@@ -322,7 +324,6 @@ onUnmounted(() => {
   border: none;
   border-radius: 50%;
   background: #fff;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -334,7 +335,10 @@ onUnmounted(() => {
 .create-v2__title-col {
   display: flex;
   flex-direction: column;
-  gap: 1px;
+  /* Figma 73:3588/73:3589 — title at navbar-y=4, subtitle at y=33,
+     i.e. ~9px gap between baselines. Was 1px which read as a single
+     stuck block (#2.2). */
+  gap: 9px;
   min-width: 0;
 }
 .create-v2__title {
@@ -594,11 +598,14 @@ button.create-v2__cell.create-v2__cell--shaded:active { background: rgba(0, 0, 0
 
 /* ── Bottom CTA ── */
 .create-v2__cta-wrap {
+  /* Figma 73:2774 anchors the CTA to bottom-16. We tighten the wrap
+     padding so the CTA doesn't sit ~28px higher than figma in iPhone
+     viewports — designer flagged the gap as «отступ больше» (#2.4). */
   position: absolute;
   left: 0;
   right: 0;
   bottom: 0;
-  padding: 12px 24px calc(16px + var(--sab, 0px));
+  padding: 4px 24px calc(16px + var(--sab, 0px));
   background: linear-gradient(180deg, rgba(250, 243, 226, 0), #faf3e2 40%);
   pointer-events: none;
 }
@@ -630,13 +637,14 @@ button.create-v2__cell.create-v2__cell--shaded:active { background: rgba(0, 0, 0
 .create-v2__cta-text {
   position: relative;
   z-index: 1;
+  /* Figma 73:2776 — Golos Text Black 24/26, no letter-spacing. The 0.01em
+     extra tracking we had was non-spec and read as too airy (#2.3). */
   font-family: 'Golos Text', sans-serif;
   font-weight: 900;
   font-size: 24px;
   line-height: 26px;
   color: #fff;
   text-shadow: 1px 1px 0 rgba(0, 0, 0, 0.6);
-  letter-spacing: 0.01em;
 }
 .create-v2__cta-deco {
   position: absolute;
