@@ -635,9 +635,10 @@ const ownerTokenId = computed<TokenArtId>(() => tokenArtFor(owner.value?.token |
   text-shadow: 0.2px 0.2px 0 rgba(0, 0, 0, 0.5);
 }
 
-/* ── Rent table ── */
+/* ── Rent table — Figma 32:3273 / 61:615: clean rows with thin
+   separators on a transparent surface (lets the parchment card
+   bleed through) instead of the previous boxed/alternating fill. */
 .rent-table {
-  background: rgba(0, 0, 0, 0.04);
   border-radius: 12px;
   overflow: hidden;
 }
@@ -645,12 +646,12 @@ const ownerTokenId = computed<TokenArtId>(() => tokenArtFor(owner.value?.token |
   display: flex;
   align-items: center;
   justify-content: space-between;
-  height: 48px;
+  height: 44px;
   padding: 0 12px;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.08);
 }
-.rent-row--alt {
-  background: rgba(0, 0, 0, 0.04);
-}
+.rent-row:last-child { border-bottom: none; }
+.rent-row--alt { background: transparent; }
 .rent-row__label {
   font-family: 'Unbounded', sans-serif;
   font-weight: 700;
@@ -675,6 +676,7 @@ const ownerTokenId = computed<TokenArtId>(() => tokenArtFor(owner.value?.token |
   gap: 8px;
 }
 .action-btn {
+  position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -682,15 +684,19 @@ const ownerTokenId = computed<TokenArtId>(() => tokenArtFor(owner.value?.token |
   gap: 2px;
   min-height: 56px;
   padding: 6px 10px;
-  background: #4ed636;
+  background: #43c22d;
   border: 1px solid rgba(0, 0, 0, 0.2);
   border-radius: 12px;
   color: #fff;
   cursor: pointer;
-  transition: transform 80ms, filter 120ms;
+  /* Figma 32:3273 buttons carry an inset bottom shadow for the
+     3D pill look. The shadow shrinks on press for haptic feedback. */
+  box-shadow: inset 0 -4px 0 rgba(0, 0, 0, 0.18);
+  transition: transform 80ms, filter 120ms, box-shadow 80ms;
 }
 .action-btn:active {
-  transform: translateY(1px);
+  transform: translateY(2px);
+  box-shadow: inset 0 -2px 0 rgba(0, 0, 0, 0.18);
 }
 .action-btn:disabled {
   filter: grayscale(0.6) brightness(0.92);
@@ -730,16 +736,16 @@ const ownerTokenId = computed<TokenArtId>(() => tokenArtFor(owner.value?.token |
   font-family: 'Golos Text', sans-serif;
 }
 
-/* ── Floating close button (Figma: 44px white circle, 4px black
-      border, offset 2.75/2.75 hard-shadow sitting below the card). */
+/* ── Floating close button — Figma 138:16662 / 75:5658: 44px white
+   circle, 4.125px black border, no offset shadow. Sits centered
+   below the card with breathing room. */
 .info-close {
-  margin-top: 14px;
+  margin-top: 16px;
   width: 44px;
   height: 44px;
   border-radius: 50%;
   background: #fff;
   border: 4px solid #000;
-  box-shadow: 2.75px 2.75px 0 0 #000;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -747,7 +753,7 @@ const ownerTokenId = computed<TokenArtId>(() => tokenArtFor(owner.value?.token |
   padding: 0;
   transition: transform 80ms;
 }
-.info-close:active { transform: translate(1px, 1px); box-shadow: 1.5px 1.5px 0 0 #000; }
+.info-close:active { transform: scale(0.94); }
 
 /* ── Transitions ── */
 .info-fade-enter-active, .info-fade-leave-active { transition: opacity 0.2s ease; }

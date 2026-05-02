@@ -143,7 +143,7 @@ const L = computed(() => isRu.value
             <div class="profile-stat">
               <div class="profile-stat__label">{{ L.holdings }}</div>
               <div class="profile-stat__val">
-                <Icon name="bag" :size="20" color="#fff"/>
+                <Icon name="home" :size="20" color="#fff"/>
                 <span class="profile-stat__num">{{ ownedList.length }}</span>
               </div>
             </div>
