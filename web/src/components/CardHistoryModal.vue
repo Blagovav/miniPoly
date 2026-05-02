@@ -148,28 +148,51 @@ function timeAgo(ts: number): string {
             </div>
           </div>
         </div>
+
+        <!-- Close FAB sits below the card, mirroring the figma popup-info
+             standalone close button (75:5658 / 138:16662). -->
+        <button
+          type="button"
+          class="history-close"
+          :aria-label="L.close"
+          @click="props.onClose"
+        >
+          <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+            <path
+              d="M6 6l12 12M18 6L6 18"
+              stroke="#000"
+              stroke-width="2.6"
+              stroke-linecap="round"
+            />
+          </svg>
+        </button>
       </div>
     </div>
   </transition>
 </template>
 
 <style scoped>
-/* ── Scrim: dark 40% overlay, bottom-sheet layout to match popup position in
-   Figma (43:4352). Tap outside dismisses. ── */
+/* ── Scrim: dark 40% overlay, vertically centred to match the figma
+   popup-history pattern. The wrap below stacks the card and the
+   standalone close FAB so they read as one unit. */
 .history-scrim {
   position: fixed;
   inset: 0;
   background: rgba(0, 0, 0, 0.4);
   z-index: 500;
   display: flex;
-  align-items: flex-end;
+  align-items: center;
   justify-content: center;
-  padding: 16px;
-  padding-bottom: calc(76px + var(--csab, 0px));
+  padding: calc(16px + var(--sat, 0px)) 24px calc(16px + var(--csab, 0px));
 }
 .history-wrap {
   width: 100%;
   max-width: 345px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  min-height: 0;
 }
 .history-card {
   width: 100%;
@@ -180,11 +203,30 @@ function timeAgo(ts: number): string {
   display: flex;
   flex-direction: column;
   gap: 16px;
-  max-height: calc(100vh - 76px - 32px - var(--csab, 0px));
+  /* Card scrolls internally if the history is long; the close FAB
+     below stays visible. 60px reserves room for the FAB + gap. */
+  max-height: calc(100vh - 60px - 32px - var(--sat, 0px) - var(--csab, 0px));
   overflow: hidden;
   font-family: 'Unbounded', sans-serif;
   color: #000;
 }
+
+/* ── Standalone close FAB — Figma 138:16662 */
+.history-close {
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 4px solid #000;
+  border-radius: 50%;
+  background: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: transform 80ms ease;
+}
+.history-close:active { transform: scale(0.94); }
 
 /* ── Header ── */
 .history-head {

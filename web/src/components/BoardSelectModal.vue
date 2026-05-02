@@ -25,26 +25,33 @@ watch(() => props.selectedId, (id) => { pick.value = id || "eldmark"; });
 watch(() => props.open, (o) => { if (o) pick.value = props.selectedId || "eldmark"; });
 
 const picked = computed(() => findBoard(pick.value));
+
 const L = computed(() => isRu.value ? {
-  title: "Выбор карты", sub: "Поле, на котором будет партия",
-  apply: "Применить", close: "Закрыть",
+  eyebrow: "Выбор поля",
+  title: "Карта партии",
+  sub: "Поле, на котором будет партия",
+  apply: "Применить",
+  close: "Закрыть",
   hostOnly: "Только хост может выбрать карту",
-  price: "Купить", active: "Текущая",
+  price: "Купить",
+  active: "Текущая",
   buyFail: "Не хватает монет",
   buyOk: "Карта открыта!",
+  closeAria: "Закрыть",
 } : {
-  title: "Choose a Map", sub: "The board this match will play on",
-  apply: "Apply", close: "Close",
-  hostOnly: "Only the host can choose the map",
-  price: "Buy", active: "Active",
+  eyebrow: "Map picker",
+  title: "Match board",
+  sub: "The board this match will play on",
+  apply: "Apply",
+  close: "Close",
+  hostOnly: "Only the host can pick the map",
+  price: "Buy",
+  active: "Active",
   buyFail: "Not enough coins",
   buyOk: "Map unlocked!",
+  closeAria: "Close",
 });
 
-// Board считается owned если:
-//   — он free,
-//   — либо помечен static `owned: true` (дефолтные карты),
-//   — либо куплен и лежит в inventory (`board-<id>`).
 function isOwned(b: BoardDef): boolean {
   if (b.rarity === "free") return true;
   if (b.owned === true) return true;
@@ -59,7 +66,6 @@ function applyPick() {
   props.onClose();
 }
 
-// Покупка: монеты — локально, звёзды — через bot invoice.
 async function buyBoard(b: BoardDef) {
   if (isOwned(b)) return;
   if (b.unit === "★") {
@@ -97,20 +103,12 @@ async function buyBoard(b: BoardDef) {
     }
     return;
   }
-  // Монетная покупка
   const ok = inv.buy(`board-${b.id}`, b.price);
-  if (ok) {
-    haptic("medium");
-    notify("success");
-  } else {
-    haptic("light");
-    notify("warning");
-  }
+  if (ok) { haptic("medium"); notify("success"); }
+  else    { haptic("light");  notify("warning"); }
 }
 
-function metaOf(id: string) {
-  return RARITY_META[findBoard(id).rarity];
-}
+function metaOf(id: string) { return RARITY_META[findBoard(id).rarity]; }
 function metaLabel(id: string) {
   const m = metaOf(id);
   return isRu.value ? m.ru : m.en;
@@ -127,300 +125,389 @@ function boardDesc(id: string) {
 
 <template>
   <transition name="bs-fade">
-    <div v-if="open" class="bs-backdrop" @click="onClose">
-      <div class="bs-modal" @click.stop>
-        <div class="bs-head">
-          <div class="row between">
-            <div>
-              <div class="bs-title">{{ L.title }}</div>
-              <div class="bs-sub">{{ L.sub }}</div>
-            </div>
-            <button class="icon-btn bs-close" @click="onClose">
-              <Icon name="x" :size="16"/>
-            </button>
+    <div v-if="open" class="bs-scrim" @click.self="onClose">
+      <div class="bs-stack">
+        <div class="bs-card">
+          <div class="bs-head">
+            <span class="bs-eyebrow">{{ L.eyebrow }}</span>
+            <h2 class="bs-title">{{ L.title }}</h2>
+            <p class="bs-sub">{{ L.sub }}</p>
           </div>
-          <div v-if="isHost === false" class="bs-host-warn">
-            <Icon name="lock" :size="12" color="var(--accent)"/>
+
+          <div v-if="isHost === false" class="bs-warn">
+            <Icon name="lock" :size="12" color="#8b1a1a"/>
             {{ L.hostOnly }}
           </div>
-        </div>
 
-        <div
-          class="bs-spotlight"
-          :style="{
-            background: picked.palette.bg,
-            color: picked.palette.text || '#2a1d10',
-          }"
-        >
-          <div class="row" style="gap: 14px; align-items: flex-start;">
-            <div class="bs-spotlight__preview" :style="{ borderColor: picked.palette.gold }">
+          <!-- Spotlight: large preview of selected board on a white inner
+               card matching the figma popup pattern. -->
+          <div class="bs-spotlight">
+            <div class="bs-spotlight__preview">
               <BoardPreview :board="picked" :size="96"/>
             </div>
-            <div style="flex: 1; min-width: 0;">
+            <div class="bs-spotlight__body">
               <div
                 class="bs-spotlight__rarity"
-                :style="{ color: RARITY_META[picked.rarity].color, opacity: picked.dark ? 0.85 : 0.8 }"
-              >
-                {{ metaLabel(picked.id) }}
-              </div>
+                :style="{ color: metaOf(picked.id).color }"
+              >{{ metaLabel(picked.id) }}</div>
               <div class="bs-spotlight__name">{{ boardLabel(picked.id) }}</div>
               <div class="bs-spotlight__desc">{{ boardDesc(picked.id) }}</div>
             </div>
           </div>
-        </div>
 
-        <div class="bs-list">
+          <!-- Grid: 2-column board picker -->
           <div class="bs-grid">
             <button
               v-for="b in BOARDS"
               :key="b.id"
-              class="bs-card"
-              :class="{ active: b.id === pick }"
+              class="bs-tile"
+              :class="{ 'bs-tile--active': b.id === pick }"
               :disabled="isHost === false"
               @click="setPick(b.id)"
             >
               <div
-                class="bs-card__preview"
+                class="bs-tile__preview"
                 :style="{
-                  borderColor: b.palette.line,
                   filter: isOwned(b) ? 'none' : 'saturate(0.5) brightness(0.95)',
                 }"
               >
                 <BoardPreview :board="b" :size="120"/>
               </div>
-              <div class="bs-card__name">{{ boardLabel(b.id) }}</div>
-              <div class="bs-card__rarity" :style="{ color: metaOf(b.id).color }">
-                {{ metaLabel(b.id) }}
-              </div>
+              <div class="bs-tile__name">{{ boardLabel(b.id) }}</div>
+              <div
+                class="bs-tile__rarity"
+                :style="{ color: metaOf(b.id).color }"
+              >{{ metaLabel(b.id) }}</div>
 
-              <div v-if="b.id === pick" class="bs-card__active">{{ L.active }}</div>
-              <div v-else-if="isOwned(b)" class="bs-card__owned">
+              <span v-if="b.id === pick" class="bs-tile__chip bs-tile__chip--active">{{ L.active }}</span>
+              <span v-else-if="isOwned(b)" class="bs-tile__chip bs-tile__chip--owned">
                 <Icon name="check" :size="11" color="#fff"/>
-              </div>
-              <div v-if="!isOwned(b)" class="bs-card__price">
-                <Icon :name="b.unit === '★' ? 'star' : 'coin'" :size="10" color="var(--gold)"/>
+              </span>
+              <span v-if="!isOwned(b)" class="bs-tile__chip bs-tile__chip--price">
+                <Icon :name="b.unit === '★' ? 'star' : 'coin'" :size="10" color="#000"/>
                 {{ b.price }}
-              </div>
+              </span>
+            </button>
+          </div>
+
+          <!-- Footer actions -->
+          <div class="bs-actions">
+            <button type="button" class="bs-btn bs-btn--ghost" @click="onClose">
+              {{ L.close }}
+            </button>
+            <button
+              v-if="isHost !== false && isOwned(picked)"
+              type="button"
+              class="bs-btn bs-btn--primary"
+              @click="applyPick"
+            >{{ L.apply }}</button>
+            <button
+              v-else-if="isHost !== false"
+              type="button"
+              class="bs-btn bs-btn--primary"
+              @click="buyBoard(picked)"
+            >
+              {{ L.price }} · {{ picked.price }}{{ picked.unit === '★' ? ' ★' : ' ◈' }}
             </button>
           </div>
         </div>
 
-        <div class="bs-foot">
-          <button class="btn btn-ghost" style="flex: 1; padding: 12px;" @click="onClose">
-            {{ L.close }}
-          </button>
-          <button
-            v-if="isHost !== false && isOwned(picked)"
-            class="btn btn-primary"
-            style="flex: 2; padding: 12px;"
-            @click="applyPick"
-          >
-            <Icon name="check" :size="16" color="#fff"/>
-            {{ L.apply }}
-          </button>
-          <button
-            v-else-if="isHost !== false"
-            class="btn btn-primary bs-buy"
-            style="flex: 2; padding: 12px;"
-            @click="buyBoard(picked)"
-          >
-            <Icon :name="picked.unit === '★' ? 'star' : 'coin'" :size="16" color="#2a1d10"/>
-            {{ L.price }} · {{ picked.price }}{{ picked.unit === '★' ? ' ★' : ' ◈' }}
-          </button>
-        </div>
+        <button type="button" class="bs-close" :aria-label="L.closeAria" @click="onClose">
+          <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+            <path
+              d="M6 6l12 12M18 6L6 18"
+              stroke="#000"
+              stroke-width="2.6"
+              stroke-linecap="round"
+            />
+          </svg>
+        </button>
       </div>
     </div>
   </transition>
 </template>
 
 <style scoped>
-.bs-backdrop {
+.bs-scrim {
   position: fixed;
   inset: 0;
-  background: rgba(26, 15, 5, 0.5);
-  backdrop-filter: blur(2px);
-  -webkit-backdrop-filter: blur(2px);
   z-index: 600;
-  display: flex;
-  align-items: flex-end;
-  justify-content: center;
-}
-.bs-modal {
-  background: var(--bg);
-  width: 100%;
-  max-width: 440px;
-  max-height: 92dvh;
+  background: rgba(0, 0, 0, 0.4);
   display: flex;
   flex-direction: column;
-  border-radius: 16px 16px 0 0;
-  border: 1px solid var(--line);
-  overflow: hidden;
-  animation: sheet-unfurl 320ms cubic-bezier(0.34, 1.56, 0.64, 1);
-  transform-origin: bottom;
-  box-shadow: 0 -8px 24px rgba(42, 29, 16, 0.3);
+  align-items: center;
+  justify-content: center;
+  padding: calc(16px + var(--sat, 0px)) 24px calc(16px + var(--sab, 0px) + var(--csab, 0px));
 }
-@keyframes sheet-unfurl {
-  0% { transform: translateY(100%); opacity: 0; }
-  100% { transform: translateY(0); opacity: 1; }
+
+.bs-stack {
+  width: 100%;
+  max-width: 345px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  max-height: 100%;
+  min-height: 0;
 }
+
+/* ── Card */
+.bs-card {
+  width: 100%;
+  background: #faf3e2;
+  border-radius: 18px;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  font-family: 'Unbounded', sans-serif;
+  color: #000;
+  overflow-y: auto;
+  min-height: 0;
+}
+.bs-card::-webkit-scrollbar { width: 3px; }
+.bs-card::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 100px;
+}
+
+/* ── Head */
 .bs-head {
-  padding: 16px 20px 12px;
-  border-bottom: 1px solid var(--divider);
-  background: var(--card);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  text-align: center;
+}
+.bs-eyebrow {
+  display: inline-flex;
+  padding: 6px 12px;
+  background: #484337;
+  border-radius: 100px;
+  font-family: 'Unbounded', sans-serif;
+  font-weight: 500;
+  font-size: 12px;
+  line-height: 14px;
+  color: #fff;
 }
 .bs-title {
-  font-family: var(--font-display);
-  font-size: 19px;
-  color: var(--ink);
+  margin: 0;
+  font-family: 'Unbounded', sans-serif;
+  font-weight: 700;
+  font-size: 22px;
+  line-height: 26px;
+  color: #000;
 }
 .bs-sub {
-  font-size: 11px;
-  color: var(--ink-3);
+  margin: 0;
+  font-family: 'Unbounded', sans-serif;
+  font-weight: 500;
+  font-size: 14px;
+  line-height: 18px;
+  color: rgba(0, 0, 0, 0.55);
 }
-.bs-close { width: 32px; height: 32px; }
-.bs-host-warn {
-  margin-top: 10px;
-  padding: 6px 10px;
-  background: rgba(154, 28, 58, 0.08);
-  border: 1px solid rgba(154, 28, 58, 0.2);
-  border-radius: 6px;
-  font-size: 11px;
-  color: var(--accent);
+
+/* ── Host warning */
+.bs-warn {
+  padding: 8px 12px;
+  background: rgba(220, 38, 38, 0.08);
+  border: 1px solid rgba(220, 38, 38, 0.25);
+  border-radius: 12px;
+  font-family: 'Unbounded', sans-serif;
+  font-weight: 500;
+  font-size: 12px;
+  line-height: 14px;
+  color: #8b1a1a;
   display: flex;
   align-items: center;
   gap: 6px;
+  justify-content: center;
 }
 
+/* ── Spotlight (selected board) — white inner card per figma popup pattern */
 .bs-spotlight {
-  padding: 14px 20px;
-  border-bottom: 1px solid var(--divider);
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  padding: 12px;
+  background: #fff;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  border-radius: 12px;
 }
 .bs-spotlight__preview {
   border-radius: 8px;
   overflow: hidden;
-  border: 2px solid var(--gold);
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.15);
-  flex-shrink: 0;
   line-height: 0;
+  flex-shrink: 0;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.16);
+}
+.bs-spotlight__body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
 }
 .bs-spotlight__rarity {
+  font-family: 'Unbounded', sans-serif;
+  font-weight: 700;
   font-size: 10px;
-  letter-spacing: 0.15em;
+  line-height: 12px;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
-  margin-bottom: 3px;
-  font-weight: 600;
 }
 .bs-spotlight__name {
-  font-family: var(--font-display);
-  font-size: 21px;
-  line-height: 1.1;
+  font-family: 'Unbounded', sans-serif;
+  font-weight: 700;
+  font-size: 16px;
+  line-height: 20px;
+  color: #000;
 }
 .bs-spotlight__desc {
+  font-family: 'Unbounded', sans-serif;
+  font-weight: 500;
   font-size: 12px;
-  opacity: 0.75;
-  margin-top: 6px;
-  line-height: 1.35;
+  line-height: 16px;
+  color: rgba(0, 0, 0, 0.6);
 }
 
-.bs-list {
-  flex: 1;
-  overflow-y: auto;
-  padding: 14px;
-}
+/* ── Grid */
 .bs-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 10px;
+  gap: 8px;
 }
-.bs-card {
+.bs-tile {
   position: relative;
   padding: 8px;
-  background: var(--card);
-  border: 1.5px solid var(--line);
-  border-radius: 10px;
+  background: #fff;
+  border: 1.5px solid rgba(0, 0, 0, 0.1);
+  border-radius: 12px;
   cursor: pointer;
   text-align: left;
-  font-family: var(--font-body);
-  color: var(--ink);
+  font-family: 'Unbounded', sans-serif;
+  color: #000;
+  transition: transform 80ms ease, border-color 120ms ease;
 }
-.bs-card:disabled { cursor: default; opacity: 0.6; }
-.bs-card.active {
-  background: rgba(90, 58, 154, 0.08);
-  border-color: var(--primary);
-}
-.bs-card__preview {
-  border-radius: 6px;
+.bs-tile:disabled { cursor: not-allowed; opacity: 0.55; }
+.bs-tile:not(:disabled):active { transform: translateY(1px); }
+.bs-tile--active { border-color: #000; }
+.bs-tile__preview {
+  border-radius: 8px;
   overflow: hidden;
-  border: 1px solid var(--line);
-  margin-bottom: 7px;
+  margin-bottom: 6px;
   line-height: 0;
 }
-.bs-card__name {
-  font-family: var(--font-display);
-  font-size: 13px;
-  color: var(--ink);
-  line-height: 1.15;
+.bs-tile__name {
+  font-family: 'Unbounded', sans-serif;
+  font-weight: 700;
+  font-size: 12px;
+  line-height: 14px;
+  color: #000;
   margin-bottom: 2px;
 }
-.bs-card__rarity {
-  font-size: 9px;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  font-weight: 600;
-}
-.bs-card__active {
-  position: absolute;
-  top: 6px; right: 6px;
-  padding: 2px 7px;
-  font-size: 9px;
-  letter-spacing: 0.1em;
-  background: var(--primary);
-  color: #fff;
-  border-radius: 999px;
+.bs-tile__rarity {
+  font-family: 'Unbounded', sans-serif;
   font-weight: 700;
+  font-size: 9px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
 }
-.bs-card__owned {
+.bs-tile__chip {
   position: absolute;
-  top: 6px; right: 6px;
-  width: 20px; height: 20px;
-  border-radius: 50%;
-  background: var(--emerald);
+  top: 6px;
+  right: 6px;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-family: 'Unbounded', sans-serif;
+  font-weight: 700;
+  font-size: 9px;
+  line-height: 12px;
+  letter-spacing: 0.06em;
+}
+.bs-tile__chip--active {
+  background: #43c22d;
+  color: #fff;
+  text-shadow: 0.2px 0.2px 0 rgba(0, 0, 0, 0.5);
+}
+.bs-tile__chip--owned {
+  background: #43c22d;
+  width: 20px;
+  height: 20px;
+  padding: 0;
   display: flex;
   align-items: center;
   justify-content: center;
 }
-.bs-card__price {
-  position: absolute;
-  top: 6px; right: 6px;
-  padding: 3px 7px;
-  font-size: 10px;
-  background: rgba(42, 29, 16, 0.85);
-  color: var(--gold);
-  border-radius: 999px;
-  display: flex;
-  align-items: center;
-  gap: 3px;
-  font-family: var(--font-mono);
-  font-weight: 600;
+.bs-tile__chip--price {
+  background: #fff;
+  border: 1px solid rgba(0, 0, 0, 0.2);
+  color: #000;
 }
 
-.bs-foot {
-  padding: 14px;
-  border-top: 1px solid var(--divider);
-  background: var(--card);
+/* ── Actions */
+.bs-actions {
   display: flex;
   gap: 8px;
 }
-.bs-buy {
-  background: linear-gradient(180deg, #d4a84a 0%, #b8892e 100%);
-  color: #2a1d10;
+.bs-btn {
+  flex: 1;
+  height: 48px;
+  border: 1px solid rgba(0, 0, 0, 0.2);
+  border-radius: 12px;
+  font-family: 'Golos Text', 'Unbounded', sans-serif;
+  font-weight: 900;
+  font-size: 16px;
+  line-height: 18px;
+  cursor: pointer;
+  transition: transform 80ms ease, box-shadow 80ms ease;
+}
+.bs-btn--ghost {
+  background: #fff;
+  color: #000;
+}
+.bs-btn--ghost:active { transform: translateY(1px); }
+.bs-btn--primary {
+  background: #43c22d;
+  color: #fff;
+  text-shadow: 1px 1px 0 rgba(0, 0, 0, 0.6);
+  box-shadow: inset 0 -4px 0 rgba(0, 0, 0, 0.18);
+  flex: 2;
+}
+.bs-btn--primary:active {
+  transform: translateY(2px);
+  box-shadow: inset 0 -2px 0 rgba(0, 0, 0, 0.18);
 }
 
-.bs-fade-enter-active, .bs-fade-leave-active { transition: opacity 200ms ease; }
-.bs-fade-enter-from, .bs-fade-leave-to { opacity: 0; }
-.bs-fade-enter-active .bs-modal,
-.bs-fade-leave-active .bs-modal {
+/* ── Standalone close FAB */
+.bs-close {
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 4px solid #000;
+  border-radius: 50%;
+  background: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: transform 80ms ease;
+}
+.bs-close:active { transform: scale(0.94); }
+
+/* ── Transitions */
+.bs-fade-enter-active,
+.bs-fade-leave-active { transition: opacity 0.22s ease; }
+.bs-fade-enter-from,
+.bs-fade-leave-to { opacity: 0; }
+.bs-fade-enter-active .bs-stack,
+.bs-fade-leave-active .bs-stack {
   transition: transform 0.22s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
-.bs-fade-leave-to .bs-modal { transform: translateY(20%); }
+.bs-fade-enter-from .bs-stack,
+.bs-fade-leave-to .bs-stack { transform: scale(0.96); }
 </style>

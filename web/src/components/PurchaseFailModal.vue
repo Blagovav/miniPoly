@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import { useI18n } from "vue-i18n";
-import Icon from "./Icon.vue";
 
 export interface PurchaseFailData {
   name: string;
@@ -26,17 +25,24 @@ const item = computed<PurchaseFailData>(() => props.data ?? {
 });
 const reason = computed(() => item.value.reason ?? "funds");
 const unit = computed(() => item.value.unit ?? "◈");
-const shortBy = computed(() => reason.value === "funds" ? Math.max(0, item.value.price - (item.value.balance ?? 0)) : 0);
+const shortBy = computed(() =>
+  reason.value === "funds" ? Math.max(0, item.value.price - (item.value.balance ?? 0)) : 0,
+);
 
 const L = computed(() => {
   const r = reason.value;
   return isRu.value ? {
-    title: r === "funds" ? "Казна пуста" : r === "sold-out" ? "Распродано" : "Сделка отклонена",
+    eyebrow: r === "funds" ? "Не хватает монет" : r === "sold-out" ? "Распродано" : "Сделка отклонена",
+    title: r === "funds"
+      ? "Казна пуста"
+      : r === "sold-out"
+        ? "Товар закончился"
+        : "Не получилось",
     sub: r === "funds"
       ? "Не хватает монет на счёте."
       : r === "sold-out"
-        ? "Товар закончился."
-        : "Не получилось провести покупку.",
+        ? "Этот товар больше недоступен."
+        : "Покупка не прошла.",
     need: "Нужно",
     have: "Есть",
     short: "Не хватает",
@@ -44,11 +50,10 @@ const L = computed(() => {
     topup: "Пополнить",
     browse: "К другим товарам",
     retry: "Повторить",
-    hint: r === "funds"
-      ? "Пополни счёт монетами или купи за звёзды Telegram."
-      : "Попробуй позже — или выбери другой товар.",
+    closeAria: "Закрыть",
   } : {
-    title: r === "funds" ? "Not enough coins" : r === "sold-out" ? "Sold out" : "Transaction declined",
+    eyebrow: r === "funds" ? "Insufficient balance" : r === "sold-out" ? "Sold out" : "Declined",
+    title: r === "funds" ? "Not enough coins" : r === "sold-out" ? "Sold out" : "Couldn't purchase",
     sub: r === "funds"
       ? "Your balance is too low."
       : r === "sold-out"
@@ -59,169 +64,235 @@ const L = computed(() => {
     short: "Short by",
     cancel: "Cancel",
     topup: "Top up",
-    browse: "Browse other items",
+    browse: "Other items",
     retry: "Try again",
-    hint: r === "funds"
-      ? "Top up with coins or buy with Telegram Stars."
-      : "Come back later — or try another item.",
+    closeAria: "Close",
   };
+});
+
+const ctaLabel = computed(() => {
+  if (reason.value === "funds") return L.value.topup;
+  if (reason.value === "sold-out") return L.value.browse;
+  return L.value.retry;
 });
 </script>
 
 <template>
   <transition name="pf-fade">
-    <div v-if="open" class="pf-backdrop" @click="onClose">
-      <div class="pf-modal" @click.stop>
-        <div class="pf-head">
-          <div class="pf-coin">
-            <svg viewBox="0 0 72 72" width="72" height="72">
-              <defs>
-                <linearGradient id="pfBrokenCoin" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0" stop-color="#8a7152"/>
-                  <stop offset="1" stop-color="#4a3a28"/>
-                </linearGradient>
-              </defs>
-              <path d="M 36 10 A 26 26 0 0 0 24 58 L 32 34 Z" fill="url(#pfBrokenCoin)" stroke="#2a1d10" stroke-width="1.5"/>
-              <g transform="translate(4, 1) rotate(6 36 36)">
-                <path d="M 36 10 A 26 26 0 0 1 48 58 L 40 34 Z" fill="url(#pfBrokenCoin)" stroke="#2a1d10" stroke-width="1.5"/>
-              </g>
-              <path d="M 36 10 L 34 22 L 38 30 L 32 40 L 36 58"
-                stroke="#1a110a" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
-            </svg>
-          </div>
+    <div v-if="open" class="pf-scrim" @click.self="onClose">
+      <div class="pf-stack">
+        <div class="pf-card">
+          <span class="pf-eyebrow">{{ L.eyebrow }}</span>
+          <h2 class="pf-title">{{ L.title }}</h2>
+          <p class="pf-sub">{{ L.sub }}</p>
 
-          <div class="pf-title">{{ L.title }}</div>
-          <div class="pf-sub">{{ L.sub }}</div>
-        </div>
-
-        <div class="pf-body">
-          <div v-if="reason === 'funds'" class="pf-cards">
-            <div class="pf-card">
-              <div class="pf-cap">{{ L.need }}</div>
-              <div class="pf-card__val" style="color: var(--ink);">{{ item.price }} {{ unit }}</div>
+          <div v-if="reason === 'funds'" class="pf-stats">
+            <div class="pf-stat">
+              <div class="pf-stat__label">{{ L.need }}</div>
+              <div class="pf-stat__val">{{ item.price }} {{ unit }}</div>
             </div>
-            <div class="pf-card">
-              <div class="pf-cap">{{ L.have }}</div>
-              <div class="pf-card__val" style="color: var(--ink-2);">{{ item.balance ?? 0 }} {{ unit }}</div>
+            <div class="pf-stat">
+              <div class="pf-stat__label">{{ L.have }}</div>
+              <div class="pf-stat__val pf-stat__val--muted">{{ item.balance ?? 0 }} {{ unit }}</div>
             </div>
-            <div class="pf-card">
-              <div class="pf-cap">{{ L.short }}</div>
-              <div class="pf-card__val" style="color: var(--accent);">{{ shortBy }} {{ unit }}</div>
+            <div class="pf-stat">
+              <div class="pf-stat__label">{{ L.short }}</div>
+              <div class="pf-stat__val pf-stat__val--accent">{{ shortBy }} {{ unit }}</div>
             </div>
           </div>
 
-          <div class="pf-hint">{{ L.hint }}</div>
-
-          <div style="display: flex; gap: 8px;">
-            <button class="btn btn-ghost" style="flex: 1;" @click="onClose">{{ L.cancel }}</button>
-            <button class="btn btn-primary" style="flex: 2;" @click="onClose">
-              <template v-if="reason === 'funds'">
-                <Icon :name="unit === '★' ? 'star' : 'coin'" :size="16" color="#fff"/>
-                {{ L.topup }}
-              </template>
-              <template v-else-if="reason === 'sold-out'">{{ L.browse }}</template>
-              <template v-else>{{ L.retry }}</template>
+          <div class="pf-actions">
+            <button type="button" class="pf-btn pf-btn--ghost" @click="onClose">
+              {{ L.cancel }}
+            </button>
+            <button type="button" class="pf-btn pf-btn--primary" @click="onClose">
+              {{ ctaLabel }}
             </button>
           </div>
         </div>
+
+        <button type="button" class="pf-close" :aria-label="L.closeAria" @click="onClose">
+          <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+            <path
+              d="M6 6l12 12M18 6L6 18"
+              stroke="#000"
+              stroke-width="2.6"
+              stroke-linecap="round"
+            />
+          </svg>
+        </button>
       </div>
     </div>
   </transition>
 </template>
 
 <style scoped>
-.pf-backdrop {
+.pf-scrim {
   position: fixed;
   inset: 0;
-  background: rgba(26, 15, 5, 0.5);
-  backdrop-filter: blur(2px);
-  -webkit-backdrop-filter: blur(2px);
   z-index: 700;
+  background: rgba(0, 0, 0, 0.4);
   display: flex;
   align-items: center;
   justify-content: center;
-}
-.pf-modal {
-  position: relative;
-  width: 100%;
-  max-width: 360px;
-  margin: 16px;
-  background: var(--bg);
-  border-radius: 16px;
-  border: 1px solid var(--accent);
-  overflow: hidden;
-  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.35);
-  animation: pf-shake 420ms ease-out;
-}
-@keyframes pf-shake {
-  0%, 100% { transform: translateX(0); }
-  20% { transform: translateX(-6px); }
-  40% { transform: translateX(6px); }
-  60% { transform: translateX(-3px); }
-  80% { transform: translateX(3px); }
+  padding: 24px;
 }
 
-.pf-head {
-  position: relative;
-  background:
-    radial-gradient(ellipse at 50% 130%, rgba(154, 28, 58, 0.25) 0%, transparent 60%),
-    linear-gradient(180deg, #3a1218 0%, #1a0810 100%);
-  padding: 24px 20px 18px;
-  color: #f7eeda;
+.pf-stack {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  width: 100%;
+  max-width: 345px;
+}
+
+/* ── Card — parchment popup body */
+.pf-card {
+  width: 100%;
+  background: #faf3e2;
+  border-radius: 18px;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
   text-align: center;
+  font-family: 'Unbounded', sans-serif;
+  color: #000;
 }
-.pf-coin {
-  width: 72px; height: 72px;
-  margin: 0 auto 12px;
+
+/* Coral eyebrow pill — same family as the trade-modal "Отправка гонца"
+   tag but coloured red to flag the failure. */
+.pf-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 12px;
+  background: #e2776e;
+  border-radius: 100px;
+  font-family: 'Unbounded', sans-serif;
+  font-weight: 700;
+  font-size: 12px;
+  line-height: 14px;
+  color: #fff;
+  text-shadow: 0.2px 0.2px 0 rgba(0, 0, 0, 0.6);
+  letter-spacing: 0.02em;
 }
+
 .pf-title {
-  font-family: var(--font-display);
+  margin: 0;
+  font-family: 'Unbounded', sans-serif;
+  font-weight: 700;
   font-size: 22px;
-  color: #f7eeda;
-  margin-bottom: 4px;
+  line-height: 26px;
+  color: #000;
 }
 .pf-sub {
-  font-size: 12px;
-  color: #c9b88e;
-  line-height: 1.4;
+  margin: 0;
+  font-family: 'Unbounded', sans-serif;
+  font-weight: 500;
+  font-size: 14px;
+  line-height: 18px;
+  color: rgba(0, 0, 0, 0.65);
   max-width: 260px;
-  margin: 0 auto;
 }
 
-.pf-body { padding: 16px 20px 14px; }
-.pf-cards {
+/* ── Stats grid (only for "funds" reason) */
+.pf-stats {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 8px;
-  margin-bottom: 14px;
+  gap: 4px;
+  width: 100%;
 }
-.pf-card {
-  padding: 8px 6px;
-  background: var(--card);
-  border: 1px solid var(--divider);
-  border-radius: 8px;
-  text-align: center;
+.pf-stat {
+  background: #fff;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  border-radius: 12px;
+  padding: 10px 6px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
 }
-.pf-cap {
-  font-size: 9px;
-  color: var(--ink-3);
-  letter-spacing: 0.08em;
+.pf-stat__label {
+  font-family: 'Unbounded', sans-serif;
+  font-weight: 700;
+  font-size: 10px;
+  line-height: 12px;
+  color: rgba(0, 0, 0, 0.55);
+  letter-spacing: 0.04em;
   text-transform: uppercase;
 }
-.pf-card__val {
-  margin-top: 3px;
-  font-family: var(--font-mono);
-  font-size: 12px;
-  font-weight: 700;
+.pf-stat__val {
+  font-family: 'Golos Text', 'Unbounded', sans-serif;
+  font-weight: 900;
+  font-size: 16px;
+  line-height: 18px;
+  color: #000;
 }
-.pf-hint {
-  font-size: 11px;
-  color: var(--ink-3);
-  text-align: center;
-  line-height: 1.4;
-  padding: 0 8px 12px;
+.pf-stat__val--muted { color: rgba(0, 0, 0, 0.55); }
+.pf-stat__val--accent { color: #e2776e; }
+
+/* ── Actions */
+.pf-actions {
+  display: flex;
+  gap: 8px;
+  width: 100%;
+}
+.pf-btn {
+  flex: 1;
+  height: 48px;
+  border: 1px solid rgba(0, 0, 0, 0.2);
+  border-radius: 12px;
+  font-family: 'Golos Text', 'Unbounded', sans-serif;
+  font-weight: 900;
+  font-size: 16px;
+  line-height: 18px;
+  cursor: pointer;
+  transition: transform 80ms ease, box-shadow 80ms ease;
+}
+.pf-btn--ghost {
+  background: #fff;
+  color: #000;
+}
+.pf-btn--ghost:active { transform: translateY(1px); }
+.pf-btn--primary {
+  background: #43c22d;
+  color: #fff;
+  text-shadow: 1px 1px 0 rgba(0, 0, 0, 0.6);
+  box-shadow: inset 0 -4px 0 rgba(0, 0, 0, 0.18);
+  flex: 2;
+}
+.pf-btn--primary:active {
+  transform: translateY(2px);
+  box-shadow: inset 0 -2px 0 rgba(0, 0, 0, 0.18);
 }
 
-.pf-fade-enter-active, .pf-fade-leave-active { transition: opacity 220ms ease; }
-.pf-fade-enter-from, .pf-fade-leave-to { opacity: 0; }
+/* ── Standalone close FAB */
+.pf-close {
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 4px solid #000;
+  border-radius: 50%;
+  background: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: transform 80ms ease;
+}
+.pf-close:active { transform: scale(0.94); }
+
+/* ── Transitions */
+.pf-fade-enter-active,
+.pf-fade-leave-active { transition: opacity 0.22s ease; }
+.pf-fade-enter-from,
+.pf-fade-leave-to { opacity: 0; }
+.pf-fade-enter-active .pf-stack,
+.pf-fade-leave-active .pf-stack {
+  transition: transform 0.22s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.pf-fade-enter-from .pf-stack,
+.pf-fade-leave-to .pf-stack { transform: scale(0.94); }
 </style>

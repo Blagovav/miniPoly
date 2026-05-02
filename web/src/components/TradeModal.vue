@@ -365,10 +365,13 @@ const L = computed(() => isRu.value
   inset: 0;
   z-index: 510;
   background: rgba(0, 0, 0, 0.4);
+  /* Figma 75:5226 places the popup-history card at calc(50% + 34px) —
+     a touch below true centre. We centre vertically; the inner card
+     has max-height + overflow so a long holdings list still fits. */
   display: flex;
   flex-direction: column;
-  justify-content: flex-end;
-  padding: 0 24px calc(16px + var(--sab, 0px) + var(--csab, 0px));
+  justify-content: center;
+  padding: calc(16px + var(--sat, 0px)) 24px calc(16px + var(--sab, 0px) + var(--csab, 0px));
 }
 
 .trade-fade-enter-active,
