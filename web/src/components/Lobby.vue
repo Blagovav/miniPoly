@@ -1040,21 +1040,18 @@ const L = computed(() => isRu.value
 }
 .token-btn--taken { opacity: 0.35; cursor: not-allowed; }
 
-/* ── Action CTAs (Figma 110:9563 / 110:9566 — ГОТОВ / НАЧАТЬ ПАРТИЮ).
-   Sticky-pinned at the bottom of the scroll viewport so users on tall
-   player lists can still see the call-to-action without scrolling.
-   Negative margin extends the bg fill to the lobby's full width so the
-   pin doesn't reveal scrolling content peeking through the gutters. */
+/* ── Action CTAs (Figma 110:9441 / 110:9624 — ГОТОВ / НАЧАТЬ ПАРТИЮ).
+   Designer feedback 2026-05-02 #3.10: CTA flows in-document, no sticky
+   bottom-band — figma shows the button just below the token rail with
+   the parchment lobby bg behind it, no separate fill. Lets the player
+   list breathe naturally; the bottom safe-area pad still applies so
+   on iPhone the CTA never tucks under the home indicator. */
 .lobby-actions {
-  position: sticky;
-  bottom: 0;
-  z-index: 5;
   display: flex;
   flex-direction: column;
   gap: 8px;
-  margin: 8px -24px 0;
-  padding: 12px 24px calc(8px + var(--tg-safe-area-inset-bottom, 0px));
-  background: #faf3e2;
+  margin: 8px 0 0;
+  padding-bottom: var(--tg-safe-area-inset-bottom, 0px);
 }
 .lobby-hint {
   margin: 0;
@@ -1063,7 +1060,10 @@ const L = computed(() => isRu.value
   font-weight: 500;
   font-size: 14px;
   line-height: 16px;
-  color: rgba(0, 0, 0, 0.4);
+  /* Figma renders the hint at full ink, not the muted grey we had —
+     the prior 0.4 alpha read as too quiet for a status line that
+     gates the Start CTA (#3.11). */
+  color: rgba(0, 0, 0, 0.6);
 }
 .lobby-hint--ok { color: #43c22d; }
 
