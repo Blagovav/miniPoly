@@ -367,10 +367,9 @@ const L = computed(() => isRu.value
           @click="copyCode"
         >
           <Icon v-if="copied" name="check" :size="16" color="#43c22d" />
-          <svg v-else viewBox="0 0 24 24" width="16" height="16" fill="none" aria-hidden="true">
-            <rect x="8" y="8" width="12" height="12" rx="2.5" stroke="#000" stroke-width="1.6"/>
-            <path d="M4 16V6.5A2.5 2.5 0 0 1 6.5 4H16" stroke="#000" stroke-width="1.6" stroke-linecap="round"/>
-          </svg>
+          <!-- Figma 110:9611 — vuesax/linear/copy SVG. Designer flagged the
+               prior hand-drawn icon as off-spec (#3.6). -->
+          <img v-else class="lobby-code2__copy-icon" src="/figma/lobby/icon-copy.svg" alt="" aria-hidden="true"/>
         </button>
       </div>
       <button
@@ -776,6 +775,12 @@ const L = computed(() => isRu.value
 }
 .lobby-code2__copy:hover { background: rgba(0, 0, 0, 0.04); }
 .lobby-code2__copy:active { transform: translateY(-50%) scale(0.92); }
+.lobby-code2__copy-icon {
+  width: 16px;
+  height: 16px;
+  object-fit: contain;
+  pointer-events: none;
+}
 
 .lobby-cta--invite { background: #43c22d; }
 

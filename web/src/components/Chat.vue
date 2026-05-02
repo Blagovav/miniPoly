@@ -165,7 +165,9 @@ onUnmounted(() => {
             @click="send"
             aria-label="send"
           >
-            <Icon name="send" :size="18" color="#fff"/>
+            <!-- Figma 75:6068 — paper-airplane asset (image 30) sized 24×24
+                 inside the 40×40 blue circle. Replaces the inline Icon stand-in. -->
+            <img class="chat__send-icon" src="/figma/room/icon-send.webp" alt="" aria-hidden="true"/>
           </button>
         </div>
 
@@ -395,6 +397,12 @@ onUnmounted(() => {
   justify-content: center;
   cursor: pointer;
   transition: transform 0.1s ease, filter 0.1s ease;
+}
+.chat__send-icon {
+  width: 24px;
+  height: 24px;
+  object-fit: contain;
+  pointer-events: none;
 }
 .chat__send:disabled { opacity: 0.45; cursor: default; }
 .chat__send:not(:disabled):hover { filter: brightness(1.05); }
