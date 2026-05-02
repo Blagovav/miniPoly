@@ -318,17 +318,23 @@ const statusPopupSub = computed(() =>
       </div>
 
       <nav class="home-v2__nav">
-        <button class="home-v2__nav-item" @click="go('history')">
-          <img src="/figma/home/history.webp" alt="" />
-          <span>{{ L.history }}</span>
+        <button class="home-v2__nav-item home-v2__nav-item--history" @click="go('history')">
+          <span class="home-v2__nav-icon">
+            <img src="/figma/home/history.webp" alt="" />
+          </span>
+          <span class="home-v2__nav-label">{{ L.history }}</span>
         </button>
-        <button class="home-v2__nav-item" @click="go('shop')">
-          <img src="/figma/home/shop.webp" alt="" />
-          <span>{{ L.shop }}</span>
+        <button class="home-v2__nav-item home-v2__nav-item--shop" @click="go('shop')">
+          <span class="home-v2__nav-icon">
+            <img src="/figma/home/shop.webp" alt="" />
+          </span>
+          <span class="home-v2__nav-label">{{ L.shop }}</span>
         </button>
-        <button class="home-v2__nav-item" @click="go('profile')">
-          <img src="/figma/home/friends.webp" alt="" />
-          <span>{{ L.profile }}</span>
+        <button class="home-v2__nav-item home-v2__nav-item--profile" @click="go('profile')">
+          <span class="home-v2__nav-icon">
+            <img src="/figma/home/profile.webp" alt="" />
+          </span>
+          <span class="home-v2__nav-label">{{ L.profile }}</span>
         </button>
       </nav>
     </div>
@@ -437,7 +443,12 @@ const statusPopupSub = computed(() =>
 .home-v2__hero {
   position: relative;
   height: 140px;
-  margin-top: 45px;
+  /* Figma 13:2077 anchors the mascot at frame-y=66 / settings at y=104 /
+     greeting at y=172. Telegram WebApp consumes the safe-area on its own,
+     so we don't pad on top of it again — a 0 hero margin lines the mascot
+     up with the figma offset on iPhone viewports (designer feedback
+     2026-05-02 #1.1). */
+  margin-top: 0;
   margin-bottom: -37px;
 }
 .home-v2__mascot-clip {
@@ -500,6 +511,7 @@ const statusPopupSub = computed(() =>
   font-size: 28px;
   line-height: 34px;
   color: #fff;
+  -webkit-text-stroke: 1px #000;
   text-shadow: 1px 1px 0 #000;
   pointer-events: none;
 }
@@ -710,7 +722,7 @@ const statusPopupSub = computed(() =>
   width: 100%;
   min-height: 140px;
   padding: 76px 16px 22px;
-  background: #feffff;
+  background: #faf3e2;
   border: none;
   border-radius: 18px;
   box-shadow:
@@ -735,10 +747,10 @@ const statusPopupSub = computed(() =>
   pointer-events: none;
 }
 .home-v2__card-art--join {
-  top: -40px;
-  left: -1px;
-  width: 134px;
-  height: 134px;
+  top: -24px;
+  left: 5px;
+  width: 102px;
+  height: 102px;
 }
 
 .home-v2__card-title {
@@ -777,18 +789,38 @@ const statusPopupSub = computed(() =>
   width: 72px;
   transition: transform 120ms ease;
 }
-.home-v2__nav-item img {
+/* Figma 13:2108-13:2119 — each nav slot is a 72×72 footprint, but the icon
+   art overflows out of it (98 for history/profile, 112 for shop) so the
+   character pieces bleed past the tap target. The container stays 72×72 for
+   alignment; overflow is visible so the bleed actually shows. */
+.home-v2__nav-icon {
+  position: relative;
   width: 72px;
   height: 72px;
+  pointer-events: none;
+}
+.home-v2__nav-icon img {
+  position: absolute;
+  top: -13px;
+  left: -13px;
+  width: 98px;
+  height: 98px;
   object-fit: contain;
   pointer-events: none;
 }
-.home-v2__nav-item span {
+.home-v2__nav-item--shop .home-v2__nav-icon img {
+  top: -20px;
+  left: -20px;
+  width: 112px;
+  height: 112px;
+}
+.home-v2__nav-label {
   font-family: 'Unbounded', sans-serif;
   font-weight: 700;
   font-size: 14px;
   line-height: 16px;
   color: #feffff;
+  -webkit-text-stroke: 1px #000;
   text-shadow: 1px 1px 0 #000;
 }
 .home-v2__nav-item:active { transform: scale(0.92); }

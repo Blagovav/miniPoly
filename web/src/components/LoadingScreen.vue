@@ -33,7 +33,10 @@ onUnmounted(() => {
   padding-bottom: max(var(--sab, 0px), var(--csab, 0px));
 }
 .splash__logo {
-  width: min(90vw, 418px);
+  /* Figma 52:5051 — logo image is 418px wide on a 393px frame, i.e. ~106vw,
+     so it bleeds slightly past the viewport edges by design. Cap at 480px on
+     wide viewports so it doesn't grow unbounded. */
+  width: min(106vw, 480px);
   height: auto;
   object-fit: contain;
   pointer-events: none;
