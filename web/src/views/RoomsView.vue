@@ -236,18 +236,20 @@ onUnmounted(() => {
   font-family: 'Golos Text', sans-serif;
 }
 
-/* ── Sticky header (navbar + filter chips) ── */
+/* ── Sticky header (navbar + filter chips). Transparent at rest so the
+   body's blue + pattern overlay shows through unbroken (Figma 67:1216 —
+   the header in the design carries its own copy of the pattern, but on
+   the web the body's background-attachment: fixed achieves the same
+   continuity for free). */
 .rooms-v2__header {
   position: relative;
   z-index: 2;
   flex-shrink: 0;
   padding: 16px 24px 20px;
-  background: #0d68db;
-  transition: background-color 200ms ease, box-shadow 200ms ease, border-radius 200ms ease;
+  transition: box-shadow 200ms ease, border-radius 200ms ease;
 }
-/* Scroll-aware: shadow + rounded bottom appear once scroll starts.
-   At rest the header blends with the body's matching #0d68db so the
-   visual divide only kicks in when content has actually scrolled. */
+/* On scroll: rounded bottom + shadow detach the header from the list,
+   matching RoomView's scrolled-topbar pattern. */
 .rooms-v2__header--scrolled {
   border-bottom-left-radius: 18px;
   border-bottom-right-radius: 18px;
@@ -287,9 +289,11 @@ onUnmounted(() => {
 }
 .rooms-v2__count-pill {
   position: absolute;
-  left: 50%;
+  /* Aligned to the title's left edge — back-btn 44 + flex gap 16 = 60px
+     from the navbar's left, so the pill always sits flush under "Игры"
+     regardless of viewport width. */
+  left: 60px;
   top: 30px;
-  transform: translateX(-50%);
   padding: 3px 8px;
   background: #fff;
   border-radius: 999px;
@@ -299,6 +303,7 @@ onUnmounted(() => {
   line-height: 16px;
   color: #000;
   white-space: nowrap;
+  pointer-events: none;
 }
 
 .rooms-v2__filters {

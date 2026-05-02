@@ -21,7 +21,7 @@ const L = computed(() => isRu.value
       joinS:   "Войдите в заранее созданные другими игроками партии",
       history: "История",
       shop:    "Магазин",
-      friends: "Друзья",
+      profile: "Профиль",
       daily:   "Ежедневный бонус",
       settingsAria: "Настройки",
       playerFallback: "Игрок",
@@ -48,7 +48,7 @@ const L = computed(() => isRu.value
       joinS:   "Hop into matches other players have set up",
       history: "History",
       shop:    "Shop",
-      friends: "Friends",
+      profile: "Profile",
       daily:   "Daily bonus",
       settingsAria: "Settings",
       playerFallback: "Player",
@@ -273,7 +273,7 @@ const statusPopupSub = computed(() =>
         <button class="home-v2__name-save" @click="saveName">✓</button>
       </div>
 
-      <div class="home-v2__cards">
+      <div class="home-v2__cards" :class="{ 'home-v2__cards--with-active': activeRoomId }">
         <!-- Active match card (Figma 133:14865 / 133:14910). Shown only when
              the rejoin localStorage hint is fresh; replaces the slim banner
              that used to live above the greeting. Two CTAs match the figma
@@ -326,9 +326,9 @@ const statusPopupSub = computed(() =>
           <img src="/figma/home/shop.webp" alt="" />
           <span>{{ L.shop }}</span>
         </button>
-        <button class="home-v2__nav-item" @click="go('friends')">
+        <button class="home-v2__nav-item" @click="go('profile')">
           <img src="/figma/home/friends.webp" alt="" />
-          <span>{{ L.friends }}</span>
+          <span>{{ L.profile }}</span>
         </button>
       </nav>
     </div>
@@ -428,24 +428,24 @@ const statusPopupSub = computed(() =>
 }
 
 /* ── Hero: mascot + settings gear. Matches Figma main-menu (node 13:2077):
-   mascot box is 190×190 at viewport (24, 69) — left-aligned at the content
-   edge. Inside the box the character is rendered at 190×190 and offset by
-   (-18, -6) to match Figma's mask-position, which puts the bow-tie center
-   at ~(113, 140) in viewport coords (verified pixel-for-pixel vs Figma).
-   The greeting then sits 103px below the box top and overlaps the lower
-   portion of the character just like in the Figma screenshot. */
+   mascot box is 190×140 at viewport (24, 66) — the 190×190 character image
+   is offset by (-18, -6) and clipped by the 140-tall box so only the upper
+   portion of the figure (head/torso through mid-thigh) shows. The greeting
+   below docks to y=172 via the negative bottom-margin, slightly overlapping
+   the mascot's legs — the look matches the Figma screenshot. Settings sits
+   at y=104 (Figma navbar top:100 + nav inset 4). */
 .home-v2__hero {
   position: relative;
-  height: 190px;
+  height: 140px;
   margin-top: 45px;
-  margin-bottom: -87px;
+  margin-bottom: -37px;
 }
 .home-v2__mascot-clip {
   position: absolute;
   top: 0;
   left: 0;
   width: 190px;
-  height: 190px;
+  height: 140px;
   overflow: hidden;
   pointer-events: none;
   user-select: none;
@@ -457,12 +457,18 @@ const statusPopupSub = computed(() =>
   width: 190px;
   height: 190px;
   object-fit: contain;
+  /* Soft fade-out at the lower body — matches the figma mask-image
+     gradient (190×190 mask with stops at 55.5% / 66.2%). The image is
+     6px above the clip's top, so the percentages shift up by 6/190
+     (~3.16pp) to land at the same parent-y as the figma. */
+  -webkit-mask-image: linear-gradient(180deg, #fff 58.7%, transparent 69.4%);
+  mask-image: linear-gradient(180deg, #fff 58.7%, transparent 69.4%);
   pointer-events: none;
   user-select: none;
 }
 .home-v2__settings {
   position: absolute;
-  top: 47px;
+  top: 35px;
   right: 0;
   width: 48px;
   height: 48px;
@@ -544,9 +550,6 @@ const statusPopupSub = computed(() =>
   flex-direction: column;
   gap: 16px;
   color: #000;
-  box-shadow:
-    0 4px 8px rgba(0, 0, 0, 0.16),
-    inset 0 0 8px rgba(0, 0, 0, 0.16);
 }
 .home-v2__active-match-text {
   display: flex;
@@ -691,11 +694,16 @@ const statusPopupSub = computed(() =>
 .home-v2__cards {
   display: flex;
   flex-direction: column;
-  /* Figma 133:14869 — 12px between active-match / create / join cards.
-     Without an active match the gap reads visually as 24px because the
-     create card's mascot art overlaps the empty space. */
-  gap: 12px;
+  /* Figma 13:2077 — without an active match the create+join cards sit
+     24px apart and the stack starts 40px below the greeting. When the
+     active-match card is shown (Figma 133:14869) the inner gap tightens
+     to 12px and the whole stack shifts up to 24px below the greeting. */
+  gap: 24px;
   margin-top: 40px;
+}
+.home-v2__cards--with-active {
+  gap: 12px;
+  margin-top: 24px;
 }
 .home-v2__card {
   position: relative;

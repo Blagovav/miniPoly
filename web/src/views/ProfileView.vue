@@ -435,7 +435,7 @@ function userInitial() {
       </div>
 
       <!-- Tab toggle. Sticky so it docks under the topbar while scrolling. -->
-      <div class="profile__tabs-wrap">
+      <div class="profile__tabs-wrap" :class="{ 'profile__tabs-wrap--stuck': sticky }">
         <div class="profile__tabs">
           <button
             class="profile__tab"
@@ -675,10 +675,10 @@ function userInitial() {
   overflow: hidden;
 }
 
-/* ─── Topbar — canonical scroll-aware pattern (matches RoomView):
-       at scroll=0 sits transparently in flow with the body's blue/pattern
-       showing through; on scroll>4px it picks up a rounded bottom + shadow
-       to read as a floating card detached from the top edge. */
+/* ─── Topbar — sits transparently in flow with the body's blue/pattern
+       showing through. When scrolled the rounded bottom + shadow live on
+       the tabs-wrap below (see .profile__tabs-wrap--stuck) so the topbar
+       and tabs read as a single continuous card, not two stacked pieces. */
 .profile__topbar {
   position: relative;
   z-index: 10;
@@ -687,12 +687,6 @@ function userInitial() {
   justify-content: space-between;
   padding: 6px 24px 8px;
   flex-shrink: 0;
-  transition: background-color 200ms ease, box-shadow 200ms ease, border-radius 200ms ease;
-}
-.profile__topbar--stuck {
-  border-bottom-left-radius: 18px;
-  border-bottom-right-radius: 18px;
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.16);
 }
 .profile__icon-btn {
   width: 44px;
@@ -817,9 +811,9 @@ function userInitial() {
 }
 
 /* ─── Tab toggle — `position: sticky` so it docks at scroll-container top
-       once the hero (avatar/name/stats) scrolls past it. We don't add a
-       shadow here: the topbar already supplies the floating-card cue at the
-       very top of the viewport. */
+       once the hero (avatar/name/stats) scrolls past it. When stuck the
+       wrap takes the rounded-bottom + shadow that would otherwise sit on
+       the topbar — together they read as one continuous header card. */
 .profile__tabs-wrap {
   position: sticky;
   top: 0;
@@ -827,6 +821,12 @@ function userInitial() {
   margin: 0 -24px;
   padding: 8px 24px;
   background: transparent;
+  transition: box-shadow 200ms ease, border-radius 200ms ease;
+}
+.profile__tabs-wrap--stuck {
+  border-bottom-left-radius: 18px;
+  border-bottom-right-radius: 18px;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.16);
 }
 .profile__tabs {
   display: flex;
