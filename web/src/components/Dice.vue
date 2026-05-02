@@ -120,7 +120,9 @@ function pips(v: number) {
   height: 56px;
   background: #ffffff;
   border: none;
-  border-radius: 12px;
+  /* Designer feedback 2026-05-02 #5.9 — figma uses a softer 16px corner;
+     12px read as a hard-edged cube. */
+  border-radius: 16px;
   box-shadow:
     0 6px 12px rgba(0, 0, 0, 0.18),
     0 1px 0 rgba(0, 0, 0, 0.08),

@@ -1031,6 +1031,9 @@ void t;
               v-for="slot in turnSlots"
               :key="slot.key"
               :class="['turn-card', `turn-card--${slot.role}`]"
+              :style="slot.role === 'current'
+                ? { background: slot.player.color }
+                : undefined"
             >
               <div class="turn-card__avatar" />
               <div class="turn-card__body">
@@ -1739,6 +1742,9 @@ void t;
   font-size: 18px;
   line-height: 20px;
   color: #fff;
+  /* Designer feedback 2026-05-02 #5.12 — stroke + shadow combo so the
+     heading reads on the busy green board bg; was just the shadow. */
+  -webkit-text-stroke: 1px #000;
   text-shadow: 1px 1px 0 #000;
 }
 .turn-slider {
@@ -1791,6 +1797,10 @@ void t;
     padding 320ms ease;
 }
 .turn-card--current {
+  /* Designer feedback 2026-05-02 #5.13 — current-turn band now picks up
+     the active player's seat colour via inline :style binding above; the
+     hard-coded red read as "alarm" rather than "this player's turn".
+     Background fallback kept in case the player object is missing a hex. */
   background: #e84b3e;
   border: 2px solid #000;
   padding: 6px;
@@ -1839,8 +1849,11 @@ void t;
 .turn-card__name {
   font-family: 'Unbounded', sans-serif;
   font-weight: 900;
-  font-size: 14px;
-  line-height: 16px;
+  /* Designer feedback 2026-05-02 #5.10 — bump active-player typography
+     so the name reads as the focal point of the slider, not equal-weight
+     to prev/next. */
+  font-size: 16px;
+  line-height: 18px;
   color: #000;
   white-space: nowrap;
   overflow: hidden;
@@ -1848,7 +1861,10 @@ void t;
 }
 .turn-card--current .turn-card__name {
   color: #fff;
-  text-shadow: 0.4px 0.4px 0 #000;
+  /* Designer feedback 2026-05-02 #5.13 — stroke + shadow so the name
+     stays legible against any seat colour. */
+  -webkit-text-stroke: 0.5px #000;
+  text-shadow: 1px 1px 0 #000;
 }
 .turn-card__stats {
   display: flex;
@@ -1869,8 +1885,10 @@ void t;
   gap: 3px;
 }
 .turn-card__stats img {
-  width: 14px;
-  height: 14px;
+  /* Designer feedback 2026-05-02 #5.13 — bump stat icons so they don't
+     look anaemic next to the upsized player name. */
+  width: 16px;
+  height: 16px;
   object-fit: contain;
 }
 
