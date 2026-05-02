@@ -1048,9 +1048,10 @@ void t;
         </div>
 
         <!-- Current-tile plate — name + price/rent of the tile the active
-             player stands on. Figma node 32:1065. Only shown on property
-             tiles; chest/chance/tax/etc have no number to display.
-             Hidden during pre-roll (tile/position is meaningless yet). -->
+             player stands on. Per the latest Figma it's a cream/rounded
+             pill below the slider, NOT folded into a card. Sized big
+             enough that long Russian names ("Пенсильвания-авеню") never
+             truncate. Hidden during pre-roll. -->
         <div v-if="currentTileInfo && !isPreRoll" class="tile-info">
           <span class="tile-info__name">{{ currentTileInfo.name }}</span>
           <span v-if="currentTileInfo.value !== null" class="tile-info__value">
@@ -1902,22 +1903,25 @@ void t;
   object-fit: contain;
 }
 
-/* ── Current-tile plate — Figma 32:1065 ── */
+/* ── Current-tile plate — Figma reference (Текущий ход + tile pill).
+   Cream/rounded pill below the slider, big bold tile name on the left,
+   coin + value on the right. Sized so long Russian names render at
+   full width without truncation. ── */
 .tile-info {
-  margin-top: 12px;
-  background: #fff;
-  border-radius: 12px;
-  padding: 8px 12px;
+  margin-top: 16px;
+  background: #f5efd9;
+  border-radius: 24px;
+  padding: 14px 20px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
+  gap: 12px;
 }
 .tile-info__name {
   font-family: 'Unbounded', sans-serif;
-  font-weight: 700;
-  font-size: 14px;
-  line-height: 16px;
+  font-weight: 900;
+  font-size: 18px;
+  line-height: 22px;
   color: #000;
   white-space: nowrap;
   overflow: hidden;
@@ -1926,17 +1930,17 @@ void t;
 .tile-info__value {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   font-family: 'Unbounded', sans-serif;
-  font-weight: 700;
-  font-size: 14px;
-  line-height: 16px;
+  font-weight: 900;
+  font-size: 18px;
+  line-height: 22px;
   color: #000;
   flex-shrink: 0;
 }
 .tile-info__value img {
-  width: 24px;
-  height: 24px;
+  width: 28px;
+  height: 28px;
   object-fit: contain;
 }
 
