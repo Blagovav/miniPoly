@@ -273,8 +273,11 @@ void lighten;
   Board-wrap centres the square board inside the room view while letting
   the outer .room column keep its vertical padding.
 */
+/* Designer feedback 2026-05-02 #5.4 — board sat too close to the
+   topbar. Bump top padding 4 → 16 so there's breathing room between
+   the in-game toolbar and the board edge. */
 .board-wrap {
-  padding: 4px 4px 8px;
+  padding: 16px 4px 8px;
   position: relative;
   z-index: 4;
 }
