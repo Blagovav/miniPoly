@@ -1251,8 +1251,10 @@ function sendToJail(room: RoomState, p: Player): void {
  * Hasbro: a player must sell every house they own, then mortgage every
  * unmortgaged property, BEFORE declaring bankruptcy. Real rules let the
  * player choose which to sell selectively — our digital simplification
- * is to liquidate everything in one go (always profitable for the
- * player, since selling more than needed turns into surplus cash).
+ * is automated, but stops as soon as the obligation is covered so the
+ * player isn't over-liquidated (over-mortgage = lost rent + 10% interest
+ * to redeem). Each forced sale/mortgage is logged so the player can see
+ * in the room log exactly which tiles were touched and why.
  *
  * Mutates `p.cash` upward; callers re-check whether the post-liquidate
  * balance covers the obligation. Returns silently when the player
@@ -1262,34 +1264,52 @@ function sendToJail(room: RoomState, p: Player): void {
 function liquidateForCash(room: RoomState, p: Player, target: number): void {
   if (p.cash >= target) return;
 
-  // Phase 1 — sell all buildings (half house cost each, hotel = 5 houses).
+  // Phase 1 — sell buildings (half house cost each, hotel = 5 houses).
+  // Stops as soon as the cash target is met so we don't strip a fully-
+  // built monopoly to cover a small rent.
   for (const idx in room.properties) {
+    if (p.cash >= target) break;
     const prop = room.properties[idx];
     if (prop.ownerId !== p.id) continue;
     if (!prop.hotel && prop.houses === 0) continue;
     const tile = BOARD[parseInt(idx, 10)];
     if (tile.kind !== "street") continue;
+    let proceeds = 0;
     if (prop.hotel) {
-      p.cash += Math.floor((tile.houseCost * 5) / 2);
+      proceeds += Math.floor((tile.houseCost * 5) / 2);
       prop.hotel = false;
       room.hotelBank++;
     }
     if (prop.houses > 0) {
-      p.cash += Math.floor((tile.houseCost * prop.houses) / 2);
+      proceeds += Math.floor((tile.houseCost * prop.houses) / 2);
       room.houseBank += prop.houses;
       prop.houses = 0;
     }
+    p.cash += proceeds;
+    log(room, {
+      en: `${p.name} sold buildings on ${tile.name.en} (+$${proceeds}, forced)`,
+      ru: `${p.name} вынужденно продал постройки на ${tile.name.ru} (+$${proceeds})`,
+    });
   }
   if (p.cash >= target) return;
 
-  // Phase 2 — mortgage every property not already mortgaged.
+  // Phase 2 — mortgage properties one at a time, stopping the moment
+  // the player can cover their obligation. Without the break the engine
+  // used to mortgage every tile they owned even when one was enough,
+  // which players rightly read as "the game mortgaged my property and
+  // didn't tell me".
   for (const idx in room.properties) {
+    if (p.cash >= target) break;
     const prop = room.properties[idx];
     if (prop.ownerId !== p.id || prop.mortgaged) continue;
     const tile = BOARD[parseInt(idx, 10)];
     if (tile.kind !== "street" && tile.kind !== "railroad" && tile.kind !== "utility") continue;
     p.cash += tile.mortgage;
     prop.mortgaged = true;
+    log(room, {
+      en: `${p.name} mortgaged ${tile.name.en} (+$${tile.mortgage}, forced)`,
+      ru: `${p.name} вынужденно заложил ${tile.name.ru} (+$${tile.mortgage})`,
+    });
   }
 }
 
