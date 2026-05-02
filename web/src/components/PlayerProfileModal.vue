@@ -198,7 +198,9 @@ const L = computed(() => isRu.value
   display: flex;
   flex-direction: column;
   justify-content: flex-end;
-  padding: 0 24px calc(16px + var(--sab, 0px) + var(--csab, 0px));
+  /* Designer feedback 2026-05-02 #5.18 — figma 75:5661 anchors popup-info
+     at 76px from frame bottom; was 16px, lifting by 60px. */
+  padding: 0 24px calc(76px + var(--sab, 0px) + var(--csab, 0px));
 }
 
 .profile-fade-enter-active,

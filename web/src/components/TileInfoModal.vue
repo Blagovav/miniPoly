@@ -467,11 +467,15 @@ const ownerTokenId = computed<TokenArtId>(() => tokenArtFor(owner.value?.token |
      property card. RouteLoader is 90, TourOverlay is 600 — modal
      fits cleanly between Chat and Tour. */
   z-index: 130;
+  /* Designer feedback 2026-05-02 #5.18 — in-game popups dock to bottom
+     76px from figma 75:5661 instead of centring, so the player keeps
+     the board visible above the popup. */
   display: flex;
+  flex-direction: column;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-end;
   padding: 16px;
-  padding-bottom: calc(16px + var(--csab, 0px));
+  padding-bottom: calc(76px + var(--sab, 0px) + var(--csab, 0px));
 }
 
 .info-wrap {

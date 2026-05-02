@@ -148,10 +148,14 @@ const L = computed(() => locale.value === "ru"
   inset: 0;
   z-index: 520;
   background: rgba(0, 0, 0, 0.4);
+  /* Designer feedback 2026-05-02 #5.18 — chance/chest reveals dock at
+     76px from bottom so the board stays visible. */
   display: flex;
+  flex-direction: column;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-end;
   padding: 24px;
+  padding-bottom: calc(76px + var(--sab, 0px) + var(--csab, 0px));
 }
 
 .card-stack {

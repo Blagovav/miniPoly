@@ -367,7 +367,10 @@ const L = computed(() => isRu.value
   background: rgba(0, 0, 0, 0.4);
   /* Figma 75:5226 places the popup-history card at calc(50% + 34px) —
      a touch below true centre. We centre vertically; the inner card
-     has max-height + overflow so a long holdings list still fits. */
+     has max-height + overflow so a long holdings list still fits.
+     TradeModal stays centred per its own figma anchor — designer's
+     5.18 «76px from bottom» rule applies to the smaller popup-info
+     (75:5661) pattern, not the longer trade-proposal modal. */
   display: flex;
   flex-direction: column;
   justify-content: center;

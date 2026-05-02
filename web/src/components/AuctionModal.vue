@@ -219,11 +219,14 @@ const visible = computed(() => open.value && !!tile.value && !!auction.value && 
   inset: 0;
   background: rgba(0, 0, 0, 0.4);
   z-index: 500;
+  /* Designer feedback 2026-05-02 #5.18 — auction popup docks 76px from
+     bottom (figma in-game popup-info anchor) instead of centring. */
   display: flex;
+  flex-direction: column;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-end;
   padding: 16px;
-  padding-bottom: calc(16px + var(--csab, 0px));
+  padding-bottom: calc(76px + var(--sab, 0px) + var(--csab, 0px));
 }
 
 .auction-card {
