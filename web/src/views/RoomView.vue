@@ -1060,6 +1060,12 @@ void t;
              Per Figma 32:2037: 24px medal on the left, coloured pill with
              avatar + name + cash on the right. Skipped during pre-roll —
              the standings aren't meaningful until seats are set. -->
+        <h2
+          v-if="leaderboard.length > 0 && !isPreRoll"
+          class="players-header"
+        >
+          {{ locale === 'ru' ? 'Игроки' : 'Players' }}
+        </h2>
         <div v-if="leaderboard.length > 0 && !isPreRoll" class="leaderboard">
           <button
             v-for="(p, i) in leaderboard.slice(0, 4)"
@@ -1711,9 +1717,8 @@ void t;
   font-size: 14px;
   line-height: 16px;
 }
-.board-hud__budget-row + .board-hud__budget-row {
-  border-top: 1px solid rgba(0, 0, 0, 0.12);
-}
+/* Designer feedback 2026-05-02 #5.11 — figma drops the divider between
+   «Ваш бюджет» and «Собственностей»; the spacing alone separates them. */
 .board-hud__budget-val {
   display: inline-flex;
   align-items: center;
@@ -1907,9 +1912,22 @@ void t;
   object-fit: contain;
 }
 
+/* Designer feedback 2026-05-02 #5.14 — figma adds an «Игроки» heading
+   above the leaderboard so it reads as its own section, not a floating
+   list. Mirrors the .turn-label / Lobby section-label typography. */
+.players-header {
+  margin: 16px 0 8px;
+  font-family: 'Unbounded', sans-serif;
+  font-weight: 900;
+  font-size: 18px;
+  line-height: 20px;
+  color: #fff;
+  text-shadow: 1px 1px 0 #000;
+}
+
 /* ── Leaderboard — Figma 32:2037 ── */
 .leaderboard {
-  margin-top: 16px;
+  margin-top: 0;
   background: #feffff;
   border-radius: 18px;
   padding: 12px;
