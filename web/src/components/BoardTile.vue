@@ -292,7 +292,10 @@ const showPrice = computed(() =>
 }
 
 /* Price — Figma node 19:2778: Unbounded Black 10px text in #31581a,
-   centered in the tile. No pill, no background. */
+   centered in the tile. No pill, no background. Designer feedback
+   2026-05-02 #5.3 — bumped clamp ceiling 10 → 12 + min 8 → 9 so the
+   number reads at the larger Telegram viewports without forcing big
+   tiles to a tiny 8px floor. */
 .price {
   position: absolute;
   left: 50%;
@@ -300,8 +303,8 @@ const showPrice = computed(() =>
   transform: translate(-50%, -50%);
   font-family: 'Unbounded', sans-serif;
   font-weight: 900;
-  font-size: clamp(8px, 1.2vmin, 10px);
-  line-height: 10px;
+  font-size: clamp(9px, 1.4vmin, 12px);
+  line-height: 12px;
   color: #31581a;
   font-variant-numeric: tabular-nums;
   letter-spacing: 0.01em;
