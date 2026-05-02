@@ -898,7 +898,12 @@ function handleProperty(room: RoomState, p: Player, tile: PropertyTile, opts?: R
     if (p.cash >= tile.price) {
       room.phase = "buyPrompt";
     } else {
+      // Hasbro: if the player who lands can't afford the face price, the
+      // tile goes straight to auction. They can still bid in that auction
+      // up to whatever cash they actually have. Without this the player
+      // was just left with "End Turn" and the tile sat unsold.
       log(room, { en: `${p.name} can't afford ${tile.name.en}`, ru: `${p.name} не может купить ${tile.name.ru}` });
+      startAuction(room, tile.index);
     }
     return;
   }
