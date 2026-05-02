@@ -107,13 +107,21 @@ const L = computed(() => isRu.value
     <div v-if="player" class="profile-scrim" role="dialog" aria-modal="true" @click.self="onClose">
       <div class="profile-stack">
         <div class="profile-card">
-          <!-- Head: avatar + name + colour chip -->
+          <!-- Head: avatar + name + colour chip. Designer feedback
+               2026-05-02 #5.23 — figma 75:5663 uses a character glyph
+               (image 35) inside the player-colour circle, not the
+               initial-on-color sigil we had. -->
           <div class="profile-head">
             <div
               class="profile-avatar"
               :style="{ background: player.color }"
             >
-              <Sigil :name="player.name" :color="player.color" :size="48"/>
+              <img
+                class="profile-avatar__art"
+                src="/figma/profile-popup/avatar.webp"
+                alt=""
+                aria-hidden="true"
+              />
             </div>
             <div class="profile-head__body">
               <div class="profile-name">{{ player.name }}</div>
@@ -124,26 +132,28 @@ const L = computed(() => isRu.value
             </div>
           </div>
 
-          <!-- 3 green stat cards -->
+          <!-- 3 green stat cards. Coin/properties figures are figma
+               assets (image 25 + Ic24Properies / image 18 from 75:5675–
+               75:5688) replacing the prior 💰 emoji + Icon stand-ins. -->
           <div class="profile-stats">
             <div class="profile-stat">
               <div class="profile-stat__label">{{ L.cash }}</div>
               <div class="profile-stat__val">
-                <span class="profile-stat__coin" aria-hidden="true">💰</span>
+                <img class="profile-stat__icon" src="/figma/profile-popup/coin.webp" alt="" aria-hidden="true"/>
                 <span class="profile-stat__num">{{ player.cash }}</span>
               </div>
             </div>
             <div class="profile-stat">
               <div class="profile-stat__label">{{ L.worth }}</div>
               <div class="profile-stat__val">
-                <span class="profile-stat__coin" aria-hidden="true">💰</span>
+                <img class="profile-stat__icon" src="/figma/profile-popup/coin.webp" alt="" aria-hidden="true"/>
                 <span class="profile-stat__num">{{ totalWorth }}</span>
               </div>
             </div>
             <div class="profile-stat">
               <div class="profile-stat__label">{{ L.holdings }}</div>
               <div class="profile-stat__val">
-                <Icon name="home" :size="20" color="#fff"/>
+                <img class="profile-stat__icon" src="/figma/profile-popup/properties.webp" alt="" aria-hidden="true"/>
                 <span class="profile-stat__num">{{ ownedList.length }}</span>
               </div>
             </div>
@@ -258,6 +268,12 @@ const L = computed(() => isRu.value
   background: transparent !important;
   box-shadow: none !important;
 }
+.profile-avatar__art {
+  width: 48px;
+  height: 48px;
+  object-fit: contain;
+  pointer-events: none;
+}
 .profile-head__body {
   display: flex;
   flex-direction: column;
@@ -323,6 +339,12 @@ const L = computed(() => isRu.value
   font-size: 18px;
   line-height: 1;
   filter: saturate(0.9);
+}
+.profile-stat__icon {
+  width: 24px;
+  height: 24px;
+  object-fit: contain;
+  pointer-events: none;
 }
 .profile-stat__num {
   font-family: 'Golos Text', 'Unbounded', sans-serif;
