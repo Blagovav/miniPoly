@@ -2,7 +2,7 @@ import { defineStore } from "pinia";
 import { computed, ref } from "vue";
 import type { RoomState, ServerMessage } from "../../../shared/types";
 import { useTelegram } from "../composables/useTelegram";
-import { playStep } from "./../composables/useSounds";
+import { startStep, stopStep } from "./../composables/useSounds";
 
 export interface ChatMessage {
   id: string;
@@ -73,8 +73,13 @@ export const useGameStore = defineStore("game", () => {
     const stepDuration = 180;
     const isMe = playerId === myPlayerId.value;
     const startPos = from;
+    // The walk SFX is one continuous mp3, so kick it off ONCE at the
+    // start of the animation rather than per-step. Stop it on land so
+    // the audio doesn't trail past the visual end (~1s+ leftover).
+    startStep();
     const tick = () => {
       if (current === to) {
+        stopStep();
         animatingPlayerId.value = null;
         const next = { ...animatedPositions.value };
         delete next[playerId];
@@ -100,10 +105,6 @@ export const useGameStore = defineStore("game", () => {
       }
       animatedPositions.value = { ...animatedPositions.value, [playerId]: current };
       if (isMe) haptic("light");
-      // Step SFX fires for EVERY player's walk (not just isMe) so other
-      // players' turns also get audio feedback. Volume is intentionally
-      // reduced inside playStep so a 12-step roll doesn't deafen.
-      playStep();
       setTimeout(tick, stepDuration);
     };
     setTimeout(tick, 400);
