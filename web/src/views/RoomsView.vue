@@ -496,9 +496,8 @@ onUnmounted(() => {
   font-size: 24px;
   line-height: 30px;
   color: #fff;
-  /* Stroke + shadow combo to match the figma empty-state (59:65) +
-     designer pattern from PR-A's greeting (#4.3). */
-  -webkit-text-stroke: 1px #000;
+  /* Drop-shadow only — webkit-text-stroke fuzzes Golos 700 into a
+     double outline. Playtester 2026-05-03 sweep across all views. */
   text-shadow: 1px 1px 0 #000;
 }
 .rooms-v2__empty-text p { margin: 0; }

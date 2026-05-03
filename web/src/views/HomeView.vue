@@ -511,7 +511,10 @@ const statusPopupSub = computed(() =>
   font-size: 28px;
   line-height: 34px;
   color: #fff;
-  -webkit-text-stroke: 1px #000;
+  /* Single drop-shadow — figma "stroke" on text always lands as a
+     centred webkit-text-stroke in the browser, which fuzzes heavy
+     glyphs (Golos 700 / Unbounded Black) into an unreadable double
+     outline. Playtester 2026-05-03 — drop the stroke everywhere. */
   text-shadow: 1px 1px 0 #000;
   pointer-events: none;
 }
@@ -820,7 +823,7 @@ const statusPopupSub = computed(() =>
   font-size: 14px;
   line-height: 16px;
   color: #feffff;
-  -webkit-text-stroke: 1px #000;
+  /* See .home-v2__greeting — webkit-text-stroke removed app-wide. */
   text-shadow: 1px 1px 0 #000;
 }
 .home-v2__nav-item:active { transform: scale(0.92); }
