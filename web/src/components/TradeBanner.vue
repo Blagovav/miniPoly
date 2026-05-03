@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { computed } from "vue";
-import { BOARD } from "../../../shared/board";
+import { BOARD, GROUP_COLORS } from "../../../shared/board";
 import { useI18n } from "vue-i18n";
-import type { Locale } from "../../../shared/types";
+import type { Locale, StreetTile } from "../../../shared/types";
 import { useGameStore } from "../stores/game";
 import Icon from "./Icon.vue";
 import Sigil from "./Sigil.vue";
@@ -41,14 +41,28 @@ const fromColor = computed(() => {
   return idx >= 0 ? ORDERED_PLAYER_COLORS[idx % ORDERED_PLAYER_COLORS.length] : ORDERED_PLAYER_COLORS[0];
 });
 
-function tileName(idx: number): string {
-  return BOARD[idx]?.name[loc.value] ?? "?";
+interface TileRow {
+  idx: number;
+  name: string;
+  band: string; // CSS color for the leading dot — group color for streets, neutral for railroad/utility
+}
+function tileRow(idx: number): TileRow {
+  const t = BOARD[idx];
+  let band = "var(--ink-3)";
+  if (t?.kind === "street") band = GROUP_COLORS[(t as StreetTile).group] ?? band;
+  else if (t?.kind === "railroad") band = "#000";
+  else if (t?.kind === "utility") band = "#9ca3af";
+  return {
+    idx,
+    name: t?.name[loc.value] ?? "?",
+    band,
+  };
 }
 
 // "They give me" = offer.giveTiles/giveCash/giveJailCards
 // "I give them" = offer.takeTiles/takeCash/takeJailCards
-const theyGiveTiles = computed(() => offerForMe.value?.giveTiles.map(tileName) ?? []);
-const iGiveTiles = computed(() => offerForMe.value?.takeTiles.map(tileName) ?? []);
+const theyGiveTiles = computed(() => offerForMe.value?.giveTiles.map(tileRow) ?? []);
+const iGiveTiles = computed(() => offerForMe.value?.takeTiles.map(tileRow) ?? []);
 const theyGiveCash = computed(() => offerForMe.value?.giveCash ?? 0);
 const iGiveCash = computed(() => offerForMe.value?.takeCash ?? 0);
 const theyGiveJail = computed(() => offerForMe.value?.giveJailCards ?? 0);
@@ -98,7 +112,10 @@ void props;
         <div class="side side--get">
           <div class="side__label">{{ L.youGet }}</div>
           <ul class="side__list">
-            <li v-for="n in theyGiveTiles" :key="n">{{ n }}</li>
+            <li v-for="row in theyGiveTiles" :key="row.idx" class="side__tile">
+              <span class="side__dot" :style="{ background: row.band }" aria-hidden="true"/>
+              <span class="side__tile-name">{{ row.name }}</span>
+            </li>
             <li v-if="theyGiveCash > 0" class="side__coin">◈ {{ theyGiveCash }} {{ L.cash }}</li>
             <li v-if="theyGiveJail > 0">⛓ {{ theyGiveJail }} {{ L.jail }}</li>
             <li v-if="theyGiveTiles.length === 0 && theyGiveCash === 0 && theyGiveJail === 0" class="side__none">
@@ -110,7 +127,10 @@ void props;
         <div class="side side--give">
           <div class="side__label">{{ L.youGive }}</div>
           <ul class="side__list">
-            <li v-for="n in iGiveTiles" :key="n">{{ n }}</li>
+            <li v-for="row in iGiveTiles" :key="row.idx" class="side__tile">
+              <span class="side__dot" :style="{ background: row.band }" aria-hidden="true"/>
+              <span class="side__tile-name">{{ row.name }}</span>
+            </li>
             <li v-if="iGiveCash > 0" class="side__coin">◈ {{ iGiveCash }} {{ L.cash }}</li>
             <li v-if="iGiveJail > 0">⛓ {{ iGiveJail }} {{ L.jail }}</li>
             <li v-if="iGiveTiles.length === 0 && iGiveCash === 0 && iGiveJail === 0" class="side__none">
@@ -215,10 +235,34 @@ void props;
   margin: 0;
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 4px;
   font-family: var(--font-display);
   font-size: 12px;
   color: var(--ink);
+}
+/* Tile row — leading colour dot mirrors the colour-band system used in the
+   board / TradeModal, so the recipient instantly sees which group each
+   property belongs to (playtester feedback 2026-05-03 — "непонятно какие
+   территории и каких цветов предлагают"). */
+.side__tile {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.side__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  box-shadow: inset 0 -1px 1px rgba(0, 0, 0, 0.18), 0 0 0 1px rgba(0, 0, 0, 0.08);
+}
+.side__tile-name {
+  flex: 1 1 0;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .side__coin {
   font-family: var(--font-mono);
