@@ -185,13 +185,20 @@ const bankHasSupply = computed(() => {
 });
 
 // Дом: build next house (only when fewer than 4).
+// Cash gate added 2026-05-03 — server already rejects `not enough cash`,
+// but the rejection wasn't surfaced to the user (lastError sat in the
+// store unread). Disabling the button is the cleaner UX: matches the
+// "Залог" pattern below where can/can't is computed from state.
 const canBuildHouse = computed(() => {
   if (!isMineStreet.value || !hasMonopoly.value) return false;
   const o = owned.value;
   if (!o || o.mortgaged) return false;
   if (o.hotel || o.houses >= 4) return false;
   if (!bankHasSupply.value) return false;
-  return evenBuildOk.value;
+  if (!evenBuildOk.value) return false;
+  const cost = (tile.value && tile.value.kind === "street") ? (tile.value as StreetTile).houseCost : 0;
+  if ((game.me?.cash ?? 0) < cost) return false;
+  return true;
 });
 // Отель: upgrade 4 houses → hotel.
 const canBuildHotel = computed(() => {
@@ -200,7 +207,10 @@ const canBuildHotel = computed(() => {
   if (!o || o.mortgaged) return false;
   if (o.hotel || o.houses < 4) return false;
   if (!bankHasSupply.value) return false;
-  return evenBuildOk.value;
+  if (!evenBuildOk.value) return false;
+  const cost = (tile.value && tile.value.kind === "street") ? (tile.value as StreetTile).houseCost : 0;
+  if ((game.me?.cash ?? 0) < cost) return false;
+  return true;
 });
 const canSell = computed(() => {
   const o = owned.value;
@@ -278,6 +288,14 @@ const buildHint = computed<string | null>(() => {
     return owned.value?.houses === 4
       ? (isRu.value ? "В банке закончились отели" : "No hotels left in the bank")
       : (isRu.value ? "В банке закончились дома" : "No houses left in the bank");
+  }
+  // Cash short — mirrors the new canBuildHouse/canBuildHotel gate so the
+  // user knows why the button is grey instead of guessing.
+  const o = owned.value;
+  const cost = (tile.value && tile.value.kind === "street") ? (tile.value as StreetTile).houseCost : 0;
+  const wouldBuild = o && !o.hotel && (o.houses < 4 || (o.houses === 4 && bankHasSupply.value));
+  if (wouldBuild && (game.me?.cash ?? 0) < cost) {
+    return isRu.value ? "Не хватает денег на постройку" : "Not enough cash to build";
   }
   return null;
 });

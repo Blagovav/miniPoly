@@ -336,7 +336,11 @@ function handleVoiceSignal(conn: Conn, toId: string, payload: import("../../../s
 function authenticate(initData: string, name: string) {
   const auth = validateInitData(initData);
   if (!auth) return null;
-  return { tgUserId: auth.user.id, displayName: name || auth.user.first_name };
+  return {
+    tgUserId: auth.user.id,
+    displayName: name || auth.user.first_name,
+    photoUrl: auth.user.photo_url,
+  };
 }
 
 function handleCreate(conn: Conn, msg: ClientMessage & { type: "create" }): void {
@@ -346,7 +350,7 @@ function handleCreate(conn: Conn, msg: ClientMessage & { type: "create" }): void
     return;
   }
   const room = createRoom("pending", msg.isPublic ?? true, msg.maxPlayers ?? 6);
-  const player = addPlayer(room, auth.tgUserId, auth.displayName);
+  const player = addPlayer(room, auth.tgUserId, auth.displayName, auth.photoUrl);
   if (!player) {
     conn.send({ type: "error", message: "can't add player" });
     return;
@@ -376,7 +380,7 @@ function handleJoin(conn: Conn, msg: ClientMessage & { type: "join" }): void {
     conn.send({ type: "error", message: "room not found" });
     return;
   }
-  const player = addPlayer(room, auth.tgUserId, auth.displayName);
+  const player = addPlayer(room, auth.tgUserId, auth.displayName, auth.photoUrl);
   if (!player) {
     conn.send({ type: "error", message: "can't join (full or already started)" });
     return;
@@ -504,6 +508,10 @@ function handlePlaceBid(conn: Conn, amount: number): void {
     return;
   }
   sendState(ctx.room.id);
+  // Without onStateChange the auction-bot scheduler never re-arms after a
+  // human raise — bots would just sit and never counter-bid, leaving the
+  // human as last-bidder-by-default after the timer never advanced.
+  onStateChange(ctx.room);
 }
 
 function handlePassAuction(conn: Conn): void {
@@ -588,6 +596,7 @@ function handleBuy(conn: Conn): void {
     return;
   }
   sendState(ctx.room.id);
+  onStateChange(ctx.room);
 }
 
 function handleSkipBuy(conn: Conn): void {
@@ -595,6 +604,11 @@ function handleSkipBuy(conn: Conn): void {
   if (!ctx) return;
   skipBuy(ctx.room);
   sendState(ctx.room.id);
+  // skipBuy on a property tile flips phase to "auction" and starts the
+  // auction state. Without onStateChange the auction-bot scheduler is
+  // never invoked, so when a human declines to buy, bots never wake up
+  // to bid — auction stalls until the human bids or passes themselves.
+  onStateChange(ctx.room);
 }
 
 function handleEndTurn(conn: Conn): void {
@@ -648,6 +662,12 @@ function handleLeave(conn: Conn): void {
     return;
   }
   sendState(ctx.room.id);
+  // Active-game leave advances currentTurn inside leaveActiveGame when the
+  // leaver was the current player, but without onStateChange the bot/turn
+  // timers never re-arm for the new current player — bots freeze, humans
+  // see no "your turn" notification, and the room appears stalled to
+  // everyone still in it. Same wake-up gap that hit the auction scheduler.
+  onStateChange(ctx.room);
   conn.roomId = null;
   conn.playerId = null;
 }
@@ -714,6 +734,10 @@ function handleProposeTrade(
     return;
   }
   sendState(ctx.room.id);
+  // onStateChange auto-resolves any pendingTrade aimed at a bot. Without
+  // this the bot would never react to a human's offer and the trade would
+  // hang in pendingTrade forever.
+  onStateChange(ctx.room);
 }
 
 function handleRespondTrade(conn: Conn, accept: boolean): void {
@@ -725,6 +749,7 @@ function handleRespondTrade(conn: Conn, accept: boolean): void {
     return;
   }
   sendState(ctx.room.id);
+  onStateChange(ctx.room);
 }
 
 function handleMortgage(conn: Conn, tileIndex: number): void {

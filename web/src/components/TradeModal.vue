@@ -234,7 +234,7 @@ const L = computed(() => isRu.value
                 <span class="trade-pill__body">
                   <span class="trade-pill__name">{{ p.name }}</span>
                   <span class="trade-pill__cash">
-                    <span aria-hidden="true">💰</span>
+                    <img class="trade-pill__cash-icon" src="/figma/room/icon-money.webp" alt="" aria-hidden="true"/>
                     {{ p.cash }}
                   </span>
                 </span>
@@ -265,7 +265,7 @@ const L = computed(() => isRu.value
               </div>
 
               <div class="trade-input">
-                <span class="trade-input__icon" aria-hidden="true">💰</span>
+                <img class="trade-input__icon" src="/figma/room/icon-money.webp" alt="" aria-hidden="true"/>
                 <input
                   v-model.number="giveCash"
                   type="number"
@@ -278,7 +278,7 @@ const L = computed(() => isRu.value
               </div>
 
               <div v-if="myJailMax > 0" class="trade-input">
-                <span class="trade-input__icon" aria-hidden="true">🎴</span>
+                <img class="trade-input__icon" src="/figma/room/tile-jail.webp" alt="" aria-hidden="true"/>
                 <input
                   v-model.number="giveJail"
                   type="number"
@@ -314,7 +314,7 @@ const L = computed(() => isRu.value
                 </div>
 
                 <div class="trade-input">
-                  <span class="trade-input__icon" aria-hidden="true">💰</span>
+                  <img class="trade-input__icon" src="/figma/room/icon-money.webp" alt="" aria-hidden="true"/>
                   <input
                     v-model.number="takeCash"
                     type="number"
@@ -327,7 +327,7 @@ const L = computed(() => isRu.value
                 </div>
 
                 <div v-if="theirJailMax > 0" class="trade-input">
-                  <span class="trade-input__icon" aria-hidden="true">🎴</span>
+                  <img class="trade-input__icon" src="/figma/room/tile-jail.webp" alt="" aria-hidden="true"/>
                   <input
                     v-model.number="takeJail"
                     type="number"
@@ -515,6 +515,13 @@ const L = computed(() => isRu.value
   color: #fff;
   text-shadow: 0.2px 0.2px 0 rgba(0, 0, 0, 0.5);
 }
+.trade-pill__cash-icon {
+  width: 16px;
+  height: 16px;
+  object-fit: contain;
+  flex-shrink: 0;
+  pointer-events: none;
+}
 
 /* ── Empty / warning strip ── */
 .trade-empty {
@@ -608,11 +615,11 @@ const L = computed(() => isRu.value
   gap: 4px;
 }
 .trade-input__icon {
-  font-size: 22px;
-  line-height: 1;
-  flex-shrink: 0;
   width: 24px;
-  text-align: center;
+  height: 24px;
+  flex-shrink: 0;
+  object-fit: contain;
+  pointer-events: none;
 }
 .trade-input__field {
   flex: 1;
@@ -622,7 +629,9 @@ const L = computed(() => isRu.value
   background: #fff;
   border: 1px solid rgba(0, 0, 0, 0.16);
   border-radius: 12px;
-  font-family: 'Unbounded', sans-serif;
+  /* Figma inputs use SF Pro Text Medium — let the OS pick the closest
+     system UI font; falls back to the project sans on non-Apple. */
+  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, sans-serif;
   font-weight: 500;
   font-size: 14px;
   line-height: 16px;
@@ -639,9 +648,10 @@ const L = computed(() => isRu.value
 .trade-input__field:focus { border-color: rgba(0, 0, 0, 0.4); }
 .trade-input__field::placeholder { opacity: 0.4; }
 .trade-input__max {
-  font-family: 'Unbounded', sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, sans-serif;
   font-weight: 500;
   font-size: 12px;
+  line-height: 14px;
   color: #000;
   flex-shrink: 0;
 }

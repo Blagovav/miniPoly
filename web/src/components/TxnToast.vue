@@ -4,6 +4,7 @@ import { useI18n } from "vue-i18n";
 import { BOARD } from "../../../shared/board";
 import type { GameLogEntry } from "../../../shared/types";
 import { useGameStore } from "../stores/game";
+import { playBuy, playCashIn, playCashOut } from "../composables/useSounds";
 
 // Surfaces a short-lived banner ("Bought X for $140", "-100 → Alex", "+100
 // from Slava") whenever a log entry with structured `txn` data arrives that
@@ -14,7 +15,7 @@ const game = useGameStore();
 
 type Toast = {
   id: string;
-  dir: "in" | "out" | "buy"; // color/glyph variant
+  dir: "in" | "out" | "buy" | "forced"; // color/glyph variant
   amount: number;
   tileName: string;
   counterparty: string;
@@ -68,6 +69,19 @@ function entryToToast(entry: GameLogEntry): Toast | null {
       counterparty: playerName(t.actorId),
     };
   }
+  // Forced sale / mortgage on the player's own property — surface as a
+  // clear toast so the user understands why their houses or properties
+  // suddenly changed state. Without it, players read "my houses just
+  // disappeared" instead of "the engine had to liquidate to cover rent".
+  if (t.kind === "liquidation" && t.actorId === me) {
+    return {
+      id: entry.id,
+      dir: "forced",
+      amount: t.amount,
+      tileName: tileName(t.tileIndex),
+      counterparty: "",
+    };
+  }
   return null;
 }
 
@@ -115,6 +129,12 @@ watch(
 
 function show(t: Toast) {
   active.value = t;
+  // SFX matched to the toast direction. The toast is the canonical
+  // surface for "money just changed hands" so we hook the sound here
+  // instead of sprinkling playCash* calls across every action handler.
+  if (t.dir === "buy") playBuy();
+  else if (t.dir === "out" || t.dir === "forced") playCashOut();
+  else playCashIn();
   if (clearTimer) clearTimeout(clearTimer);
   clearTimer = setTimeout(() => {
     active.value = null;
@@ -139,6 +159,14 @@ const label = computed(() => {
       sub: t.tileName,
       amount: `◈ ${t.amount}`,
       sign: "-" as const,
+    };
+  }
+  if (t.dir === "forced") {
+    return {
+      title: isRu ? "Принудительная продажа" : "Forced sale",
+      sub: t.tileName,
+      amount: `◈ ${t.amount}`,
+      sign: "+" as const,
     };
   }
   return {
@@ -202,6 +230,10 @@ const label = computed(() => {
   border-color: var(--emerald);
   box-shadow: 0 0 0 1px var(--emerald), 0 8px 24px rgba(45, 122, 79, 0.28);
 }
+.txn-toast--forced {
+  border-color: #f97316;
+  box-shadow: 0 0 0 1px #f97316, 0 8px 24px rgba(249, 115, 22, 0.28);
+}
 .txn-toast__body {
   flex: 1;
   min-width: 0;
@@ -218,6 +250,7 @@ const label = computed(() => {
 .txn-toast--buy .txn-toast__title { color: var(--primary); }
 .txn-toast--out .txn-toast__title { color: var(--accent); }
 .txn-toast--in .txn-toast__title { color: var(--emerald); }
+.txn-toast--forced .txn-toast__title { color: #c2410c; }
 
 .txn-toast__sub {
   font-size: 11px;

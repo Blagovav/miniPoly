@@ -9,6 +9,7 @@ import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { useRoute, useRouter } from "vue-router";
 import { useTelegram } from "../composables/useTelegram";
+import { playYourTurn } from "../composables/useSounds";
 import { useShake } from "../composables/useShake";
 import { useWs } from "../composables/useWs";
 import { useGameStore } from "../stores/game";
@@ -85,6 +86,24 @@ const off = ws.onMessage((m) => {
   }
   try { localStorage.setItem("activeRoomTs", String(Date.now())); } catch {}
 });
+
+// "Your turn" alert — playtester feedback 2026-05-03 ("нужна вибрация
+// когда твой ход"). Fires when the rolling phase flips to me; we gate
+// on phase + turn so a doubles-replay or auction interlude doesn't
+// re-fire on the same turn.
+let lastTurnAlertId: string | null = null;
+watch(
+  () => [game.isMyTurn, game.room?.phase, game.me?.id] as const,
+  ([mine, phase, myId]) => {
+    if (!mine || !myId) return;
+    if (phase !== "rolling") return;
+    const turnKey = `${myId}|${game.room?.currentTurn ?? -1}`;
+    if (lastTurnAlertId === turnKey) return;
+    lastTurnAlertId = turnKey;
+    notify("success");
+    playYourTurn();
+  },
+);
 onUnmounted(() => {
   off();
   game.reset();

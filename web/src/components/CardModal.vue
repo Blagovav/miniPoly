@@ -56,6 +56,8 @@ const L = computed(() => locale.value === "ru"
       chance: "Шанс",
       chest: "Общественная казна",
       drawnBy: (n: string) => `тянет ${n}`,
+      yourCard: "ваша карта",
+      youAre: "ВЫ —",
       keep: "Сохранена в инвентаре. Используй, когда попадёшь в тюрьму.",
       auto: "Закроется автоматически",
       gotIt: "Понятно",
@@ -65,6 +67,8 @@ const L = computed(() => locale.value === "ru"
       chance: "Chance",
       chest: "Community Chest",
       drawnBy: (n: string) => `drawn by ${n}`,
+      yourCard: "your card",
+      youAre: "YOU —",
       keep: "Saved to your inventory. Use it next time you're jailed.",
       auto: "Closes automatically",
       gotIt: "Got it",
@@ -81,24 +85,36 @@ const L = computed(() => locale.value === "ru"
     >
       <div class="card-stack" @click.stop>
         <div class="card-pop">
-          <!-- Eyebrow badge: "Шанс — тянет Никита" / "Общественная казна" -->
+          <!-- Eyebrow badge: "Шанс — тянет Никита" / "Общественная казна — ваша карта" -->
           <div
             class="card-pop__badge"
             :class="isChance ? 'card-pop__badge--chance' : 'card-pop__badge--chest'"
           >
             {{ isChance ? L.chance : L.chest }}<span
-              v-if="drawer && !isMyCard"
+              v-if="isMyCard"
+            > — {{ L.yourCard }}</span><span
+              v-else-if="drawer"
             > — {{ L.drawnBy(drawer.name) }}</span>
           </div>
 
           <!-- Seal: keeps the chance/chest emblem as the figma "img-building"
                slot, but rendered as a soft-coloured circle so we don't need
-               to ship a per-deck image asset. -->
-          <div
-            class="card-pop__seal"
-            :class="isChance ? 'card-pop__seal--chance' : 'card-pop__seal--chest'"
-            aria-hidden="true"
-          >{{ isChance ? "?" : "⎔" }}</div>
+               to ship a per-deck image asset. Drawer's name caption sits
+               below it so passive viewers (and the drawer themselves) can
+               see at a glance who the card actually applies to —
+               playtester feedback 2026-05-03 ("не понятно что это ты
+               победил"). -->
+          <div class="card-pop__seal-wrap">
+            <div
+              class="card-pop__seal"
+              :class="isChance ? 'card-pop__seal--chance' : 'card-pop__seal--chest'"
+              aria-hidden="true"
+            >{{ isChance ? "?" : "⎔" }}</div>
+            <div v-if="drawer" class="card-pop__drawer-name">
+              <span v-if="isMyCard" class="card-pop__drawer-you">{{ L.youAre }}</span>
+              <span>{{ drawer.name }}</span>
+            </div>
+          </div>
 
           <!-- Body text — what the card actually says -->
           <p class="card-pop__text">
@@ -227,6 +243,34 @@ const L = computed(() => locale.value === "ru"
 }
 .card-pop__seal--chest {
   background: radial-gradient(circle at 35% 30%, #688ee2 0%, #3a5db5 60%, #1f3a83 100%);
+}
+.card-pop__seal-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+.card-pop__drawer-name {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  font-family: 'Unbounded', sans-serif;
+  font-weight: 700;
+  font-size: 14px;
+  line-height: 16px;
+  color: #000;
+  white-space: nowrap;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.card-pop__drawer-you {
+  font-family: 'Unbounded', sans-serif;
+  font-weight: 900;
+  font-size: 11px;
+  letter-spacing: 0.05em;
+  color: #43c22d;
+  text-transform: uppercase;
 }
 
 /* ── Body text */

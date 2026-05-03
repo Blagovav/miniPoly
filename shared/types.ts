@@ -147,7 +147,7 @@ export interface PreRollBracket {
 // Structured money-move metadata attached to log entries. The client uses it
 // to render transaction toasts (e.g. "-100 → Alex" when you land on a rented
 // tile) without brittle string parsing of the human-readable text.
-export type TxnKind = "buy" | "rent" | "salary" | "tax" | "jail";
+export type TxnKind = "buy" | "rent" | "salary" | "tax" | "jail" | "liquidation";
 export interface TxnInfo {
   kind: TxnKind;
   amount: number; // always positive; client derives sign from my role
