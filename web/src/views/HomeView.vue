@@ -248,10 +248,14 @@ const statusPopupSub = computed(() =>
 <template>
   <div class="app home-v2">
     <div class="home-v2__content">
-      <div class="home-v2__hero">
-        <div class="home-v2__mascot-clip" aria-hidden="true">
-          <img class="home-v2__mascot" src="/figma/home/mascot.webp" alt="" />
-        </div>
+      <!-- Mascot, greeting and settings all live in ONE container so they
+           move as a unit (playtester 2026-05-03 — "пусть они будут с
+           текстом в одном диве"). The mascot is positioned absolutely
+           inside; the greeting sits along the bottom edge so it overlaps
+           the lower torso of the character. No overflow:hidden / mask —
+           the mascot displays at its full art size. -->
+      <div class="home-v2__welcome">
+        <img class="home-v2__mascot" src="/figma/home/mascot.webp" alt="" aria-hidden="true" />
         <button
           class="home-v2__settings"
           :aria-label="L.settingsAria"
@@ -259,8 +263,8 @@ const statusPopupSub = computed(() =>
         >
           <img src="/figma/home/settings.webp" alt="" />
         </button>
+        <h1 class="home-v2__greeting">{{ L.greeting }}</h1>
       </div>
-      <h1 class="home-v2__greeting">{{ L.greeting }}</h1>
 
       <div v-if="!tg && editingName" class="home-v2__name-edit">
         <input
@@ -433,44 +437,25 @@ const statusPopupSub = computed(() =>
   overflow-x: hidden;
 }
 
-/* ── Hero: mascot + settings gear. Mascot anchored to the LEFT
-   (playtester reference 2026-05-03 — character on the left, settings
-   gear on the right, greeting overlapping the lower portion of the
-   character). The 190×140 clip + `overflow: hidden` does all the
-   cropping; mask-image is intentionally NOT used because several
-   Telegram WebViews ignore it and the lower body spills onto the
-   active-match card. ── */
-.home-v2__hero {
+/* ── Welcome block: mascot + greeting + settings as one unit.
+   Playtester 2026-05-03 — "пусть они будут с текстом в одном диве".
+   The block is `position: relative` with a fixed 220px height that
+   accommodates the full mascot + the greeting overlapping its base.
+   No overflow / mask — the character shows at its full 220px art size. */
+.home-v2__welcome {
   position: relative;
-  height: 140px;
-  margin-top: 0;
-  /* Negative bottom margin pulls the greeting up so its baseline
-     overlaps the mascot's mid-body — matches the reference. */
-  margin-bottom: -37px;
-}
-.home-v2__mascot-clip {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 190px;
-  height: 140px;
-  overflow: hidden;
-  pointer-events: none;
+  width: 100%;
+  height: 220px;
   user-select: none;
 }
 .home-v2__mascot {
   position: absolute;
-  /* Per Figma 133:14898 the 191×191 image's centre sits at
-     (clip-50% - 17.5, clip-50% + 19.5), i.e. its top-left lands at
-     (-18, -6) of the clip. overflow: hidden on the parent clips the
-     bottom 50px of the image (lower legs) cleanly. */
-  left: -18px;
-  top: -6px;
-  width: 190px;
-  height: 190px;
+  top: 0;
+  left: -16px;
+  width: 220px;
+  height: 220px;
   object-fit: contain;
   pointer-events: none;
-  user-select: none;
 }
 .home-v2__settings {
   position: absolute;
@@ -483,7 +468,7 @@ const statusPopupSub = computed(() =>
   border: none;
   cursor: pointer;
   transition: transform 120ms ease;
-  z-index: 1;
+  z-index: 2;
 }
 .home-v2__settings img {
   position: absolute;
@@ -497,17 +482,20 @@ const statusPopupSub = computed(() =>
 }
 .home-v2__settings:active { transform: scale(0.92); }
 
-/* ── Greeting — overlaps the lower portion of the mascot clip via the
-   negative `margin-bottom` on .home-v2__hero (-37px), so the text
+/* ── Greeting — bottom-anchored inside the welcome block so the text
    baseline crosses the character's bow tie / lower torso area. ── */
 .home-v2__greeting {
-  position: relative;
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
   margin: 0;
   font-family: 'Golos Text', sans-serif;
   font-weight: 700;
   font-size: 28px;
   line-height: 34px;
   color: #fff;
+  z-index: 1;
   /* Single drop-shadow — figma "stroke" on text always lands as a
      centred webkit-text-stroke in the browser, which fuzzes heavy
      glyphs (Golos 700 / Unbounded Black) into an unreadable double
