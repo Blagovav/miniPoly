@@ -118,9 +118,32 @@ export function playYourTurn(): void {
   fire("notify");
 }
 
-/** Token step — fires per tile during the walk animation. */
-export function playStep(): void {
-  // Lower volume — steps fire 2-12 times in quick succession, full
-  // volume gets oppressive. The base mp3 is already short.
-  fire("step", 0.4);
+// Token walk SFX is a single continuous mp3 (not a per-tile click), so
+// we use a start/stop pair against the preloaded element directly
+// instead of cloning. The game store calls startStep() once at the
+// beginning of the walk and stopStep() the moment the token lands —
+// otherwise the sound trails on past the animation end (~1s+ leftover).
+export function startStep(): void {
+  if (!shouldPlay()) return;
+  const a = preload("step");
+  if (!a) return;
+  try {
+    a.currentTime = 0;
+    a.volume = 0.55;
+    const p = a.play();
+    if (p && typeof p.catch === "function") p.catch(() => { /* ignore */ });
+  } catch {
+    /* ignore */
+  }
+}
+
+export function stopStep(): void {
+  const a = elements.step;
+  if (!a) return;
+  try {
+    a.pause();
+    a.currentTime = 0;
+  } catch {
+    /* ignore */
+  }
 }
