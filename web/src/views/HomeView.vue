@@ -710,15 +710,16 @@ const statusPopupSub = computed(() =>
   display: flex;
   flex-direction: column;
   /* Figma 13:2077 — without an active match the create+join cards sit
-     24px apart and the stack starts 40px below the greeting. When the
-     active-match card is shown (Figma 133:14869) the inner gap tightens
-     to 12px and the whole stack shifts up to 24px below the greeting. */
+     24px apart and the stack starts 40px below the greeting.
+     With an active match (Figma 133:14869) the inner gap tightens to
+     12px so all 3 cards still fit, but margin-top stays the same as
+     default — playtester 2026-05-03 explicitly wants the active-match
+     card to sit BELOW the mascot region, not get pulled up under it. */
   gap: 24px;
   margin-top: 40px;
 }
 .home-v2__cards--with-active {
   gap: 12px;
-  margin-top: 24px;
 }
 .home-v2__card {
   position: relative;

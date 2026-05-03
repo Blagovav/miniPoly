@@ -1,8 +1,14 @@
 // Tiny Web-Audio synth for game-feel SFX. We don't ship audio assets — the
 // stings here are short bursts of oscillator + noise that work everywhere
-// without an asset budget. The shared AudioContext is lazy-initialised on
-// the first play so iOS Safari (which gates AC creation behind a user
-// gesture) doesn't choke during boot.
+// without an asset budget.
+//
+// iOS Safari / Telegram WebView gate AudioContext behind a user gesture —
+// the AC is created suspended and stays silent until something resumes it
+// inside a touch/click handler. We install a one-time pointerdown +
+// touchstart + click listener at module load that resumes the shared AC
+// the first time the user interacts with the page; without this, dice
+// rolls etc. would fire `playDice()` from a watcher and produce no sound
+// because the watcher isn't a user-gesture context.
 //
 // Each play is a no-op when settings.sound is off or the AC can't be
 // created (very old browsers). Errors are swallowed so audio failures
@@ -11,8 +17,38 @@ import { useSettings } from "./useSettings";
 
 let ctx: AudioContext | null = null;
 
+if (typeof window !== "undefined") {
+  // Install the unlock listener immediately at module load — NOT lazily
+  // from the first shouldPlay() call. Reason: the first sound trigger is
+  // typically a watcher (e.g. dice tumble fires from watch(rolling)),
+  // which runs OUTSIDE a user-gesture callstack. By that point the
+  // earlier roll click has already passed, so a lazily-armed listener
+  // never catches it and the AC stays suspended through the whole
+  // first interaction.
+  const unlock = () => {
+    const ac = getCtx();
+    if (ac && ac.state === "suspended") {
+      ac.resume().catch(() => { /* ignore */ });
+    }
+    window.removeEventListener("pointerdown", unlock);
+    window.removeEventListener("touchstart", unlock);
+    window.removeEventListener("click", unlock);
+  };
+  window.addEventListener("pointerdown", unlock, { once: true, passive: true });
+  window.addEventListener("touchstart", unlock, { once: true, passive: true });
+  window.addEventListener("click", unlock, { once: true, passive: true });
+}
+
 function getCtx(): AudioContext | null {
-  if (ctx) return ctx;
+  if (ctx) {
+    // Best-effort resume on every fetch — Telegram WebView occasionally
+    // re-suspends the AC mid-session (background tab, audio interruption)
+    // and the next play would silently no-op without this.
+    if (ctx.state === "suspended") {
+      ctx.resume().catch(() => { /* ignore */ });
+    }
+    return ctx;
+  }
   try {
     const AC: typeof AudioContext =
       window.AudioContext ||
