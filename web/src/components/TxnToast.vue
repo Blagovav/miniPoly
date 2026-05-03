@@ -4,6 +4,7 @@ import { useI18n } from "vue-i18n";
 import { BOARD } from "../../../shared/board";
 import type { GameLogEntry } from "../../../shared/types";
 import { useGameStore } from "../stores/game";
+import { playBuy, playCashIn, playCashOut } from "../composables/useSounds";
 
 // Surfaces a short-lived banner ("Bought X for $140", "-100 → Alex", "+100
 // from Slava") whenever a log entry with structured `txn` data arrives that
@@ -128,6 +129,12 @@ watch(
 
 function show(t: Toast) {
   active.value = t;
+  // SFX matched to the toast direction. The toast is the canonical
+  // surface for "money just changed hands" so we hook the sound here
+  // instead of sprinkling playCash* calls across every action handler.
+  if (t.dir === "buy") playBuy();
+  else if (t.dir === "out" || t.dir === "forced") playCashOut();
+  else playCashIn();
   if (clearTimer) clearTimeout(clearTimer);
   clearTimer = setTimeout(() => {
     active.value = null;

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, watch, onBeforeUnmount } from "vue";
+import { playDice } from "../composables/useSounds";
 
 const props = defineProps<{
   dice: [number, number] | null;
@@ -38,6 +39,10 @@ watch(
   (isRolling) => {
     if (isRolling) {
       startTumble();
+      // SFX: dice tumble — fire as soon as the visual tumble begins so
+      // sound and animation start in lock-step. Auto-no-op when settings
+      // sound is off.
+      playDice();
       flashing.value = false;
       if (flashHandle) { clearTimeout(flashHandle); flashHandle = null; }
     } else {

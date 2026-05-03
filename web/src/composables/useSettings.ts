@@ -7,7 +7,7 @@ interface Settings {
 }
 
 const STORAGE_KEY = "settings";
-const defaults: Settings = { sound: false, vibration: true, motion: true };
+const defaults: Settings = { sound: true, vibration: true, motion: true };
 
 function load(): Settings {
   try {
