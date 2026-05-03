@@ -739,6 +739,11 @@ const statusPopupSub = computed(() =>
 .home-v2__cards--with-active {
   gap: 12px;
   margin-top: 24px;
+  /* Cap the 3-card stack at 400px with internal scroll so the bottom
+     nav never gets pushed off-screen on shorter viewports — playtester
+     pinned these values in devtools. */
+  max-height: 400px;
+  overflow: auto;
 }
 .home-v2__card {
   position: relative;
