@@ -187,19 +187,23 @@ const label = computed(() => {
       role="status"
       aria-live="polite"
     >
-      <div class="txn-toast__body">
-        <div class="txn-toast__title">{{ label.title }}</div>
-        <div class="txn-toast__sub">{{ label.sub }}</div>
-      </div>
-      <div class="txn-toast__amt">
+      <span class="txn-toast__badge">{{ label.title }}</span>
+      <span v-if="label.sub" class="txn-toast__sub">{{ label.sub }}</span>
+      <span class="txn-toast__amt">
         <span class="txn-toast__sign">{{ label.sign }}</span>
-        {{ label.amount }}
-      </div>
+        <img class="txn-toast__icon" src="/figma/room/icon-money.webp" alt="" aria-hidden="true"/>
+        {{ active.amount }}
+      </span>
     </div>
   </transition>
 </template>
 
 <style scoped>
+/* Figma-style toast (matches CardModal / TileInfoModal language):
+   parchment card, Unbounded type, coloured eyebrow badge for the action
+   kind, real money icon next to the amount. Same visual family as the
+   chest/profile popups so notifications stop looking like a leftover
+   from the v0 design. */
 .txn-toast {
   position: fixed;
   top: calc(12px + var(--tg-safe-area-inset-top, 0px));
@@ -208,74 +212,72 @@ const label = computed(() => {
   min-width: 240px;
   max-width: min(420px, calc(100% - 24px));
   padding: 10px 14px;
-  border-radius: 12px;
+  border-radius: 18px;
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: 10px;
   z-index: 540;
-  background: var(--card-alt);
-  border: 1px solid var(--line);
-  box-shadow: 0 8px 24px rgba(26, 15, 5, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.4);
-  font-family: var(--font-display);
+  background: #faf3e2;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  box-shadow: 0 8px 24px rgba(26, 15, 5, 0.22);
+  font-family: 'Unbounded', sans-serif;
+  color: #000;
 }
-.txn-toast--buy {
-  border-color: var(--primary);
-  box-shadow: 0 0 0 1px var(--primary), 0 8px 24px rgba(90, 58, 154, 0.28);
-}
-.txn-toast--out {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 1px var(--accent), 0 8px 24px rgba(139, 26, 26, 0.28);
-}
-.txn-toast--in {
-  border-color: var(--emerald);
-  box-shadow: 0 0 0 1px var(--emerald), 0 8px 24px rgba(45, 122, 79, 0.28);
-}
-.txn-toast--forced {
-  border-color: #f97316;
-  box-shadow: 0 0 0 1px #f97316, 0 8px 24px rgba(249, 115, 22, 0.28);
-}
-.txn-toast__body {
-  flex: 1;
-  min-width: 0;
-}
-.txn-toast__title {
-  font-size: 13px;
-  color: var(--ink);
-  font-weight: 500;
-  letter-spacing: 0.02em;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.txn-toast--buy .txn-toast__title { color: var(--primary); }
-.txn-toast--out .txn-toast__title { color: var(--accent); }
-.txn-toast--in .txn-toast__title { color: var(--emerald); }
-.txn-toast--forced .txn-toast__title { color: #c2410c; }
 
-.txn-toast__sub {
-  font-size: 11px;
-  color: var(--ink-3);
-  font-style: italic;
-  margin-top: 2px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.txn-toast__amt {
-  font-family: var(--font-mono);
-  font-size: 18px;
-  font-weight: 600;
+.txn-toast__badge {
   display: inline-flex;
-  align-items: baseline;
-  gap: 2px;
+  align-items: center;
+  padding: 4px 10px;
+  border-radius: 100px;
+  font-family: 'Unbounded', sans-serif;
+  font-weight: 700;
+  font-size: 12px;
+  line-height: 14px;
+  color: #fff;
+  text-shadow: 0.2px 0.2px 0 rgba(0, 0, 0, 0.5);
+  white-space: nowrap;
   flex-shrink: 0;
 }
-.txn-toast--buy .txn-toast__amt { color: var(--primary); }
-.txn-toast--out .txn-toast__amt { color: var(--accent); }
-.txn-toast--in .txn-toast__amt  { color: var(--emerald); }
+.txn-toast--buy    .txn-toast__badge { background: #43c22d; }
+.txn-toast--out    .txn-toast__badge { background: #e84b3e; }
+.txn-toast--in     .txn-toast__badge { background: #2283f3; }
+.txn-toast--forced .txn-toast__badge { background: #f97316; }
+
+.txn-toast__sub {
+  flex: 1 1 0;
+  min-width: 0;
+  font-family: 'Unbounded', sans-serif;
+  font-weight: 500;
+  font-size: 13px;
+  line-height: 16px;
+  color: #000;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.txn-toast__amt {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-family: 'Unbounded', sans-serif;
+  font-weight: 700;
+  font-size: 14px;
+  line-height: 16px;
+  color: #000;
+  flex-shrink: 0;
+}
+.txn-toast--out .txn-toast__amt    { color: #b32c2c; }
+.txn-toast--in .txn-toast__amt     { color: #2d7a4f; }
+.txn-toast--buy .txn-toast__amt    { color: #2d7a4f; }
+.txn-toast--forced .txn-toast__amt { color: #c2410c; }
 .txn-toast__sign {
-  font-size: 15px;
-  opacity: 0.9;
+  font-weight: 900;
+}
+.txn-toast__icon {
+  width: 18px;
+  height: 18px;
+  object-fit: contain;
 }
 
 .txn-pop-enter-active {

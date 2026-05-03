@@ -536,7 +536,18 @@ function voiceHoldEnd() {
 const subtitle = computed(() => {
   if (!game.room) return locale.value === "ru" ? "Подключение…" : "Connecting…";
   const n = playerCount.value;
-  return locale.value === "ru" ? `Игроков: ${n}` : `Players: ${n}`;
+  // Figma 67:1474 — natural Russian "N игроков" instead of "Игроков: N".
+  // Pluralisation matches the count: 1 игрок / 2-4 игрока / 5+ игроков.
+  if (locale.value === "ru") {
+    const mod10 = n % 10;
+    const mod100 = n % 100;
+    let word: string;
+    if (mod10 === 1 && mod100 !== 11) word = "игрок";
+    else if ([2, 3, 4].includes(mod10) && ![12, 13, 14].includes(mod100)) word = "игрока";
+    else word = "игроков";
+    return `${n} ${word}`;
+  }
+  return `${n} ${n === 1 ? "player" : "players"}`;
 });
 
 // ── Redesign derived state ─────────────────────────────
@@ -948,7 +959,7 @@ void t;
           :aria-label="locale === 'ru' ? 'Выйти' : 'Leave'"
           @click="handleMenu"
         >
-          <Icon name="x" :size="18" color="#fff" />
+          <Icon name="x" :size="18" color="#000" />
         </button>
       </div>
     </div>
@@ -1675,11 +1686,11 @@ void t;
   justify-content: center;
   padding: 0;
 }
-/* Designer feedback 2026-05-02 #3.3/#5.21 — close-X consistent across
-   lobby + in-game topbars: only the inset bottom-shadow. */
+/* Figma 67:1458 (Ad8pZA1lQh8pMVNxv4clkc) — leave button is a 44px white
+   circle with a black X glyph, NOT red. Earlier 5.6 pass painted it red
+   from a stale figma; designer's 2026-05-03 spec corrects this. */
 .room-topbar__menu-btn--close {
-  background: #f34822;
-  box-shadow: inset 0 -3px 0 rgba(0, 0, 0, 0.18);
+  background: #fff;
 }
 .room-topbar__menu-btn:active { transform: scale(0.92); }
 
