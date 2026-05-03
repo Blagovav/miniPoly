@@ -209,7 +209,7 @@ const label = computed(() => {
    from the v0 design. */
 .txn-toast {
   position: fixed;
-  top: calc(12px + var(--tg-safe-area-inset-top, 0px));
+  top: calc(62px + var(--tg-safe-area-inset-top, 0px));
   left: 50%;
   transform: translateX(-50%);
   min-width: 240px;

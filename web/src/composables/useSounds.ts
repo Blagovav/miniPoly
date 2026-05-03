@@ -49,20 +49,23 @@ if (typeof window !== "undefined") {
   // Unlock all preloaded elements on the first user gesture. Without
   // this, mobile Safari rejects play() that fires from a watcher
   // (dice tumble, your-turn watcher) and the session stays silent.
+  // Use volume=0 (not muted) — iOS Safari sometimes ignores `muted`
+  // set right before play() and leaks audible playback for a few ms,
+  // which on the long step.mp3 manifests as a "walking sound on
+  // game entry" (playtester 2026-05-03).
   const unlock = () => {
     (Object.keys(SRC) as Key[]).forEach((k) => {
       const a = elements[k];
       if (!a) return;
-      const wasMuted = a.muted;
-      a.muted = true;
+      a.volume = 0;
       const p = a.play();
       if (p && typeof p.then === "function") {
         p.then(() => {
           a.pause();
           a.currentTime = 0;
-          a.muted = wasMuted;
+          a.volume = 0.7;
         }).catch(() => {
-          a.muted = wasMuted;
+          a.volume = 0.7;
         });
       }
     });
@@ -84,11 +87,17 @@ function fire(key: Key, volume = 0.7): void {
   const base = preload(key);
   if (!base) return;
   try {
-    // Clone the preloaded element so overlapping triggers (e.g. step +
-    // step on consecutive frames) don't restart each other mid-clip.
-    const clone = base.cloneNode(true) as HTMLAudioElement;
-    clone.volume = volume;
-    const p = clone.play();
+    // Reuse the preloaded element instead of cloneNode — clone forces
+    // the browser through the load + decode pipeline again which adds
+    // hundreds of ms of latency on iOS / Telegram WebView (playtester
+    // 2026-05-03 "звуки покупок и тд с задержкой адской"). Restarting
+    // by setting currentTime=0 + play() fires the sting basically
+    // instantly. Trade-off: two rapid calls truncate each other, but
+    // game events don't fire faster than ~150ms apart in practice
+    // and "last event wins" is fine UX for cash/buy/notify.
+    base.volume = volume;
+    base.currentTime = 0;
+    const p = base.play();
     if (p && typeof p.catch === "function") p.catch(() => { /* ignore */ });
   } catch {
     /* ignore */
