@@ -433,26 +433,25 @@ const statusPopupSub = computed(() =>
   overflow-x: hidden;
 }
 
-/* ── Hero: mascot + settings gear. Per Figma 133:14865 the mascot box is
-   190×140 centred horizontally at top:66 (≈ greeting top - 106). The
-   character image is 190×190 placed flush at the top of the clip, with
-   `overflow: hidden` doing all the cropping — no mask. The previous
-   build used `-webkit-mask-image: linear-gradient` to soft-fade the
-   lower body, but several Telegram WebViews ignore mask-image entirely
-   and the character spilled onto the active-match card (playtester
-   2026-05-03 — "так же все наезжает"). Hard clip is universal. */
+/* ── Hero: mascot + settings gear. Mascot anchored to the LEFT
+   (playtester reference 2026-05-03 — character on the left, settings
+   gear on the right, greeting overlapping the lower portion of the
+   character). The 190×140 clip + `overflow: hidden` does all the
+   cropping; mask-image is intentionally NOT used because several
+   Telegram WebViews ignore it and the lower body spills onto the
+   active-match card. ── */
 .home-v2__hero {
   position: relative;
   height: 140px;
   margin-top: 0;
-  margin-bottom: 0;
+  /* Negative bottom margin pulls the greeting up so its baseline
+     overlaps the mascot's mid-body — matches the reference. */
+  margin-bottom: -37px;
 }
 .home-v2__mascot-clip {
   position: absolute;
   top: 0;
-  /* Figma img-placeholder at left: calc(50% - 77.5px) — centred minus
-     a 17.5px nudge so the waving arm reads correctly. */
-  left: calc(50% - 77.5px);
+  left: 0;
   width: 190px;
   height: 140px;
   overflow: hidden;
@@ -498,11 +497,12 @@ const statusPopupSub = computed(() =>
 }
 .home-v2__settings:active { transform: scale(0.92); }
 
-/* ── Greeting — sits 32px below the mascot clip per Figma 133:14899
-   (hero ends at y=140, greeting top at y=172). ── */
+/* ── Greeting — overlaps the lower portion of the mascot clip via the
+   negative `margin-bottom` on .home-v2__hero (-37px), so the text
+   baseline crosses the character's bow tie / lower torso area. ── */
 .home-v2__greeting {
   position: relative;
-  margin: 32px 0 0;
+  margin: 0;
   font-family: 'Golos Text', sans-serif;
   font-weight: 700;
   font-size: 28px;
