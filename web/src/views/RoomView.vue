@@ -1177,6 +1177,23 @@ void t;
             <img src="/figma/room/icon-money.webp" alt="" />
             {{ btn.price }}
           </span>
+          <!-- Same 98×32.5 white-vector "shine" decoration as lobby-cta /
+               trade-modal btn-roll (figma 75:5310). 5.16 — main CTA was
+               missing this corner glint, so the in-game button felt flatter
+               than every other button in the app. -->
+          <svg
+            class="primary-btn__deco"
+            viewBox="0 0 98 32.5"
+            preserveAspectRatio="none"
+            fill="none"
+            aria-hidden="true"
+          >
+            <path
+              opacity="0.2"
+              d="M98 9.5V32.5C98 32.5 97 6 89.5 4C82 2 0 0 0 0H88.5C96 0 98 3.5 98 9.5Z"
+              fill="white"
+            />
+          </svg>
         </button>
       </div>
 
@@ -1674,11 +1691,16 @@ void t;
   min-height: 0;
   overflow-y: auto;
   overflow-x: hidden;
-  /* Reserve space for the fixed primary-bar at the bottom so the
-     leaderboard isn't covered. 148px ≈ 2×56 btn + gaps + padding +
-     safe-area — enough for the tallest (buyPrompt) state. */
-  padding: 0 16px calc(160px + var(--tg-safe-area-inset-bottom, 0px));
+  /* Designer feedback 2026-05-02 #5.22 — max scroll distance should leave
+     exactly 16px between the last element and the bottom of the visible
+     viewport (i.e. just above the fixed primary-bar). Single-CTA bar is
+     ~76px tall (10 pad + 56 btn + 10 pad), so reserve 76 + 16 = 92px.
+     Double-CTA bar grows to ~140px, so we override to 156px below. */
+  padding: 0 16px calc(92px + var(--tg-safe-area-inset-bottom, 0px));
   -webkit-overflow-scrolling: touch;
+}
+.room--figma:has(.primary-bar--double) .room-body {
+  padding-bottom: calc(156px + var(--tg-safe-area-inset-bottom, 0px));
 }
 
 /* ── Board stage: board + centre HUD overlay ── */
@@ -2137,6 +2159,15 @@ void t;
   align-items: center;
   justify-content: center;
   gap: 10px;
+  overflow: hidden;
+}
+.primary-btn__deco {
+  position: absolute;
+  top: 4px;
+  right: 8px;
+  width: 98px;
+  height: 32.5px;
+  pointer-events: none;
 }
 .primary-btn:active:not(:disabled) {
   transform: translateY(2px);
