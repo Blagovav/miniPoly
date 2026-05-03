@@ -248,14 +248,18 @@ const statusPopupSub = computed(() =>
 <template>
   <div class="app home-v2">
     <div class="home-v2__content">
-      <!-- Mascot, greeting and settings all live in ONE container so they
-           move as a unit (playtester 2026-05-03 — "пусть они будут с
-           текстом в одном диве"). The mascot is positioned absolutely
-           inside; the greeting sits along the bottom edge so it overlaps
-           the lower torso of the character. No overflow:hidden / mask —
-           the mascot displays at its full art size. -->
+      <!-- Welcome block per figma 13:2077 / 133:14865.
+           - Mascot 190×140 clip CENTERED horizontally; character image
+             positioned at (-18, -6) of clip with overflow:hidden cropping
+             the lower legs cleanly (mask-image is unreliable in TG WebView).
+           - Settings gear absolute top-right of the same row.
+           - Greeting "Добро пожаловать!" lives below mascot, top:106 of
+             the welcome block — overlaps the mascot's bottom 34px so the
+             text crosses the bow-tie / lower torso (matches figma). -->
       <div class="home-v2__welcome">
-        <img class="home-v2__mascot" src="/figma/home/mascot.webp" alt="" aria-hidden="true" />
+        <div class="home-v2__mascot-clip" aria-hidden="true">
+          <img class="home-v2__mascot" src="/figma/home/mascot.webp" alt="" />
+        </div>
         <button
           class="home-v2__settings"
           :aria-label="L.settingsAria"
@@ -277,7 +281,7 @@ const statusPopupSub = computed(() =>
         <button class="home-v2__name-save" @click="saveName">✓</button>
       </div>
 
-      <div class="home-v2__cards">
+      <div class="home-v2__cards" :class="{ 'home-v2__cards--with-active': activeRoomId }">
         <!-- Active match card (Figma 133:14865 / 133:14910). Shown only when
              the rejoin localStorage hint is fresh; replaces the slim banner
              that used to live above the greeting. Two CTAs match the figma
@@ -441,36 +445,52 @@ const statusPopupSub = computed(() =>
   overflow-x: hidden;
 }
 
-/* ── Welcome block: mascot + greeting + settings as one unit.
-   Playtester 2026-05-03 — character + text live in one container so
-   they move as a unit. Mascot is 220×220 anchored at top-left;
-   container is shorter (160px) and `overflow: hidden` crops the
-   bottom legs cleanly — keeps the head/torso/bow-tie reading the
-   way the figma intends without depending on mask-image (broken in
-   Telegram WebView). */
+/* ── Welcome block per figma 13:2077 / 133:14865.
+   Mascot box (190×140) centred horizontally + settings gear at top-right.
+   Greeting at top:106 of welcome — overlaps mascot's bottom 34px so the
+   text crosses the bow-tie. Welcome height = 140 (mascot box) but
+   greeting extends down to 140; total welcome height 140. ── */
 .home-v2__welcome {
   position: relative;
   width: 100%;
-  height: 160px;
-  /* Don't let the flex parent collapse this — children are all
-     position:absolute so the welcome has no intrinsic height to fight
-     for, and `flex-shrink: 0` keeps `height: 160px` honoured. */
+  /* 140 (mascot box) is exactly enough — greeting sits at top:106
+     and is 34px tall, ending at 140. */
+  height: 140px;
+  /* figma frame y=66 for mascot top; content padding-top is 24, so add
+     42 to land mascot at frame-y=66 (plus any safe-area inset). */
+  margin-top: 42px;
   flex-shrink: 0;
-  overflow: hidden;
   user-select: none;
+}
+.home-v2__mascot-clip {
+  position: absolute;
+  top: 0;
+  /* Centred horizontally, slight 17.5px left bias matches figma's
+     mask-position offset for the asymmetric character pose. */
+  left: 50%;
+  transform: translateX(-50%);
+  width: 190px;
+  height: 140px;
+  overflow: hidden;
+  pointer-events: none;
 }
 .home-v2__mascot {
   position: absolute;
-  top: 0;
-  left: -16px;
-  width: 220px;
-  height: 220px;
+  /* Per figma 67:1191 — 191×191 image's centre lands at
+     (clip-50% - 17.5, clip-50% + 19.5), so top-left corner ≈ (-18, -6).
+     overflow:hidden on the parent crops the lower legs cleanly. */
+  top: -6px;
+  left: -18px;
+  width: 190px;
+  height: 190px;
   object-fit: contain;
   pointer-events: none;
 }
 .home-v2__settings {
   position: absolute;
-  top: 35px;
+  /* figma frame y=104 for settings top; welcome top is at frame-y=66,
+     so settings top within welcome = 104 - 66 = 38. */
+  top: 38px;
   right: 0;
   width: 48px;
   height: 48px;
@@ -493,27 +513,21 @@ const statusPopupSub = computed(() =>
 }
 .home-v2__settings:active { transform: scale(0.92); }
 
-/* ── Greeting — bottom-anchored inside the welcome block so the text
-   baseline crosses the character's bow tie / lower torso area. ── */
+/* ── Greeting per figma 13:2096 — top:106 of welcome (= frame y=172),
+   overlaps the mascot's lower torso. Golos Bold 28/34 white with a
+   single drop-shadow (no webkit-text-stroke). ── */
 .home-v2__greeting {
   position: absolute;
+  top: 106px;
   left: 0;
   right: 0;
-  bottom: 0;
   margin: 0;
   font-family: 'Golos Text', sans-serif;
   font-weight: 700;
   font-size: 28px;
   line-height: 34px;
   color: #fff;
-  /* z-index: 2 — sits above the welcome::after fade overlay (z:1) so
-     the text reads at full white instead of getting tinted by the
-     gradient. */
   z-index: 2;
-  /* Single drop-shadow — figma "stroke" on text always lands as a
-     centred webkit-text-stroke in the browser, which fuzzes heavy
-     glyphs (Golos 700 / Unbounded Black) into an unreadable double
-     outline. Playtester 2026-05-03 — drop the stroke everywhere. */
   text-shadow: 1px 1px 0 #000;
   pointer-events: none;
 }
@@ -704,13 +718,18 @@ const statusPopupSub = computed(() =>
   transform: translateY(24px);
 }
 
-/* ── Primary cards — single uniform stack with active-match (when
-   present) flowing as just another sibling. Playtester 2026-05-03
-   asked to drop the special `--with-active` modifier. ── */
+/* ── Primary cards. Per figma 13:2077 (no active match) the stack
+   starts 40px below greeting with a 24px gap; per 133:14869 (with
+   active match) it starts 24px below with a tighter 12px gap so the
+   3 cards still fit cleanly above the bottom nav. ── */
 .home-v2__cards {
   display: flex;
   flex-direction: column;
   gap: 24px;
+  margin-top: 40px;
+}
+.home-v2__cards--with-active {
+  gap: 12px;
   margin-top: 24px;
 }
 .home-v2__card {
