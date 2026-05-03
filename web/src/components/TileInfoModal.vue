@@ -40,6 +40,32 @@ const bandColor = computed<string | null>(() => {
   return GROUP_COLORS[t.group] ?? null;
 });
 
+/**
+ * Hero house art at the top of the property card. Picks one of the 41
+ * isometric renders shipped under /figma/houses/ based on the tile's
+ * colour group and the building level (figma 150:2318):
+ *   - unowned (no `owned`)            → house-neutral
+ *   - owned but no buildings yet      → level 1 of the colour
+ *   - owned with N houses (1..4)      → level N of the colour
+ *   - owned with hotel                → level 5 of the colour
+ *   - railroad / utility (any state)  → house-neutral (no group, no
+ *                                       building mechanic)
+ */
+const houseAssetUrl = computed<string>(() => {
+  const t = tile.value;
+  if (!t || (t.kind !== "street" && t.kind !== "railroad" && t.kind !== "utility")) {
+    return "/figma/houses/house-neutral.webp";
+  }
+  if (t.kind !== "street") return "/figma/houses/house-neutral.webp";
+  const o = owned.value;
+  if (!o) return "/figma/houses/house-neutral.webp";
+  const group = (t as StreetTile).group;
+  let level = 1;
+  if (o.hotel) level = 5;
+  else if (o.houses >= 1) level = Math.min(4, o.houses);
+  return `/figma/houses/house-${group}-${level}.webp`;
+});
+
 // Group → localised "Квартал" label shown in the badge at top of the card.
 const GROUP_LABEL_RU: Record<ColorGroup, string> = {
   brown: "Коричневый квартал",
@@ -329,27 +355,12 @@ const ownerTokenId = computed<TokenArtId>(() => tokenArtFor(owner.value?.token |
     <div v-if="tile" class="info-scrim" @click="close">
       <div class="info-wrap" @click.stop>
         <div class="info-card">
-          <!-- Decorative isometric house at top of the property card,
-               matching the Figma hero art (32:3273 / 61:615). -->
+          <!-- Hero house art — figma 150:2318 isometric render that
+               adapts to the tile's colour group and current building
+               level (1-4 houses or hotel). Unowned tiles + railroad /
+               utility render the neutral platform. -->
           <div v-if="isProperty" class="info-hero" aria-hidden="true">
-            <svg viewBox="0 0 80 80" width="80" height="80">
-              <!-- Ground shadow -->
-              <ellipse cx="40" cy="68" rx="26" ry="4" fill="rgba(0,0,0,0.08)"/>
-              <!-- Right wall (shaded) -->
-              <path d="M40 26 L64 38 L64 60 L40 66 Z" fill="#c77a5a" stroke="#3a2418" stroke-width="1.6" stroke-linejoin="round"/>
-              <!-- Left wall -->
-              <path d="M40 26 L16 38 L16 60 L40 66 Z" fill="#e6a98a" stroke="#3a2418" stroke-width="1.6" stroke-linejoin="round"/>
-              <!-- Roof -->
-              <path d="M40 16 L68 30 L40 34 L12 30 Z" fill="#6a4030" stroke="#2a1808" stroke-width="1.6" stroke-linejoin="round"/>
-              <path d="M40 16 L40 34" stroke="#2a1808" stroke-width="1.4"/>
-              <!-- Windows (left) -->
-              <rect x="22" y="42" width="6" height="8" fill="#fff4c2" stroke="#3a2418" stroke-width="1"/>
-              <rect x="30" y="42" width="6" height="8" fill="#fff4c2" stroke="#3a2418" stroke-width="1"/>
-              <!-- Door (right face) -->
-              <path d="M46 48 L52 46 L52 62 L46 60 Z" fill="#3a2418"/>
-              <!-- Chimney -->
-              <rect x="52" y="18" width="5" height="8" fill="#c77a5a" stroke="#2a1808" stroke-width="1"/>
-            </svg>
+            <img :src="houseAssetUrl" alt="" />
           </div>
 
           <!-- Header: group badge + title + cost -->
@@ -520,15 +531,22 @@ const ownerTokenId = computed<TokenArtId>(() => tokenArtFor(owner.value?.token |
   color: #000;
 }
 
-/* ── Hero: isometric house above title (Figma popup-info art) ── */
+/* ── Hero: isometric house above title (Figma 150:2318) ── */
 .info-hero {
   display: flex;
   justify-content: center;
   align-items: center;
-  width: 80px;
-  height: 80px;
+  width: 96px;
+  height: 96px;
   margin: 0 auto;
   line-height: 0;
+}
+.info-hero img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  pointer-events: none;
+  user-select: none;
 }
 
 /* ── Header ── */
