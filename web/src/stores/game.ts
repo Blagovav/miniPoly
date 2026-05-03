@@ -151,17 +151,24 @@ export const useGameStore = defineStore("game", () => {
       case "diceRolled": {
         rolling.value = true;
         lastDice.value = m.dice;
-        // Hold the rolling phase for the full duration of the dice mp3
-        // so the visual tumble lands together with the audio thud.
-        // Falls back to 900ms when the asset is still loading or audio
-        // is muted. Token walk + toast popups are also deferred until
-        // this timeout fires — playtester 2026-05-03 said the fish
-        // started moving and notifications appeared while the cubes
-        // were still spinning.
         const dur = diceDurationMs() ?? 900;
         const by = m.by;
         const from = m.from;
         const to = m.to;
+        // Pre-arm the animation override BEFORE the dice timeout so the
+        // token stays anchored at `from` during the tumble phase. Without
+        // this the state message that follows diceRolled (room with
+        // player.position = to) renders the token at the destination,
+        // and when animateMove finally fires it visually snaps back to
+        // `from` and walks forward — playtester 2026-05-03 "фишка резко
+        // перебегает на клетку, а потом начинает ходить".
+        animatingPlayerId.value = by;
+        animatedPositions.value = { ...animatedPositions.value, [by]: from };
+        // Hold the rolling phase for the full duration of the dice mp3
+        // so the visual tumble lands together with the audio thud.
+        // Falls back to 900ms when the asset is still loading or audio
+        // is muted. Token walk + toast popups are also deferred until
+        // this timeout fires.
         setTimeout(() => {
           rolling.value = false;
           if (by === myPlayerId.value) haptic("heavy");
