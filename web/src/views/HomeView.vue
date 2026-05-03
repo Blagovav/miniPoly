@@ -436,11 +436,15 @@ const statusPopupSub = computed(() =>
   flex-direction: column;
   flex: 1;
   min-height: 0;
-  /* Just the safe-area inset (Telegram WebApp injects this for the
-     status bar / dynamic island / chrome). Earlier 80px overshoot
-     pushed everything way too low — playtester 2026-05-03 asked to
-     raise it back up. */
-  padding: calc(24px + var(--tg-safe-area-inset-top, 0px)) 24px 24px;
+  /* Top: safe-area inset (Telegram WebApp injects this for the status
+     bar / dynamic island / chrome).
+     Bottom: safe-area + 24px so the nav doesn't tuck under the iPhone
+     home-indicator strip — playtester 2026-05-03 reported the bottom
+     nav labels were getting clipped. */
+  padding:
+    calc(24px + var(--tg-safe-area-inset-top, 0px))
+    24px
+    calc(24px + var(--tg-safe-area-inset-bottom, 0px));
   overflow-y: auto;
   overflow-x: hidden;
 }
