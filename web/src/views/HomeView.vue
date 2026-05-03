@@ -438,14 +438,17 @@ const statusPopupSub = computed(() =>
 }
 
 /* ── Welcome block: mascot + greeting + settings as one unit.
-   Playtester 2026-05-03 — "пусть они будут с текстом в одном диве".
-   The block is `position: relative` with a fixed 220px height that
-   accommodates the full mascot + the greeting overlapping its base.
-   No overflow / mask — the character shows at its full 220px art size. */
+   Playtester 2026-05-03 — character + text live in one container so
+   they move as a unit. Mascot is 220×220 anchored at top-left;
+   container is shorter (160px) and `overflow: hidden` crops the
+   bottom legs cleanly — keeps the head/torso/bow-tie reading the
+   way the figma intends without depending on mask-image (broken in
+   Telegram WebView). */
 .home-v2__welcome {
   position: relative;
   width: 100%;
-  height: 220px;
+  height: 160px;
+  overflow: hidden;
   user-select: none;
 }
 .home-v2__mascot {
