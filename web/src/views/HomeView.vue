@@ -436,13 +436,14 @@ const statusPopupSub = computed(() =>
   flex-direction: column;
   flex: 1;
   min-height: 0;
-  /* Top: safe-area inset (Telegram WebApp injects this for the status
-     bar / dynamic island / chrome).
+  /* Top: just safe-area-inset-top (status bar / dynamic island).
+     Welcome's own `margin-top: 42` already provides the figma-spec
+     gap below the chrome — 24px extra was overshooting and the
+     playtester flagged it as "слишком большой отступ сверху".
      Bottom: safe-area + 24px so the nav doesn't tuck under the iPhone
-     home-indicator strip — playtester 2026-05-03 reported the bottom
-     nav labels were getting clipped. */
+     home-indicator strip. */
   padding:
-    calc(24px + var(--tg-safe-area-inset-top, 0px))
+    var(--tg-safe-area-inset-top, 0px)
     24px
     calc(24px + var(--tg-safe-area-inset-bottom, 0px));
   overflow-y: auto;
