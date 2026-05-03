@@ -44,25 +44,32 @@ const bandColor = computed<string | null>(() => {
  * Hero house art at the top of the property card. Picks one of the 41
  * isometric renders shipped under /figma/houses/ based on the tile's
  * colour group and the building level (figma 150:2318):
- *   - unowned (no `owned`)            → house-neutral
- *   - owned but no buildings yet      → level 1 of the colour
- *   - owned with N houses (1..4)      → level N of the colour
- *   - owned with hotel                → level 5 of the colour
- *   - railroad / utility (any state)  → house-neutral (no group, no
- *                                       building mechanic)
+ *
+ *   street unowned                    → level 1 of its own colour
+ *                                       (preview of what it'll look
+ *                                        like once claimed)
+ *   street owned, 0 or 1 houses       → level 1 of its colour
+ *   street owned, 2..4 houses         → level N of its colour
+ *   street owned, hotel               → level 5 of its colour
+ *   railroad (any state)              → brown-1 (industrial palette)
+ *   utility (any state)               → yellow-1 (electric palette)
+ *
+ * Playtester 2026-05-03 — neutral platform without a house "вообще не
+ * красиво", asked for the icon to always carry a little house even when
+ * nothing is built. Railroads + utilities default to a sensible colour
+ * band (brown for trains, yellow for power/water) instead of neutral.
  */
 const houseAssetUrl = computed<string>(() => {
   const t = tile.value;
-  if (!t || (t.kind !== "street" && t.kind !== "railroad" && t.kind !== "utility")) {
-    return "/figma/houses/house-neutral.webp";
-  }
+  if (!t) return "/figma/houses/house-neutral.webp";
+  if (t.kind === "railroad") return "/figma/houses/house-brown-1.webp";
+  if (t.kind === "utility") return "/figma/houses/house-yellow-1.webp";
   if (t.kind !== "street") return "/figma/houses/house-neutral.webp";
-  const o = owned.value;
-  if (!o) return "/figma/houses/house-neutral.webp";
   const group = (t as StreetTile).group;
+  const o = owned.value;
   let level = 1;
-  if (o.hotel) level = 5;
-  else if (o.houses >= 1) level = Math.min(4, o.houses);
+  if (o?.hotel) level = 5;
+  else if (o && o.houses >= 1) level = Math.min(4, o.houses);
   return `/figma/houses/house-${group}-${level}.webp`;
 });
 
