@@ -108,7 +108,10 @@ watch(
       if (e.id === lastSeenId) break;
       const t = entryToToast(e);
       if (t) {
-        if (game.animatingPlayerId) pendingToast = t;
+        // Defer while dice are tumbling OR token is walking — both
+        // mean the visual sequence isn't done yet, and a toast
+        // popping mid-roll feels like the state skipped ahead.
+        if (game.animatingPlayerId || game.rolling) pendingToast = t;
         else show(t);
         break;
       }
@@ -118,9 +121,9 @@ watch(
 );
 
 watch(
-  () => game.animatingPlayerId,
-  (id) => {
-    if (!id && pendingToast) {
+  () => [game.animatingPlayerId, game.rolling],
+  ([id, isRolling]) => {
+    if (!id && !isRolling && pendingToast) {
       show(pendingToast);
       pendingToast = null;
     }

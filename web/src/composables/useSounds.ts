@@ -100,6 +100,20 @@ export function playDice(): void {
   fire("dice");
 }
 
+/**
+ * Length of the dice sting in ms, once the asset has loaded. Returns
+ * null while the metadata is still arriving — game.ts uses that as a
+ * "fall back to a fixed 900ms" signal so the rolling phase still
+ * resolves on cold loads.
+ */
+export function diceDurationMs(): number | null {
+  const a = elements.dice;
+  if (!a) return null;
+  const d = a.duration;
+  if (!isFinite(d) || d <= 0) return null;
+  return Math.round(d * 1000);
+}
+
 /** Property purchase — incoming buy / received rent / sold a property. */
 export function playBuy(): void {
   fire("payment");

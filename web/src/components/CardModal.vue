@@ -25,18 +25,19 @@ const isMyCard = computed(() => !!drawerId.value && drawerId.value === game.myPl
 
 const isChance = computed(() => current.value?.deck === "chance");
 
-// Show the card ONLY after the drawer's token has finished its step-by-step
-// walk. Server sets lastCard the instant the tile resolves, but the client
-// is still animating the hop — popping the modal mid-walk feels like the
-// state skipped ahead.
+// Show the card ONLY after the dice settle AND the drawer's token has
+// finished its step-by-step walk. Server sets lastCard the instant the
+// tile resolves, but the client is still animating dice → token hop —
+// popping the modal mid-sequence feels like the state skipped ahead.
 let lastShownTs = 0;
 watch(
-  [() => game.room?.lastCard?.ts, () => game.animatingPlayerId],
+  [() => game.room?.lastCard?.ts, () => game.animatingPlayerId, () => game.rolling],
   () => {
     const card = game.room?.lastCard;
     if (!card || !card.ts) return;
     if (card.ts === lastShownTs) return;
     if (game.animatingPlayerId === card.by) return;
+    if (game.rolling) return;
     lastShownTs = card.ts;
     current.value = card;
     visible.value = true;

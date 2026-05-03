@@ -2,7 +2,7 @@ import { defineStore } from "pinia";
 import { computed, ref } from "vue";
 import type { RoomState, ServerMessage } from "../../../shared/types";
 import { useTelegram } from "../composables/useTelegram";
-import { startStep, stopStep } from "./../composables/useSounds";
+import { diceDurationMs, startStep, stopStep } from "./../composables/useSounds";
 
 export interface ChatMessage {
   id: string;
@@ -148,17 +148,27 @@ export const useGameStore = defineStore("game", () => {
           errorClearTimer = null;
         }, 3000);
         break;
-      case "diceRolled":
+      case "diceRolled": {
         rolling.value = true;
         lastDice.value = m.dice;
-        // 900мс — совпадает с длиной цикла tumble в Dice.vue; когда флаг
-        // падает, кости снэпятся на финальные значения и вспыхивают.
+        // Hold the rolling phase for the full duration of the dice mp3
+        // so the visual tumble lands together with the audio thud.
+        // Falls back to 900ms when the asset is still loading or audio
+        // is muted. Token walk + toast popups are also deferred until
+        // this timeout fires — playtester 2026-05-03 said the fish
+        // started moving and notifications appeared while the cubes
+        // were still spinning.
+        const dur = diceDurationMs() ?? 900;
+        const by = m.by;
+        const from = m.from;
+        const to = m.to;
         setTimeout(() => {
           rolling.value = false;
-          if (m.by === myPlayerId.value) haptic("heavy");
-        }, 900);
-        animateMove(m.by, m.from, m.to);
+          if (by === myPlayerId.value) haptic("heavy");
+          animateMove(by, from, to);
+        }, dur);
         break;
+      }
       case "chat":
         chat.value.push({
           id: `${m.ts}-${m.fromId}-${chat.value.length}`,
