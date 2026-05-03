@@ -1813,9 +1813,9 @@ void t;
   font-size: 18px;
   line-height: 20px;
   color: #fff;
-  /* Designer feedback 2026-05-02 #5.12 — stroke + shadow combo so the
-     heading reads on the busy green board bg; was just the shadow. */
-  -webkit-text-stroke: 1px #000;
+  /* Figma 32:1212 — single 1px black shadow, no webkit-text-stroke.
+     The earlier 5.12 pass added a stroke ON TOP of the shadow which
+     rendered as a fuzzy double-outline ("шрифт расползся"). */
   text-shadow: 1px 1px 0 #000;
 }
 .turn-slider {
@@ -1932,9 +1932,9 @@ void t;
 }
 .turn-card--current .turn-card__name {
   color: #fff;
-  /* Designer feedback 2026-05-02 #5.13 — stroke + shadow so the name
-     stays legible against any seat colour. */
-  -webkit-text-stroke: 0.5px #000;
+  /* Figma matches the turn-label: single text-shadow only. The earlier
+     0.5px webkit-text-stroke fuzzed the glyphs into an unreadable
+     outline against the seat colour — playtester 2026-05-03. */
   text-shadow: 1px 1px 0 #000;
 }
 .turn-card__stats {
