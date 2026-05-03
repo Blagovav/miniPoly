@@ -277,7 +277,7 @@ const statusPopupSub = computed(() =>
         <button class="home-v2__name-save" @click="saveName">✓</button>
       </div>
 
-      <div class="home-v2__cards" :class="{ 'home-v2__cards--with-active': activeRoomId }">
+      <div class="home-v2__cards">
         <!-- Active match card (Figma 133:14865 / 133:14910). Shown only when
              the rejoin localStorage hint is fresh; replaces the slim banner
              that used to live above the greeting. Two CTAs match the figma
@@ -432,12 +432,11 @@ const statusPopupSub = computed(() =>
   flex-direction: column;
   flex: 1;
   min-height: 0;
-  /* Top padding clears the Telegram WebApp chrome (safe-area + the
-     "Закрыть"/swipe-down/menu buttons row). 80px fallback when the CSS
-     var isn't injected — playtester 2026-05-03 said the mascot
-     completely disappeared and the active-match notification was
-     hidden behind tg buttons. */
-  padding: calc(80px + var(--tg-safe-area-inset-top, 0px)) 24px 24px;
+  /* Just the safe-area inset (Telegram WebApp injects this for the
+     status bar / dynamic island / chrome). Earlier 80px overshoot
+     pushed everything way too low — playtester 2026-05-03 asked to
+     raise it back up. */
+  padding: calc(24px + var(--tg-safe-area-inset-top, 0px)) 24px 24px;
   overflow-y: auto;
   overflow-x: hidden;
 }
@@ -459,22 +458,6 @@ const statusPopupSub = computed(() =>
   flex-shrink: 0;
   overflow: hidden;
   user-select: none;
-}
-/* Soft fade-out at the bottom — playtester ask "добавь ему размытие
-   снизу". A gradient overlay fading to the page bg blue (#0d68db)
-   sits over the lower 70px of the mascot, so the legs blend out
-   smoothly instead of getting hard-cropped by overflow:hidden alone.
-   z-index: 1 puts it above the mascot but below greeting/settings. */
-.home-v2__welcome::after {
-  content: "";
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  height: 70px;
-  background: linear-gradient(180deg, rgba(13, 104, 219, 0) 0%, #0d68db 75%);
-  pointer-events: none;
-  z-index: 1;
 }
 .home-v2__mascot {
   position: absolute;
@@ -721,21 +704,13 @@ const statusPopupSub = computed(() =>
   transform: translateY(24px);
 }
 
-/* ── Primary cards ── */
+/* ── Primary cards — single uniform stack with active-match (when
+   present) flowing as just another sibling. Playtester 2026-05-03
+   asked to drop the special `--with-active` modifier. ── */
 .home-v2__cards {
   display: flex;
   flex-direction: column;
-  /* Figma 13:2077 — without an active match the create+join cards sit
-     24px apart and the stack starts 40px below the greeting.
-     With an active match (Figma 133:14869) the inner gap tightens to
-     12px and the stack starts 24px below the greeting — that's the
-     spec, and now that the mascot is properly clipped (no mask
-     dependency) the active-match card no longer collides with it. */
   gap: 24px;
-  margin-top: 40px;
-}
-.home-v2__cards--with-active {
-  gap: 12px;
   margin-top: 24px;
 }
 .home-v2__card {
