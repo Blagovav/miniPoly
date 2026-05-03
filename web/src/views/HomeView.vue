@@ -451,6 +451,22 @@ const statusPopupSub = computed(() =>
   overflow: hidden;
   user-select: none;
 }
+/* Soft fade-out at the bottom — playtester ask "добавь ему размытие
+   снизу". A gradient overlay fading to the page bg blue (#0d68db)
+   sits over the lower 70px of the mascot, so the legs blend out
+   smoothly instead of getting hard-cropped by overflow:hidden alone.
+   z-index: 1 puts it above the mascot but below greeting/settings. */
+.home-v2__welcome::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 70px;
+  background: linear-gradient(180deg, rgba(13, 104, 219, 0) 0%, #0d68db 75%);
+  pointer-events: none;
+  z-index: 1;
+}
 .home-v2__mascot {
   position: absolute;
   top: 0;
@@ -471,7 +487,7 @@ const statusPopupSub = computed(() =>
   border: none;
   cursor: pointer;
   transition: transform 120ms ease;
-  z-index: 2;
+  z-index: 3;
 }
 .home-v2__settings img {
   position: absolute;
@@ -498,7 +514,10 @@ const statusPopupSub = computed(() =>
   font-size: 28px;
   line-height: 34px;
   color: #fff;
-  z-index: 1;
+  /* z-index: 2 — sits above the welcome::after fade overlay (z:1) so
+     the text reads at full white instead of getting tinted by the
+     gradient. */
+  z-index: 2;
   /* Single drop-shadow — figma "stroke" on text always lands as a
      centred webkit-text-stroke in the browser, which fuzzes heavy
      glyphs (Golos 700 / Unbounded Black) into an unreadable double
