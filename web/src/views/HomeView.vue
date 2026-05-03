@@ -433,28 +433,26 @@ const statusPopupSub = computed(() =>
   overflow-x: hidden;
 }
 
-/* ── Hero: mascot + settings gear. Matches Figma main-menu (node 13:2077):
-   mascot box is 190×140 at viewport (24, 66) — the 190×190 character image
-   is offset by (-18, -6) and clipped by the 140-tall box so only the upper
-   portion of the figure (head/torso through mid-thigh) shows. The greeting
-   below docks to y=172 via the negative bottom-margin, slightly overlapping
-   the mascot's legs — the look matches the Figma screenshot. Settings sits
-   at y=104 (Figma navbar top:100 + nav inset 4). */
+/* ── Hero: mascot + settings gear. Per Figma 133:14865 the mascot box is
+   190×140 centred horizontally at top:66 (≈ greeting top - 106). The
+   character image is 190×190 placed flush at the top of the clip, with
+   `overflow: hidden` doing all the cropping — no mask. The previous
+   build used `-webkit-mask-image: linear-gradient` to soft-fade the
+   lower body, but several Telegram WebViews ignore mask-image entirely
+   and the character spilled onto the active-match card (playtester
+   2026-05-03 — "так же все наезжает"). Hard clip is universal. */
 .home-v2__hero {
   position: relative;
   height: 140px;
-  /* Figma 13:2077 anchors the mascot at frame-y=66 / settings at y=104 /
-     greeting at y=172. Telegram WebApp consumes the safe-area on its own,
-     so we don't pad on top of it again — a 0 hero margin lines the mascot
-     up with the figma offset on iPhone viewports (designer feedback
-     2026-05-02 #1.1). */
   margin-top: 0;
-  margin-bottom: -37px;
+  margin-bottom: 0;
 }
 .home-v2__mascot-clip {
   position: absolute;
   top: 0;
-  left: 0;
+  /* Figma img-placeholder at left: calc(50% - 77.5px) — centred minus
+     a 17.5px nudge so the waving arm reads correctly. */
+  left: calc(50% - 77.5px);
   width: 190px;
   height: 140px;
   overflow: hidden;
@@ -463,17 +461,15 @@ const statusPopupSub = computed(() =>
 }
 .home-v2__mascot {
   position: absolute;
+  /* Per Figma 133:14898 the 191×191 image's centre sits at
+     (clip-50% - 17.5, clip-50% + 19.5), i.e. its top-left lands at
+     (-18, -6) of the clip. overflow: hidden on the parent clips the
+     bottom 50px of the image (lower legs) cleanly. */
   left: -18px;
   top: -6px;
   width: 190px;
   height: 190px;
   object-fit: contain;
-  /* Soft fade-out at the lower body — matches the figma mask-image
-     gradient (190×190 mask with stops at 55.5% / 66.2%). The image is
-     6px above the clip's top, so the percentages shift up by 6/190
-     (~3.16pp) to land at the same parent-y as the figma. */
-  -webkit-mask-image: linear-gradient(180deg, #fff 58.7%, transparent 69.4%);
-  mask-image: linear-gradient(180deg, #fff 58.7%, transparent 69.4%);
   pointer-events: none;
   user-select: none;
 }
@@ -502,10 +498,11 @@ const statusPopupSub = computed(() =>
 }
 .home-v2__settings:active { transform: scale(0.92); }
 
-/* ── Greeting — overlaps the lower portion of the clipped mascot box ── */
+/* ── Greeting — sits 32px below the mascot clip per Figma 133:14899
+   (hero ends at y=140, greeting top at y=172). ── */
 .home-v2__greeting {
   position: relative;
-  margin: 0;
+  margin: 32px 0 0;
   font-family: 'Golos Text', sans-serif;
   font-weight: 700;
   font-size: 28px;
@@ -712,14 +709,15 @@ const statusPopupSub = computed(() =>
   /* Figma 13:2077 — without an active match the create+join cards sit
      24px apart and the stack starts 40px below the greeting.
      With an active match (Figma 133:14869) the inner gap tightens to
-     12px so all 3 cards still fit, but margin-top stays the same as
-     default — playtester 2026-05-03 explicitly wants the active-match
-     card to sit BELOW the mascot region, not get pulled up under it. */
+     12px and the stack starts 24px below the greeting — that's the
+     spec, and now that the mascot is properly clipped (no mask
+     dependency) the active-match card no longer collides with it. */
   gap: 24px;
   margin-top: 40px;
 }
 .home-v2__cards--with-active {
   gap: 12px;
+  margin-top: 24px;
 }
 .home-v2__card {
   position: relative;

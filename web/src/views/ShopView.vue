@@ -4,7 +4,6 @@ import { useI18n } from "vue-i18n";
 import { useRouter } from "vue-router";
 import { useInventoryStore } from "../stores/inventory";
 import { useTelegram } from "../composables/useTelegram";
-import { SHOP_ITEMS } from "../shop/items";
 import {
   SHOP_CAPS, SHOP_MAPS, SHOP_CHESTS,
   RARITY_LABEL_RU, RARITY_LABEL_EN, RARITY_BADGE_BG,
@@ -18,7 +17,7 @@ import PurchaseSuccessModal, { type PurchaseData } from "../components/PurchaseS
 import PurchaseFailModal, { type PurchaseFailData } from "../components/PurchaseFailModal.vue";
 import type { Rarity } from "../components/RarityGlow.vue";
 
-type FilterId = "all" | "chests" | "caps" | "maps" | "houses" | "banners" | "dice";
+type FilterId = "all" | "chests" | "caps" | "maps" | "dice";
 
 const { locale } = useI18n();
 const router = useRouter();
@@ -54,14 +53,10 @@ const L = computed(() => isRu.value
       filterChests: "Сундуки Удачи",
       filterCaps: "Фишки",
       filterMaps: "Карты",
-      filterHouses: "Цвета и дома",
-      filterBanners: "Знамёна",
       filterDice: "Кости",
       sectionChests: "Сундуки Удачи",
       sectionCaps: "Фишки",
       sectionMaps: "Карты",
-      sectionHouses: "Цвета и дома",
-      sectionBanners: "Знамёна",
       sectionDice: "Кости",
       seeAll: "Смотреть все →",
       hideOwned: "Скрыть купленные",
@@ -78,14 +73,10 @@ const L = computed(() => isRu.value
       filterChests: "Lucky Chests",
       filterCaps: "Tokens",
       filterMaps: "Maps",
-      filterHouses: "Colors & Houses",
-      filterBanners: "Banners",
       filterDice: "Dice",
       sectionChests: "Lucky Chests",
       sectionCaps: "Tokens",
       sectionMaps: "Maps",
-      sectionHouses: "Colors & Houses",
-      sectionBanners: "Banners",
       sectionDice: "Dice",
       seeAll: "See all →",
       hideOwned: "Hide owned",
@@ -105,8 +96,6 @@ const filters = computed(() => [
   { id: "chests" as FilterId,   label: L.value.filterChests },
   { id: "caps" as FilterId,     label: L.value.filterCaps },
   { id: "maps" as FilterId,     label: L.value.filterMaps },
-  { id: "houses" as FilterId,   label: L.value.filterHouses },
-  { id: "banners" as FilterId,  label: L.value.filterBanners },
   { id: "dice" as FilterId,     label: L.value.filterDice },
 ]);
 
@@ -230,40 +219,6 @@ function openChest(chest?: ChestEntry) {
 }
 function closeChestModal() { chestModalChest.value = null; }
 
-// ── Existing items.ts fallback for Houses/Banners ------------------------
-const housesItems = computed(() => SHOP_ITEMS.filter((i) => i.kind === "theme"));
-const bannersItems = computed(() => SHOP_ITEMS.filter((i) => i.kind === "emote"));
-
-function onLegacyAction(itemId: string, kind: "theme" | "emote", price: number, starsPrice: number | undefined, en: string, ru: string) {
-  if (isOwned(itemId)) {
-    if (kind === "theme" && inv.equippedTheme !== itemId) {
-      inv.equip(itemId, "theme");
-      haptic("light");
-      notify("success");
-    }
-    return;
-  }
-  if (starsPrice) {
-    void buyWithStars(itemId, isRu.value ? ru : en, starsPrice);
-    return;
-  }
-  if (inv.coins < price) {
-    notify("error");
-    failData.value = { name: en, ru, price, unit: "◈", balance: inv.coins, reason: "funds" };
-    return;
-  }
-  const ok = inv.buy(itemId, price);
-  if (ok) {
-    haptic("medium");
-    notify("success");
-    successData.value = {
-      id: itemId, name: en, ru,
-      price, unit: "◈",
-      kind: kind === "emote" ? "banner" : "theme",
-      balanceAfter: `${inv.coins} ◈`,
-    };
-  }
-}
 
 // ── Button label / class resolvers (used in template) ─────────────────────
 function capBtnLabel(cap: CapEntry): string {
@@ -291,23 +246,6 @@ function mapBtnClass(m: MapEntry) {
   return "shop2__btn--equip";
 }
 
-function legacyBtnLabel(i: typeof SHOP_ITEMS[number], kind: "theme" | "emote"): string {
-  if (isOwned(i.id)) {
-    if (kind === "theme") return inv.equippedTheme === i.id ? L.value.equipped : L.value.equip;
-    return L.value.equipped;
-  }
-  if (i.starsPrice) return `★ ${i.starsPrice}`;
-  if (i.price === 0) return L.value.free;
-  return `◈ ${i.price}`;
-}
-function legacyBtnClass(i: typeof SHOP_ITEMS[number]) {
-  if (isOwned(i.id)) {
-    if (i.kind === "theme" && inv.equippedTheme !== i.id) return "shop2__btn--equip";
-    return "shop2__btn--equipped";
-  }
-  if (i.starsPrice) return "shop2__btn--stars";
-  return "shop2__btn--equip";
-}
 </script>
 
 <template>
@@ -546,64 +484,6 @@ function legacyBtnClass(i: typeof SHOP_ITEMS[number]) {
                 color="#fff"
               />
               <span>{{ mapBtnLabel(m) }}</span>
-            </button>
-          </article>
-        </div>
-      </template>
-
-      <!-- ╔═══ HOUSES ═══╗ -->
-      <template v-else-if="filter === 'houses'">
-        <h2 class="shop2__section-title">{{ L.sectionHouses }}</h2>
-        <div class="shop2__grid">
-          <article
-            v-for="i in housesItems"
-            :key="i.id"
-            class="shop2__card"
-          >
-            <div class="shop2__preview">
-              <span class="shop2__theme-emoji">{{ i.icon }}</span>
-            </div>
-            <div class="shop2__meta">
-              <span class="shop2__rarity" :style="{ background: i.starsPrice ? '#dd43c8' : (i.price >= 800 ? '#357ddb' : '#8d8d8d') }">
-                {{ i.starsPrice ? rarityLabel('epic') : rarityLabel(i.price >= 800 ? 'rare' : 'common') }}
-              </span>
-              <h3 class="shop2__name">{{ pickName(i.name) }}</h3>
-            </div>
-            <button
-              class="shop2__btn"
-              :class="legacyBtnClass(i)"
-              @click="onLegacyAction(i.id, 'theme', i.price, i.starsPrice, i.name.en, i.name.ru)"
-            >
-              <span>{{ legacyBtnLabel(i, 'theme') }}</span>
-            </button>
-          </article>
-        </div>
-      </template>
-
-      <!-- ╔═══ BANNERS ═══╗ -->
-      <template v-else-if="filter === 'banners'">
-        <h2 class="shop2__section-title">{{ L.sectionBanners }}</h2>
-        <div class="shop2__grid">
-          <article
-            v-for="i in bannersItems"
-            :key="i.id"
-            class="shop2__card"
-          >
-            <div class="shop2__preview">
-              <span class="shop2__theme-emoji">{{ i.icon }}</span>
-            </div>
-            <div class="shop2__meta">
-              <span class="shop2__rarity" :style="{ background: i.price >= 200 ? '#357ddb' : '#8d8d8d' }">
-                {{ rarityLabel(i.price >= 200 ? 'rare' : 'common') }}
-              </span>
-              <h3 class="shop2__name">{{ pickName(i.name) }}</h3>
-            </div>
-            <button
-              class="shop2__btn"
-              :class="legacyBtnClass(i)"
-              @click="onLegacyAction(i.id, 'emote', i.price, i.starsPrice, i.name.en, i.name.ru)"
-            >
-              <span>{{ legacyBtnLabel(i, 'emote') }}</span>
             </button>
           </article>
         </div>
