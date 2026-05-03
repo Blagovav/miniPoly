@@ -1,35 +1,71 @@
-// Tiny Web-Audio synth for game-feel SFX. We don't ship audio assets — the
-// stings here are short bursts of oscillator + noise that work everywhere
-// without an asset budget.
+// SFX playback layer — wraps a small set of mp3 assets shipped under
+// /audio. Each helper plays a fresh clone of the preloaded Audio so
+// overlapping triggers (rapid cash-out + buy on the same turn, walk
+// step + dice landing, etc.) don't cut each other off.
 //
-// iOS Safari / Telegram WebView gate AudioContext behind a user gesture —
-// the AC is created suspended and stays silent until something resumes it
-// inside a touch/click handler. We install a one-time pointerdown +
-// touchstart + click listener at module load that resumes the shared AC
-// the first time the user interacts with the page; without this, dice
-// rolls etc. would fire `playDice()` from a watcher and produce no sound
-// because the watcher isn't a user-gesture context.
+// iOS Safari / Telegram WebView gate `audio.play()` outside a user
+// gesture: the very first call from a watcher (e.g. dice tumble fires
+// from `watch(rolling)`) would otherwise reject and stay silent for the
+// whole session. We install a one-time pointerdown/touchstart/click
+// listener at module load that "primes" each preloaded element by
+// loading + playing it muted; afterwards play() works from any context.
 //
-// Each play is a no-op when settings.sound is off or the AC can't be
-// created (very old browsers). Errors are swallowed so audio failures
-// never block gameplay.
+// Each play is a no-op when settings.sound is off or the asset failed
+// to load. Errors are swallowed so audio failures never block gameplay.
 import { useSettings } from "./useSettings";
 
-let ctx: AudioContext | null = null;
+const SRC = {
+  dice: "/audio/dice.mp3",
+  payment: "/audio/payment.mp3",
+  cashOut: "/audio/cash-out.mp3",
+  notify: "/audio/notify.mp3",
+  step: "/audio/step.mp3",
+} as const;
+
+type Key = keyof typeof SRC;
+
+const elements: Partial<Record<Key, HTMLAudioElement>> = {};
+
+function preload(key: Key): HTMLAudioElement | null {
+  if (typeof Audio === "undefined") return null;
+  const cached = elements[key];
+  if (cached) return cached;
+  try {
+    const a = new Audio(SRC[key]);
+    a.preload = "auto";
+    a.volume = 0.7;
+    elements[key] = a;
+    return a;
+  } catch {
+    return null;
+  }
+}
 
 if (typeof window !== "undefined") {
-  // Install the unlock listener immediately at module load — NOT lazily
-  // from the first shouldPlay() call. Reason: the first sound trigger is
-  // typically a watcher (e.g. dice tumble fires from watch(rolling)),
-  // which runs OUTSIDE a user-gesture callstack. By that point the
-  // earlier roll click has already passed, so a lazily-armed listener
-  // never catches it and the AC stays suspended through the whole
-  // first interaction.
+  // Pre-warm audio elements at module load so the first play() doesn't
+  // pay for a network round-trip mid-roll.
+  (Object.keys(SRC) as Key[]).forEach(preload);
+
+  // Unlock all preloaded elements on the first user gesture. Without
+  // this, mobile Safari rejects play() that fires from a watcher
+  // (dice tumble, your-turn watcher) and the session stays silent.
   const unlock = () => {
-    const ac = getCtx();
-    if (ac && ac.state === "suspended") {
-      ac.resume().catch(() => { /* ignore */ });
-    }
+    (Object.keys(SRC) as Key[]).forEach((k) => {
+      const a = elements[k];
+      if (!a) return;
+      const wasMuted = a.muted;
+      a.muted = true;
+      const p = a.play();
+      if (p && typeof p.then === "function") {
+        p.then(() => {
+          a.pause();
+          a.currentTime = 0;
+          a.muted = wasMuted;
+        }).catch(() => {
+          a.muted = wasMuted;
+        });
+      }
+    });
     window.removeEventListener("pointerdown", unlock);
     window.removeEventListener("touchstart", unlock);
     window.removeEventListener("click", unlock);
@@ -39,160 +75,52 @@ if (typeof window !== "undefined") {
   window.addEventListener("click", unlock, { once: true, passive: true });
 }
 
-function getCtx(): AudioContext | null {
-  if (ctx) {
-    // Best-effort resume on every fetch — Telegram WebView occasionally
-    // re-suspends the AC mid-session (background tab, audio interruption)
-    // and the next play would silently no-op without this.
-    if (ctx.state === "suspended") {
-      ctx.resume().catch(() => { /* ignore */ });
-    }
-    return ctx;
-  }
-  try {
-    const AC: typeof AudioContext =
-      window.AudioContext ||
-      (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
-    if (!AC) return null;
-    ctx = new AC();
-    return ctx;
-  } catch {
-    return null;
-  }
-}
-
 function shouldPlay(): boolean {
   return !!useSettings().value.sound;
 }
 
-function envelope(
-  ac: AudioContext,
-  node: AudioNode,
-  attack: number,
-  release: number,
-  peak = 0.18,
-): GainNode {
-  const g = ac.createGain();
-  const t0 = ac.currentTime;
-  g.gain.setValueAtTime(0.0001, t0);
-  g.gain.exponentialRampToValueAtTime(peak, t0 + attack);
-  g.gain.exponentialRampToValueAtTime(0.0001, t0 + attack + release);
-  node.connect(g);
-  g.connect(ac.destination);
-  return g;
+function fire(key: Key, volume = 0.7): void {
+  if (!shouldPlay()) return;
+  const base = preload(key);
+  if (!base) return;
+  try {
+    // Clone the preloaded element so overlapping triggers (e.g. step +
+    // step on consecutive frames) don't restart each other mid-clip.
+    const clone = base.cloneNode(true) as HTMLAudioElement;
+    clone.volume = volume;
+    const p = clone.play();
+    if (p && typeof p.catch === "function") p.catch(() => { /* ignore */ });
+  } catch {
+    /* ignore */
+  }
 }
 
-/** Dice tumble — short white-noise burst with a low click on tail. */
+/** Dice tumble — fires when the visual tumble starts. */
 export function playDice(): void {
-  if (!shouldPlay()) return;
-  const ac = getCtx();
-  if (!ac) return;
-  try {
-    const dur = 0.35;
-    const buffer = ac.createBuffer(1, Math.floor(ac.sampleRate * dur), ac.sampleRate);
-    const data = buffer.getChannelData(0);
-    for (let i = 0; i < data.length; i++) {
-      // Decay-shaped noise — feels like dice tumbling onto felt.
-      const t = i / data.length;
-      data[i] = (Math.random() * 2 - 1) * Math.pow(1 - t, 2.4) * 0.8;
-    }
-    const noise = ac.createBufferSource();
-    noise.buffer = buffer;
-    const filt = ac.createBiquadFilter();
-    filt.type = "bandpass";
-    filt.frequency.value = 1800;
-    filt.Q.value = 0.6;
-    noise.connect(filt);
-    envelope(ac, filt, 0.01, dur, 0.22);
-    noise.start();
-    noise.stop(ac.currentTime + dur + 0.05);
-
-    // Tail click — settles the tumble, like cubes locking.
-    setTimeout(() => {
-      const click = ac.createOscillator();
-      click.type = "square";
-      click.frequency.value = 220;
-      envelope(ac, click, 0.005, 0.08, 0.12);
-      click.start();
-      click.stop(ac.currentTime + 0.1);
-    }, 280);
-  } catch { /* ignore */ }
+  fire("dice");
 }
 
-/** Property purchase — three-tone arpeggio, major triad up. */
+/** Property purchase — incoming buy / received rent / sold a property. */
 export function playBuy(): void {
-  if (!shouldPlay()) return;
-  const ac = getCtx();
-  if (!ac) return;
-  try {
-    const notes = [523.25, 659.25, 783.99]; // C5, E5, G5
-    notes.forEach((freq, i) => {
-      setTimeout(() => {
-        const osc = ac.createOscillator();
-        osc.type = "triangle";
-        osc.frequency.value = freq;
-        envelope(ac, osc, 0.01, 0.18, 0.15);
-        osc.start();
-        osc.stop(ac.currentTime + 0.2);
-      }, i * 80);
-    });
-  } catch { /* ignore */ }
+  fire("payment");
 }
-
-/** Cash deduction — short descending two-tone, "ka-ching but sad". */
-export function playCashOut(): void {
-  if (!shouldPlay()) return;
-  const ac = getCtx();
-  if (!ac) return;
-  try {
-    [659.25, 392.00].forEach((freq, i) => {
-      setTimeout(() => {
-        const osc = ac.createOscillator();
-        osc.type = "sawtooth";
-        osc.frequency.value = freq;
-        const filt = ac.createBiquadFilter();
-        filt.type = "lowpass";
-        filt.frequency.value = 1200;
-        osc.connect(filt);
-        envelope(ac, filt, 0.005, 0.16, 0.14);
-        osc.start();
-        osc.stop(ac.currentTime + 0.18);
-      }, i * 70);
-    });
-  } catch { /* ignore */ }
-}
-
-/** Cash gain — bright single chime. */
 export function playCashIn(): void {
-  if (!shouldPlay()) return;
-  const ac = getCtx();
-  if (!ac) return;
-  try {
-    const osc = ac.createOscillator();
-    osc.type = "sine";
-    osc.frequency.value = 880;
-    osc.frequency.exponentialRampToValueAtTime(1320, ac.currentTime + 0.18);
-    envelope(ac, osc, 0.005, 0.22, 0.16);
-    osc.start();
-    osc.stop(ac.currentTime + 0.25);
-  } catch { /* ignore */ }
+  fire("payment");
 }
 
-/** Subtle "your turn" chime. Paired with a Telegram haptic at the call site. */
+/** Cash deduction — paying rent, forced sale, tax. */
+export function playCashOut(): void {
+  fire("cashOut");
+}
+
+/** "Your turn" chime, paired with a Telegram haptic at the call site. */
 export function playYourTurn(): void {
-  if (!shouldPlay()) return;
-  const ac = getCtx();
-  if (!ac) return;
-  try {
-    [523.25, 783.99].forEach((freq, i) => {
-      setTimeout(() => {
-        const osc = ac.createOscillator();
-        osc.type = "triangle";
-        osc.frequency.value = freq;
-        envelope(ac, osc, 0.01, 0.22, 0.13);
-        osc.start();
-        osc.stop(ac.currentTime + 0.24);
-      }, i * 110);
-    });
-  } catch { /* ignore */ }
+  fire("notify");
+}
+
+/** Token step — fires per tile during the walk animation. */
+export function playStep(): void {
+  // Lower volume — steps fire 2-12 times in quick succession, full
+  // volume gets oppressive. The base mp3 is already short.
+  fire("step", 0.4);
 }

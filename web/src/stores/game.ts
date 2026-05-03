@@ -2,6 +2,7 @@ import { defineStore } from "pinia";
 import { computed, ref } from "vue";
 import type { RoomState, ServerMessage } from "../../../shared/types";
 import { useTelegram } from "../composables/useTelegram";
+import { playStep } from "./../composables/useSounds";
 
 export interface ChatMessage {
   id: string;
@@ -99,6 +100,10 @@ export const useGameStore = defineStore("game", () => {
       }
       animatedPositions.value = { ...animatedPositions.value, [playerId]: current };
       if (isMe) haptic("light");
+      // Step SFX fires for EVERY player's walk (not just isMe) so other
+      // players' turns also get audio feedback. Volume is intentionally
+      // reduced inside playStep so a 12-step roll doesn't deafen.
+      playStep();
       setTimeout(tick, stepDuration);
     };
     setTimeout(tick, 400);
