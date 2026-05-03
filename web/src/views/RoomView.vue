@@ -31,7 +31,8 @@ import TxnToast from "../components/TxnToast.vue";
 import Icon from "../components/Icon.vue";
 import LoadingScreen from "../components/LoadingScreen.vue";
 import CoronationModal from "../components/CoronationModal.vue";
-import { ORDERED_PLAYER_COLORS } from "../utils/palette";
+import { ORDERED_PLAYER_COLORS, tokenArtFor } from "../utils/palette";
+import TokenArt from "../components/TokenArt.vue";
 import { SHOP_ITEMS } from "../shop/items";
 
 // Map shop token id → its emoji icon. Leaderboard + avatar fallbacks
@@ -1035,7 +1036,14 @@ void t;
                 ? { background: slot.player.color }
                 : undefined"
             >
-              <div class="turn-card__avatar" />
+              <span class="turn-card__avatar">
+                <TokenArt
+                  :id="tokenArtFor(slot.player.token || 'knight')"
+                  :size="28"
+                  :color="slot.player.color"
+                  shadow="rgba(0,0,0,0.55)"
+                />
+              </span>
               <div class="turn-card__body">
                 <div class="turn-card__name">{{ slot.player.name }}</div>
                 <div class="turn-card__stats">
@@ -1842,12 +1850,12 @@ void t;
   width: 40px;
   height: 40px;
   border-radius: 50%;
-  background: linear-gradient(135deg, #d1d5db, #9ca3af);
-  flex-shrink: 0;
-  box-shadow: inset 0 1px 2px rgba(255, 255, 255, 0.4), 0 1px 2px rgba(0, 0, 0, 0.1);
-}
-.turn-card--current .turn-card__avatar {
   background: #fff;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: inset 0 1px 2px rgba(255, 255, 255, 0.4), 0 1px 2px rgba(0, 0, 0, 0.1);
 }
 .turn-card__body {
   min-width: 0;
