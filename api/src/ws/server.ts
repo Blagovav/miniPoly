@@ -662,6 +662,12 @@ function handleLeave(conn: Conn): void {
     return;
   }
   sendState(ctx.room.id);
+  // Active-game leave advances currentTurn inside leaveActiveGame when the
+  // leaver was the current player, but without onStateChange the bot/turn
+  // timers never re-arm for the new current player — bots freeze, humans
+  // see no "your turn" notification, and the room appears stalled to
+  // everyone still in it. Same wake-up gap that hit the auction scheduler.
+  onStateChange(ctx.room);
   conn.roomId = null;
   conn.playerId = null;
 }
@@ -728,6 +734,10 @@ function handleProposeTrade(
     return;
   }
   sendState(ctx.room.id);
+  // onStateChange auto-resolves any pendingTrade aimed at a bot. Without
+  // this the bot would never react to a human's offer and the trade would
+  // hang in pendingTrade forever.
+  onStateChange(ctx.room);
 }
 
 function handleRespondTrade(conn: Conn, accept: boolean): void {
@@ -739,6 +749,7 @@ function handleRespondTrade(conn: Conn, accept: boolean): void {
     return;
   }
   sendState(ctx.room.id);
+  onStateChange(ctx.room);
 }
 
 function handleMortgage(conn: Conn, tileIndex: number): void {

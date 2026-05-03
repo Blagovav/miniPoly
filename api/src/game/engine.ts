@@ -1302,10 +1302,17 @@ function liquidateForCash(room: RoomState, p: Player, target: number): void {
       prop.houses = 0;
     }
     p.cash += proceeds;
-    log(room, {
-      en: `${p.name} sold buildings on ${tile.name.en} (+$${proceeds}, forced)`,
-      ru: `${p.name} вынужденно продал постройки на ${tile.name.ru} (+$${proceeds})`,
-    });
+    log(
+      room,
+      {
+        en: `${p.name} sold buildings on ${tile.name.en} (+$${proceeds}, forced)`,
+        ru: `${p.name} вынужденно продал постройки на ${tile.name.ru} (+$${proceeds})`,
+      },
+      // Surface forced-sale via TxnToast on the affected player's screen so
+      // they don't think their houses just vanished — designer feedback
+      // 2026-05-03 from playtester ("купил дома, и все они пропали").
+      { kind: "liquidation", amount: proceeds, actorId: p.id, tileIndex: parseInt(idx, 10) },
+    );
   }
   if (p.cash >= target) return;
 
@@ -1322,10 +1329,14 @@ function liquidateForCash(room: RoomState, p: Player, target: number): void {
     if (tile.kind !== "street" && tile.kind !== "railroad" && tile.kind !== "utility") continue;
     p.cash += tile.mortgage;
     prop.mortgaged = true;
-    log(room, {
-      en: `${p.name} mortgaged ${tile.name.en} (+$${tile.mortgage}, forced)`,
-      ru: `${p.name} вынужденно заложил ${tile.name.ru} (+$${tile.mortgage})`,
-    });
+    log(
+      room,
+      {
+        en: `${p.name} mortgaged ${tile.name.en} (+$${tile.mortgage}, forced)`,
+        ru: `${p.name} вынужденно заложил ${tile.name.ru} (+$${tile.mortgage})`,
+      },
+      { kind: "liquidation", amount: tile.mortgage, actorId: p.id, tileIndex: parseInt(idx, 10) },
+    );
   }
 }
 
