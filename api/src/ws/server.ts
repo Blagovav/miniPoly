@@ -508,6 +508,10 @@ function handlePlaceBid(conn: Conn, amount: number): void {
     return;
   }
   sendState(ctx.room.id);
+  // Without onStateChange the auction-bot scheduler never re-arms after a
+  // human raise — bots would just sit and never counter-bid, leaving the
+  // human as last-bidder-by-default after the timer never advanced.
+  onStateChange(ctx.room);
 }
 
 function handlePassAuction(conn: Conn): void {
@@ -592,6 +596,7 @@ function handleBuy(conn: Conn): void {
     return;
   }
   sendState(ctx.room.id);
+  onStateChange(ctx.room);
 }
 
 function handleSkipBuy(conn: Conn): void {
@@ -599,6 +604,11 @@ function handleSkipBuy(conn: Conn): void {
   if (!ctx) return;
   skipBuy(ctx.room);
   sendState(ctx.room.id);
+  // skipBuy on a property tile flips phase to "auction" and starts the
+  // auction state. Without onStateChange the auction-bot scheduler is
+  // never invoked, so when a human declines to buy, bots never wake up
+  // to bid — auction stalls until the human bids or passes themselves.
+  onStateChange(ctx.room);
 }
 
 function handleEndTurn(conn: Conn): void {
