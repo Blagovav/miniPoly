@@ -461,18 +461,18 @@ const statusPopupSub = computed(() =>
   /* 140 (mascot box) is exactly enough — greeting sits at top:106
      and is 34px tall, ending at 140. */
   height: 140px;
-  /* figma frame y=66 for mascot top; content padding-top is 24, so add
-     42 to land mascot at frame-y=66 (plus any safe-area inset). */
-  margin-top: 42px;
+  /* margin-top removed — playtester pinned exact values in devtools.
+     Welcome sits flush with content padding-top (safe-area only). */
   flex-shrink: 0;
   user-select: none;
 }
 .home-v2__mascot-clip {
   position: absolute;
   top: 0;
-  /* Centred horizontally, slight 17.5px left bias matches figma's
-     mask-position offset for the asymmetric character pose. */
-  left: 50%;
+  /* left:30% (not 50%) — playtester nudged the clip a third in from
+     the left edge in devtools. Combined with translateX(-50%) the
+     centre of the clip lands at 30% of the welcome width. */
+  left: 30%;
   transform: translateX(-50%);
   width: 190px;
   height: 140px;
@@ -481,14 +481,17 @@ const statusPopupSub = computed(() =>
 }
 .home-v2__mascot {
   position: absolute;
-  /* Per figma 67:1191 — 191×191 image's centre lands at
-     (clip-50% - 17.5, clip-50% + 19.5), so top-left corner ≈ (-18, -6).
-     overflow:hidden on the parent crops the lower legs cleanly. */
+  /* Image stays at (-18, -6) so the character pose sits where figma
+     designed it. height:140 + object-fit:cover makes the image fill
+     the clip exactly without needing the parent overflow to crop —
+     the lower 50px of the original 190×190 art naturally never
+     enters the box because the image element itself is 140px tall. */
   top: -6px;
   left: -18px;
   width: 190px;
-  height: 190px;
-  object-fit: contain;
+  height: 140px;
+  object-fit: cover;
+  object-position: 0 0;
   pointer-events: none;
 }
 .home-v2__settings {
