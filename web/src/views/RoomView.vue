@@ -1067,7 +1067,21 @@ void t;
                 : undefined"
             >
               <span class="turn-card__avatar">
+                <!-- Prefer the player's Telegram photo when present
+                     (same wiring as 3.9 in Lobby). Falls back to the
+                     heraldic token for bots and accounts with no
+                     TG photo set. Playtester 2026-05-03 — turn-slider
+                     was always rendering the token even when we have
+                     a real avatar URL. -->
+                <img
+                  v-if="slot.player.avatar"
+                  class="turn-card__avatar-photo"
+                  :src="slot.player.avatar"
+                  alt=""
+                  referrerpolicy="no-referrer"
+                />
                 <TokenArt
+                  v-else
                   :id="tokenArtFor(slot.player.token || 'knight')"
                   :size="28"
                   :color="slot.player.color"
@@ -1909,6 +1923,13 @@ void t;
   align-items: center;
   justify-content: center;
   box-shadow: inset 0 1px 2px rgba(255, 255, 255, 0.4), 0 1px 2px rgba(0, 0, 0, 0.1);
+  overflow: hidden;
+}
+.turn-card__avatar-photo {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
 }
 .turn-card__body {
   min-width: 0;
