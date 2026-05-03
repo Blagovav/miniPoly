@@ -432,7 +432,12 @@ const statusPopupSub = computed(() =>
   flex-direction: column;
   flex: 1;
   min-height: 0;
-  padding: 24px 24px 24px;
+  /* Top padding clears the Telegram WebApp chrome (safe-area + the
+     "Закрыть"/swipe-down/menu buttons row). 80px fallback when the CSS
+     var isn't injected — playtester 2026-05-03 said the mascot
+     completely disappeared and the active-match notification was
+     hidden behind tg buttons. */
+  padding: calc(80px + var(--tg-safe-area-inset-top, 0px)) 24px 24px;
   overflow-y: auto;
   overflow-x: hidden;
 }
@@ -448,6 +453,10 @@ const statusPopupSub = computed(() =>
   position: relative;
   width: 100%;
   height: 160px;
+  /* Don't let the flex parent collapse this — children are all
+     position:absolute so the welcome has no intrinsic height to fight
+     for, and `flex-shrink: 0` keeps `height: 160px` honoured. */
+  flex-shrink: 0;
   overflow: hidden;
   user-select: none;
 }
