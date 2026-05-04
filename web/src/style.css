@@ -89,7 +89,16 @@ html, body, #app {
   margin: 0;
   padding: 0;
   min-height: var(--tg-viewport-stable-height, 100dvh);
-  background: var(--bg);
+  /* Brand blue is the global fallback. Specific views override via body
+     classes (`home-figma-root`, `create-figma-root`, `room-figma-root`,
+     etc) with !important — those win. The base color matters during
+     route transitions, when one view's class is removed before the
+     next view's class is added: previously the page flashed legacy
+     parchment beige (#f0e4c8) for a frame, which playtester reported
+     as "бежевый экран по переходам". Sitting on the splash blue
+     instead makes any uncovered moment match the boot splash and the
+     RouteLoader overlay. */
+  background: #0d68db;
   color: var(--ink);
   font-family: var(--font-body);
   font-size: 14px;
@@ -108,14 +117,18 @@ html, body {
 }
 
 body {
-  background: var(--bg);
+  background: #0d68db;
 }
 
+/* App-level wrappers stay transparent so the body's brand-blue (or
+   whichever colour the active view's body class is painting) shows
+   through. Used to be `var(--bg)` = beige, which leaked the legacy
+   parchment between figma view transitions. */
 .app-root {
   width: 100%;
   height: 100%;
   max-height: 100%;
-  background: var(--bg);
+  background: transparent;
   position: relative;
   isolation: isolate;
   display: flex;
@@ -131,7 +144,7 @@ body {
   max-height: 100%;
   display: flex;
   flex-direction: column;
-  background: var(--bg);
+  background: transparent;
   overflow-x: clip;
   overflow-y: hidden;
 }
