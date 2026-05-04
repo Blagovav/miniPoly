@@ -1212,7 +1212,7 @@ void t;
         </h2>
         <div v-if="leaderboard.length > 0 && !isPreRoll" class="leaderboard">
           <button
-            v-for="(p, i) in leaderboard.slice(0, 4)"
+            v-for="(p, i) in leaderboard"
             :key="p.id"
             type="button"
             class="leaderboard__row"
