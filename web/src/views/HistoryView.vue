@@ -5,66 +5,80 @@ import { useRouter } from "vue-router";
 import { useTelegram } from "../composables/useTelegram";
 import { ORDERED_PLAYER_COLORS } from "../utils/palette";
 
-type HistoryRoom = {
-  id: string;
-  hostName: string;
-  playerCount: number;
-  maxPlayers: number;
-};
+interface HistoryMatch {
+  id: number;
+  roomId: string;
+  endedAt: string;
+  won: boolean;
+  cashAtEnd: number;
+  opponentNames: string[];
+  opponentCash: number[];
+}
 
 const { locale } = useI18n();
 const router = useRouter();
-const { haptic } = useTelegram();
+const { haptic, userId } = useTelegram();
 
-// History list. Once `/api/history` exists this will fetch the user's
-// past matches; until then the array stays empty and the empty-state
-// ("Истории партий пока нет — Сыграй первую партию") covers the UI.
-//
-// The Figma layout (150:2113) reuses the rooms-list visuals (node
-// 150:2206), so the shape mirrors PublicRoomSummary. Hardcoded sample
-// rows that used to live here were leaking into the live build —
-// playtester saw four phantom "Дэн / Nat / Alex" rooms and thought
-// they were real lobbies.
-const rooms = ref<HistoryRoom[]>([]);
+// History list — fetched from /api/users/:tgUserId/history. The
+// engine writes a row per participant on game end (engine.ts
+// checkWinCondition → recordMatch). Read-only — the user explicitly
+// asked NOT to make the rows clickable for rejoin («просто история»).
+const matches = ref<HistoryMatch[]>([]);
+const loading = ref(false);
 const activeFilter = ref(0);
 
 const isRu = computed(() => locale.value === "ru");
 const L = computed(() => isRu.value
   ? {
       title: "История игр",
-      filters: ["Все игры", "Друзья", "Свободные"],
+      filters: ["Все игры", "Победы"],
       roomPrefix: "Комната",
-      freeSeats: (n: number) => `Свободных мест: ${n}`,
-      noFreeSeats: "Свободных мест нет",
-      enter: "ВОЙТИ",
+      victory: "Победа",
+      placeNth: (n: number) => `${n} место`,
+      unfinished: "Не завершена",
+      versus: "против",
       create: "СОЗДАТЬ ПАРТИЮ",
       emptyLine1: "Истории партий пока нет.",
       emptyLine2: "Сыграй первую партию",
     }
   : {
       title: "Match History",
-      filters: ["All", "Friends", "Open"],
+      filters: ["All", "Victories"],
       roomPrefix: "Room",
-      freeSeats: (n: number) => `Free seats: ${n}`,
-      noFreeSeats: "No free seats",
-      enter: "JOIN",
+      victory: "Victory",
+      placeNth: (n: number) => `${n}${ordinalSuffix(n)} place`,
+      unfinished: "Unfinished",
+      versus: "vs",
       create: "CREATE MATCH",
       emptyLine1: "No match history yet.",
       emptyLine2: "Play your first match",
     });
 
-const filteredRooms = computed(() => {
-  if (activeFilter.value === 2) {
-    return rooms.value.filter((r) => r.playerCount < r.maxPlayers);
+function ordinalSuffix(n: number): string {
+  const v = n % 100;
+  if (v >= 11 && v <= 13) return "th";
+  switch (n % 10) {
+    case 1: return "st";
+    case 2: return "nd";
+    case 3: return "rd";
+    default: return "th";
   }
-  return rooms.value;
-});
-
-function join(id: string, disabled: boolean) {
-  if (disabled) return;
-  haptic("medium");
-  router.push({ name: "room", params: { id } });
 }
+
+// Final standing within the match — rank everyone by cash desc, find me.
+// Server records `won` directly, so the winner is `1` regardless. Lower
+// places are computed from opponentCash + my cashAtEnd.
+function placeFor(m: HistoryMatch): number {
+  if (m.won) return 1;
+  const cashes = [m.cashAtEnd, ...m.opponentCash];
+  const sorted = [...cashes].sort((a, b) => b - a);
+  return sorted.indexOf(m.cashAtEnd) + 1;
+}
+
+const filteredMatches = computed(() => {
+  if (activeFilter.value === 1) return matches.value.filter((m) => m.won);
+  return matches.value;
+});
 
 function goBack() {
   haptic("light");
@@ -80,6 +94,22 @@ function setFilter(i: number) {
   if (activeFilter.value === i) return;
   haptic("light");
   activeFilter.value = i;
+}
+
+async function loadHistory() {
+  if (!userId.value) return;
+  loading.value = true;
+  try {
+    const base = (import.meta.env.VITE_API_URL as string) || "";
+    const res = await fetch(`${base}/api/users/${userId.value}/history`);
+    if (!res.ok) return;
+    const data = await res.json();
+    matches.value = (data.matches ?? []) as HistoryMatch[];
+  } catch {
+    // network — empty state covers it
+  } finally {
+    loading.value = false;
+  }
 }
 
 const scrollEl = ref<HTMLDivElement | null>(null);
@@ -100,6 +130,7 @@ function colorFor(name: string): string {
 onMounted(() => {
   document.documentElement.classList.add("history-figma-root");
   document.body.classList.add("history-figma-root");
+  void loadHistory();
 });
 onUnmounted(() => {
   document.documentElement.classList.remove("history-figma-root");
@@ -137,7 +168,7 @@ onUnmounted(() => {
     </div>
 
     <div class="history-v2__scroll" ref="scrollEl" @scroll.passive="onScroll">
-      <div v-if="filteredRooms.length === 0" class="history-v2__empty">
+      <div v-if="filteredMatches.length === 0" class="history-v2__empty">
         <img
           class="history-v2__empty-art"
           src="/figma/rooms/char-empty.webp"
@@ -151,43 +182,38 @@ onUnmounted(() => {
 
       <div v-else class="history-v2__list">
         <div
-          v-for="(r, i) in filteredRooms"
-          :key="`${r.id}-${i}`"
+          v-for="m in filteredMatches"
+          :key="m.id"
           class="history-v2__card"
         >
           <div class="history-v2__card-body">
             <div class="history-v2__card-name">
-              {{ L.roomPrefix }} {{ r.id }}
-            </div>
-            <div class="history-v2__card-host">
-              <span
-                class="history-v2__host-dot"
-                :style="{ background: `radial-gradient(circle at 30% 30%, ${colorFor(r.hostName)}aa, ${colorFor(r.hostName)})` }"
-              >{{ r.hostName[0]?.toUpperCase() || '?' }}</span>
-              <span class="history-v2__host-name">{{ r.hostName }}</span>
+              {{ L.roomPrefix }} {{ m.roomId }}
             </div>
             <div
-              class="history-v2__seat-pill"
-              :class="{ 'history-v2__seat-pill--full': r.playerCount >= r.maxPlayers }"
+              v-if="m.opponentNames.length > 0"
+              class="history-v2__card-host"
             >
               <span
-                v-if="r.playerCount < r.maxPlayers"
-                class="history-v2__seat-dot"
-                aria-hidden="true"
-              />
-              <span class="history-v2__seat-text">
-                {{ r.playerCount < r.maxPlayers
-                  ? L.freeSeats(r.maxPlayers - r.playerCount)
-                  : L.noFreeSeats }}
+                class="history-v2__host-dot"
+                :style="{ background: `radial-gradient(circle at 30% 30%, ${colorFor(m.opponentNames[0])}aa, ${colorFor(m.opponentNames[0])})` }"
+              >{{ m.opponentNames[0][0]?.toUpperCase() || '?' }}</span>
+              <span class="history-v2__host-name">
+                {{ L.versus }} {{ m.opponentNames.join(', ') }}
+              </span>
+            </div>
+            <!-- Result pill replaces the seats pill from rooms-list. Green
+                 for victory, slate for non-podium. No JOIN button — user
+                 explicitly asked the history rows be read-only. -->
+            <div
+              class="history-v2__result-pill"
+              :class="m.won ? 'history-v2__result-pill--win' : 'history-v2__result-pill--place'"
+            >
+              <span class="history-v2__result-text">
+                {{ m.won ? L.victory : L.placeNth(placeFor(m)) }}
               </span>
             </div>
           </div>
-          <button
-            class="history-v2__enter"
-            :class="{ 'history-v2__enter--disabled': r.playerCount >= r.maxPlayers }"
-            :disabled="r.playerCount >= r.maxPlayers"
-            @click="join(r.id, r.playerCount >= r.maxPlayers)"
-          >{{ L.enter }}</button>
         </div>
       </div>
     </div>
@@ -371,6 +397,31 @@ onUnmounted(() => {
   color: #000;
   overflow: hidden;
   text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.history-v2__result-pill {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border-radius: 100px;
+  border: 1px solid rgba(0, 0, 0, 0.2);
+}
+.history-v2__result-pill--win {
+  background: #43c22d;
+}
+.history-v2__result-pill--place {
+  background: #6b7280;
+}
+.history-v2__result-text {
+  font-family: 'Unbounded', sans-serif;
+  font-weight: 700;
+  font-size: 14px;
+  line-height: 16px;
+  color: #fff;
+  text-shadow: 0.4px 0.4px 0 rgba(0, 0, 0, 0.4);
   white-space: nowrap;
 }
 

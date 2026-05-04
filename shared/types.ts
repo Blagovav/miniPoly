@@ -106,6 +106,14 @@ export interface Player {
   bankrupt: boolean;
   ready: boolean;
   connected: boolean;
+  // Whether the player's Mini App is in the foreground (visible on
+  // screen). Defaults to true on join; flips false when the client sends
+  // `wsForeground { foreground: false }` after a `visibilitychange` →
+  // hidden event. Server uses this to decide whether to push a
+  // "ваш ход" Telegram message — bot pings fire when the app is
+  // backgrounded but the WS is still connected, matching the original
+  // behaviour playtesters relied on.
+  foreground?: boolean;
   // Host-added AI player. Plays every turn via the server's auto-act
   // logic with a shorter timer than humans. Always ready, never connected
   // (no WS), cannot host. `tgUserId` is synthetic (negative).
@@ -295,7 +303,16 @@ export type ClientMessage =
   | { type: "removeBot"; playerId: string }
   | { type: "voiceJoin" }
   | { type: "voiceLeave" }
-  | { type: "voiceSignal"; toId: string; payload: VoiceSignalPayload };
+  | { type: "voiceSignal"; toId: string; payload: VoiceSignalPayload }
+  // App moved to background / came back. Server uses this to gate
+  // notifyTurn so users get a Telegram push when the WebApp is
+  // minimized but the WS is still alive.
+  | { type: "wsForeground"; foreground: boolean }
+  // In-game friends (independent of Telegram contacts). A→B sends a
+  // pending request; B's client gets `friendRequestIncoming` and
+  // responds via `friendRespond`.
+  | { type: "friendRequest"; toUserId: number }
+  | { type: "friendRespond"; requestId: number; accept: boolean };
 
 // Payload for WebRTC signaling relayed via WS between two peers in the same room.
 export type VoiceSignalPayload =
@@ -319,4 +336,19 @@ export type ServerMessage =
   | { type: "voicePeers"; peerIds: string[] }
   | { type: "voicePeerJoined"; peerId: string }
   | { type: "voicePeerLeft"; peerId: string }
-  | { type: "voiceSignal"; fromId: string; payload: VoiceSignalPayload };
+  | { type: "voiceSignal"; fromId: string; payload: VoiceSignalPayload }
+  // Pushed to the recipient when someone sends them a friend request.
+  | {
+      type: "friendRequestIncoming";
+      requestId: number;
+      fromUserId: number;
+      fromName: string;
+    }
+  // Pushed to both sides after a respond — sender hears whether their
+  // request was accepted/declined; recipient acks they're now linked.
+  | {
+      type: "friendStatusUpdate";
+      otherUserId: number;
+      otherName: string;
+      status: "accepted" | "declined";
+    };

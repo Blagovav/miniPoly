@@ -10,6 +10,7 @@ import type { RoomState } from "../../../shared/types";
 import { SHOP_ITEMS } from "../shop/items";
 import { useInventoryStore } from "../stores/inventory";
 import { useTelegram } from "../composables/useTelegram";
+import { useGameStore } from "../stores/game";
 import Icon from "./Icon.vue";
 import Sigil from "./Sigil.vue";
 import CosmeticsCaps from "./CosmeticsCaps.vue";
@@ -28,12 +29,35 @@ const props = defineProps<{
   onSelectToken: (tokenId: string) => void;
   onAddBot?: () => void;
   onRemoveBot?: (playerId: string) => void;
+  // Sends a friend request to another lobby player (by their tgUserId).
+  // Optional so the lobby can render without it during early onboarding.
+  onFriendRequest?: (toUserId: number) => void;
 }>();
 
 const inv = useInventoryStore();
+const game = useGameStore();
 const { t, locale } = useI18n();
 const isRu = computed(() => locale.value === "ru");
 void t;
+
+// Per-row friendship state — drives the in-lobby «В ДРУЗЬЯ» button.
+function friendStateFor(p: { tgUserId: number; isBot?: boolean; id: string }):
+  "self" | "bot" | "friend" | "pending" | "none" {
+  if (p.isBot) return "bot";
+  if (p.id === props.myPlayerId) return "self";
+  if (game.friendIds.has(p.tgUserId)) return "friend";
+  if (game.sentFriendRequests.has(p.tgUserId)) return "pending";
+  return "none";
+}
+function requestFriend(p: { tgUserId: number }) {
+  if (!props.onFriendRequest) return;
+  if (game.sentFriendRequests.has(p.tgUserId)) return;
+  // Optimistic flip — server's `friendStatusUpdate` cleans up if rejected.
+  const next = new Set(game.sentFriendRequests);
+  next.add(p.tgUserId);
+  game.sentFriendRequests = next;
+  props.onFriendRequest(p.tgUserId);
+}
 
 // Lobby-only board pick (display-only — server doesn't pick boards yet).
 const boardId = ref<string>("eldmark");
@@ -316,6 +340,9 @@ const L = computed(() => isRu.value
       bot: "Бот",
       addBot: "Добавить бота",
       kickBot: "Убрать бота",
+      addFriend: "Добавить в друзья",
+      friendRequested: "Запрос отправлен",
+      alreadyFriend: "Уже в друзьях",
       takenBy: (name: string) => `Занята: ${name}`,
       inviteTitle: "Пригласить игроков",
       inviteSub: "Вы можете пригласить друзей или отправить приглашение в телеграм напрямую",
@@ -345,6 +372,9 @@ const L = computed(() => isRu.value
       bot: "Bot",
       addBot: "Add a bot",
       kickBot: "Remove bot",
+      addFriend: "Add as friend",
+      friendRequested: "Request sent",
+      alreadyFriend: "Already friends",
       takenBy: (name: string) => `Taken: ${name}`,
       inviteTitle: "Invite players",
       inviteSub: "Invite friends or share to Telegram directly",
@@ -481,6 +511,33 @@ const L = computed(() => isRu.value
         >
           <Icon name="x" :size="14" color="#000"/>
         </button>
+        <!-- In-lobby friend request. Hidden on self / bots. Three pill
+             states: idle (green +), pending (grey, awaiting their accept),
+             accepted (teal heart, disabled). -->
+        <button
+          v-else-if="friendStateFor(p) === 'none' && onFriendRequest"
+          class="player-row__action player-row__action--addfriend"
+          :title="L.addFriend"
+          @click="requestFriend(p)"
+        >
+          <Icon name="plus" :size="14" color="#fff"/>
+        </button>
+        <span
+          v-else-if="friendStateFor(p) === 'pending'"
+          class="player-row__action player-row__action--pendingfriend"
+          :title="L.friendRequested"
+          aria-hidden="true"
+        >
+          <Icon name="check" :size="12" color="#000"/>
+        </span>
+        <span
+          v-else-if="friendStateFor(p) === 'friend'"
+          class="player-row__action player-row__action--isfriend"
+          :title="L.alreadyFriend"
+          aria-hidden="true"
+        >
+          ❤
+        </span>
         <span
           v-else-if="p.ready"
           class="player-row__action player-row__action--check"
@@ -971,6 +1028,24 @@ const L = computed(() => isRu.value
 .player-row__action--check {
   background: #43c22d;
   border-color: #43c22d;
+  cursor: default;
+}
+.player-row__action--addfriend {
+  background: #2283f3;
+  border-color: #2283f3;
+}
+.player-row__action--addfriend:hover { background: #1a6dc7; }
+.player-row__action--pendingfriend {
+  background: #d6d6d6;
+  border-color: rgba(0, 0, 0, 0.2);
+  cursor: default;
+}
+.player-row__action--isfriend {
+  background: #fff;
+  border-color: rgba(0, 0, 0, 0.18);
+  color: #e84b3e;
+  font-size: 14px;
+  line-height: 14px;
   cursor: default;
 }
 

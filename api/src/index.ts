@@ -4,7 +4,16 @@ import { config } from "./config";
 import { registerWebSocket } from "./ws/server";
 import { allRooms, getRoom } from "./rooms/manager";
 import { BOARD } from "../../shared/board";
-import { getRecentCoPlayers, getUserProfile, getUserPurchases, initDb, recordPurchase } from "./db";
+import {
+  getFriends,
+  getIncomingFriendRequests,
+  getMatchHistory,
+  getRecentCoPlayers,
+  getUserProfile,
+  getUserPurchases,
+  initDb,
+  recordPurchase,
+} from "./db";
 
 const app = Fastify({ logger: true });
 
@@ -65,6 +74,26 @@ app.get<{ Params: { tgUserId: string } }>("/api/users/:tgUserId/coplayers", asyn
   if (!id) return reply.code(400).send({ error: "bad id" });
   const list = await getRecentCoPlayers(id);
   return { players: list };
+});
+
+// History of finished matches, newest first. The engine writes a row per
+// participant in checkWinCondition (engine.ts ~1238) and the UI in
+// HistoryView.vue reads from this endpoint.
+app.get<{ Params: { tgUserId: string } }>("/api/users/:tgUserId/history", async (req, reply) => {
+  const id = Number(req.params.tgUserId);
+  if (!id) return reply.code(400).send({ error: "bad id" });
+  const matches = await getMatchHistory(id);
+  return { matches };
+});
+
+// Accepted in-game friends (separate from Telegram contacts). Friend
+// requests themselves are sent + accepted over WS — see ws/server.ts.
+app.get<{ Params: { tgUserId: string } }>("/api/users/:tgUserId/friends", async (req, reply) => {
+  const id = Number(req.params.tgUserId);
+  if (!id) return reply.code(400).send({ error: "bad id" });
+  const friends = await getFriends(id);
+  const incoming = await getIncomingFriendRequests(id);
+  return { friends, incoming };
 });
 
 app.get<{ Params: { tgUserId: string } }>("/api/users/:tgUserId/purchases", async (req, reply) => {

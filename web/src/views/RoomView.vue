@@ -27,6 +27,7 @@ import AuctionModal from "../components/AuctionModal.vue";
 import PreRollPanel from "../components/PreRollPanel.vue";
 import TileInfoModal from "../components/TileInfoModal.vue";
 import PlayerProfileModal from "../components/PlayerProfileModal.vue";
+import FriendRequestModal from "../components/FriendRequestModal.vue";
 import TradeBanner from "../components/TradeBanner.vue";
 import TradeModal, { type TradePayload } from "../components/TradeModal.vue";
 import TxnToast from "../components/TxnToast.vue";
@@ -443,6 +444,15 @@ function addBot() {
 function removeBot(playerId: string) {
   haptic("light");
   ws.send({ type: "removeBot", playerId });
+}
+function sendFriendRequest(toUserId: number) {
+  haptic("medium");
+  ws.send({ type: "friendRequest", toUserId });
+}
+function respondFriendRequest(requestId: number, accept: boolean) {
+  haptic("light");
+  ws.send({ type: "friendRespond", requestId, accept });
+  game.dismissIncomingRequest(requestId);
 }
 
 function buildHouse(tileIndex: number) {
@@ -1063,6 +1073,7 @@ void t;
       :on-select-token="selectToken"
       :on-add-bot="addBot"
       :on-remove-bot="removeBot"
+      :on-friend-request="sendFriendRequest"
     />
 
     <!-- ── In-game / ended phases ── -->
@@ -1533,6 +1544,11 @@ void t;
       :on-submit="submitTrade"
     />
     <TxnToast v-if="game.room" />
+    <FriendRequestModal
+      v-if="game.incomingFriendRequests.length > 0"
+      :request="game.incomingFriendRequests[0]"
+      :on-respond="respondFriendRequest"
+    />
 
     <transition name="err-slide">
       <div v-if="errorMsg" class="err-toast" role="alert" aria-live="assertive">
