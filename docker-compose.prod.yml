@@ -71,6 +71,14 @@ services:
       # Картинка-превью для shareMessage. Оставь пустым, если нет файла —
       # карточка будет без thumbnail.
       OG_IMAGE_URL: ${OG_IMAGE_URL:-}
+      # Force IPv4 DNS resolution. The VPS has no working IPv6 outbound,
+      # but the default Node DNS order on this image returns the IPv6
+      # api.telegram.org address first → every grammy call timed out and
+      # all bot operations (sendMessage, savePreparedInlineMessage,
+      # createInvoiceLink) silently failed. createInvoiceLink failure is
+      # what broke Stars purchases: web → /api/stars/invoice → bot →
+      # api.telegram.org timed out → 502 «bot unreachable» bubbled to UI.
+      NODE_OPTIONS: --dns-result-order=ipv4first
     depends_on:
       - api
 
