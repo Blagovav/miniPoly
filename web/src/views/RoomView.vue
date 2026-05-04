@@ -614,20 +614,22 @@ const turnSlots = computed<{ key: string; player: Player; role: "prev" | "curren
       { key: next.id, player: next, role: "next" as const },
     ];
   }
-  // 2-player: prev and next are the same player (a 2-element circular
-  // list). Rendering 3 slots would either need duplicate keys (Vue
-  // crashes) or role-prefixed keys (every key changes on every turn
-  // flip → TransitionGroup runs enter+leave on all three cards →
-  // playtester saw "беспорядочный бег"). Render TWO slots instead
-  // — current + opponent — keyed by player.id. On turn flip the two
-  // entries swap positions, FLIP detects the move, and the cards
-  // genuinely slide past each other instead of cross-fading. The
-  // `.turn-card { transition: background-color 320ms, padding 320ms,
-  // ... }` rule still morphs the red current-band on the card that
-  // becomes current.
+  // 2-player: prev and next are literally the same player (a 2-element
+  // circular list). We still want the 3-slot layout so the centred
+  // "current" card has the triangle indicator pointing at it, with the
+  // opponent peeking from both sides — that's the "infinite carousel"
+  // playtesters expected from the design. Keys are role-stable
+  // (slot-prev / slot-current / slot-next) rather than id-based: id
+  // keys would collide (Vue crash on duplicates) and role-prefixed
+  // ids change on every turn flip (TransitionGroup fires enter+leave
+  // on all three at once → flicker storm). With role-stable keys, the
+  // cards stay mounted and the inner data (avatar/name/cash) just
+  // morphs in place via the existing `.turn-card { transition:
+  // background-color, padding, ... }` rule.
   return [
-    { key: cur.id,  player: cur,  role: "current" as const },
-    { key: next.id, player: next, role: "next" as const },
+    { key: "slot-prev",    player: prev, role: "prev" as const },
+    { key: "slot-current", player: cur,  role: "current" as const },
+    { key: "slot-next",    player: next, role: "next" as const },
   ];
 });
 
