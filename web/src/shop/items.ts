@@ -6,7 +6,11 @@ export const SHOP_ITEMS: ShopItem[] = [
   { id: "token-dog",     kind: "token", name: { en: "Dog",        ru: "Пёс" },           price: 0,    icon: "🐕" },
   { id: "token-hat",     kind: "token", name: { en: "Top Hat",    ru: "Цилиндр" },       price: 0,    icon: "🎩" },
   { id: "token-cat",     kind: "token", name: { en: "Cat",        ru: "Кот" },           price: 0,    icon: "🐈" },
-  { id: "token-crown",   kind: "token", name: { en: "Crown",      ru: "Корона" },        price: 0,    icon: "👑" },
+  // Originally "Crown" but no crown art existed — the figurine fell back
+  // to the top-hat asset, visually duplicating `token-hat` in the lobby
+  // picker. Renamed to Plane (matches the cosmetics.ts mapping) so the 6
+  // free tokens have distinct silhouettes.
+  { id: "token-crown",   kind: "token", name: { en: "Plane",      ru: "Самолёт" },       price: 0,    icon: "✈️" },
   { id: "token-ufo",     kind: "token", name: { en: "UFO",        ru: "НЛО" },           price: 0,    icon: "🛸" },
 
   { id: "token-rocket",  kind: "token", name: { en: "Rocket",     ru: "Ракета" },        price: 300,  icon: "🚀" },

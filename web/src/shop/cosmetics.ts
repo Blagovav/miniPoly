@@ -152,15 +152,18 @@ const CAP_BY_ID = new Map<string, CapEntry>(SHOP_CAPS.map((c) => [c.id, c]));
 
 /** Legacy `token-*` ids predate the redesigned shop — map them to the
  *  closest cap figurine so existing inventories don't suddenly fall back
- *  to the default. `token-crown` had no direct equivalent; the hat reads
- *  as the closest "fancy/regal" piece. */
+ *  to the default. `token-crown` originally fell back to "hat" because no
+ *  crown asset existed, but that visually duplicated `token-hat` in the
+ *  lobby's free-token picker (playtester: «дублирование фишек снизу»).
+ *  Remapped to `plane` so all 6 free tokens have distinct silhouettes —
+ *  matched up by the `Plane / Самолёт` rename in SHOP_ITEMS. */
 const LEGACY_TOKEN_TO_CAP: Record<string, CapType> = {
   "token-car": "car",
   "token-dog": "dog",
   "token-hat": "hat",
   "token-cat": "cat",
   "token-ufo": "ufo",
-  "token-crown": "hat",
+  "token-crown": "plane",
 };
 
 const ALL_CAP_TYPES: readonly CapType[] = SHOP_CAPS.map((c) => c.type);
