@@ -601,9 +601,10 @@ const turnSlots = computed<{ key: string; player: Player; role: "prev" | "curren
   const prev = r.players[(i - 1 + n) % n];
   const cur  = r.players[i];
   const next = r.players[(i + 1) % n];
-  // 3+ players: key by player.id so Vue's TransitionGroup FLIP slides
-  // persistent cards (current → prev, next → current, fresh next fades
-  // in from the right, old prev fades out to the left).
+  // 3+ players: 3-slot circular carousel keyed by player.id. Vue's
+  // TransitionGroup FLIP slides the persistent cards across the slot
+  // boundaries (current → prev, next → current, fresh next fades in
+  // from the right, old prev fades out to the left).
   if (n >= 3) {
     return [
       { key: prev.id, player: prev, role: "prev" as const },
@@ -611,21 +612,20 @@ const turnSlots = computed<{ key: string; player: Player; role: "prev" | "curren
       { key: next.id, player: next, role: "next" as const },
     ];
   }
-  // 2-player: prev and next are the SAME player (circular). Player-id
-  // keys would collide, and the previously-used `prev-${id}` /
-  // `current-${id}` / `next-${id}` workaround swapped every key on
-  // every turn flip, so Vue ran an enter+leave on all three cards at
-  // once — playtester reported the slider "беспорядочно бегает". Use
-  // role-stable keys instead: cards stay mounted, only their content
-  // changes, and the `transition: background/padding/color` rule on
-  // `.turn-card` morphs the red highlight smoothly between the two
-  // seats. No FLIP slide (there's only ever two unique players to
-  // shuffle, and the centred-red-card layout is what the designer
-  // wanted regardless), but no chaotic flicker either.
+  // 2-player: prev and next are the same player (a 2-element circular
+  // list). Rendering 3 slots would either need duplicate keys (Vue
+  // crashes) or role-prefixed keys (every key changes on every turn
+  // flip → TransitionGroup runs enter+leave on all three cards →
+  // playtester saw "беспорядочный бег"). Render TWO slots instead
+  // — current + opponent — keyed by player.id. On turn flip the two
+  // entries swap positions, FLIP detects the move, and the cards
+  // genuinely slide past each other instead of cross-fading. The
+  // `.turn-card { transition: background-color 320ms, padding 320ms,
+  // ... }` rule still morphs the red current-band on the card that
+  // becomes current.
   return [
-    { key: "slot-prev",    player: prev, role: "prev" as const },
-    { key: "slot-current", player: cur,  role: "current" as const },
-    { key: "slot-next",    player: next, role: "next" as const },
+    { key: cur.id,  player: cur,  role: "current" as const },
+    { key: next.id, player: next, role: "next" as const },
   ];
 });
 
