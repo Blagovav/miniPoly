@@ -131,11 +131,21 @@ export function onStateChange(room: RoomState): void {
       notifyTurn(p.tgUserId, room.id, p.name);
     }
     resetTurnTimer(room);
-  } else if (room.phase === "rolling" && (!p.connected || p.isBot)) {
-    // Same bot is up again (doubles). currentTurn didn't change, so the
-    // turn-change branch above doesn't fire — but the bot still needs a
-    // timer to auto-roll the bonus turn. Without this re-arm, a bot that
-    // rolls doubles just freezes.
+  } else if (
+    (!p.connected || p.isBot)
+    && (room.phase === "rolling" || room.phase === "buyPrompt" || room.phase === "action")
+  ) {
+    // currentTurn didn't change but the bot still has work to do — and
+    // the original turn timer has already fired and exited. Cases:
+    //   - rolling: doubles bonus turn, bot needs to auto-roll again.
+    //   - action: bot started an auction during its turn, the auction
+    //     finished out-of-band via a human's bid/pass, phase flipped
+    //     back to action, and engineEndTurn never ran. Without this
+    //     re-arm the room freezes with the bot still marked as
+    //     currentPlayer in phase=action.
+    //   - buyPrompt: defensive — same shape if a human action ever
+    //     leaves the bot mid-buyPrompt.
+    // auction phase is handled by scheduleAuctionBotTick above.
     resetTurnTimer(room);
   }
 }
