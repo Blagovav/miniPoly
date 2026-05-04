@@ -15,10 +15,11 @@ const game = useGameStore();
 
 type Toast = {
   id: string;
-  dir: "in" | "out" | "buy" | "forced"; // color/glyph variant
+  dir: "in" | "out" | "buy" | "forced" | "auction"; // color/glyph variant
   amount: number;
   tileName: string;
   counterparty: string;
+  actorId?: string; // used by auction toast to pick the right SFX for me-vs-other
 };
 
 const active = ref<Toast | null>(null);
@@ -130,6 +131,34 @@ watch(
   },
 );
 
+// Auction wrap-up toast: surfaces "X won Y for $Z" the moment the
+// auction modal closes. Server logs the win but doesn't emit structured
+// `txn` data for it, so the regular log-watcher path can't pick it up.
+// Instead we observe room.auction transitioning from non-null to null
+// and synthesize a toast from the prior auction snapshot. Skipped when
+// the auction ended without a winner (no bids, or winner went bankrupt
+// in the resolve race).
+watch(
+  () => game.room?.auction,
+  (newA, oldA) => {
+    if (!oldA || newA) return;
+    const winnerId = oldA.highBidderId;
+    if (!winnerId) return;
+    const winner = game.room?.players.find((pl) => pl.id === winnerId);
+    if (!winner || winner.bankrupt) return;
+    const t: Toast = {
+      id: `auction-${oldA.tileIndex}-${oldA.startedAt}`,
+      dir: "auction",
+      amount: oldA.highBid,
+      tileName: tileName(oldA.tileIndex),
+      counterparty: winner.name,
+      actorId: winner.id,
+    };
+    if (game.animatingPlayerId || game.rolling) pendingToast = t;
+    else show(t);
+  },
+);
+
 function show(t: Toast) {
   active.value = t;
   // SFX matched to the toast direction. The toast is the canonical
@@ -137,6 +166,13 @@ function show(t: Toast) {
   // instead of sprinkling playCash* calls across every action handler.
   if (t.dir === "buy") playBuy();
   else if (t.dir === "out" || t.dir === "forced") playCashOut();
+  else if (t.dir === "auction") {
+    // Winner gets the cha-ching, everyone else gets the lighter cash-in
+    // so they know "someone got something" without it sounding like
+    // their own purchase.
+    if (t.actorId && t.actorId === game.myPlayerId) playBuy();
+    else playCashIn();
+  }
   else playCashIn();
   if (clearTimer) clearTimeout(clearTimer);
   clearTimer = setTimeout(() => {
@@ -170,6 +206,14 @@ const label = computed(() => {
       sub: t.tileName,
       amount: `◈ ${t.amount}`,
       sign: "+" as const,
+    };
+  }
+  if (t.dir === "auction") {
+    return {
+      title: isRu ? "Аукцион" : "Auction",
+      sub: `${t.counterparty} → ${t.tileName}`,
+      amount: `◈ ${t.amount}`,
+      sign: "" as const,
     };
   }
   return {
@@ -241,10 +285,13 @@ const label = computed(() => {
   white-space: nowrap;
   flex-shrink: 0;
 }
-.txn-toast--buy    .txn-toast__badge { background: #43c22d; }
-.txn-toast--out    .txn-toast__badge { background: #e84b3e; }
-.txn-toast--in     .txn-toast__badge { background: #2283f3; }
-.txn-toast--forced .txn-toast__badge { background: #f97316; }
+.txn-toast--buy     .txn-toast__badge { background: #43c22d; }
+.txn-toast--out     .txn-toast__badge { background: #e84b3e; }
+.txn-toast--in      .txn-toast__badge { background: #2283f3; }
+.txn-toast--forced  .txn-toast__badge { background: #f97316; }
+/* Gold for auction wins — distinct from buy (green) so the player can
+   tell at a glance "this is a contested win, not a quiet purchase". */
+.txn-toast--auction .txn-toast__badge { background: #d97706; }
 
 .txn-toast__sub {
   flex: 1 1 0;
@@ -274,6 +321,7 @@ const label = computed(() => {
 .txn-toast--in .txn-toast__amt     { color: #2d7a4f; }
 .txn-toast--buy .txn-toast__amt    { color: #2d7a4f; }
 .txn-toast--forced .txn-toast__amt { color: #c2410c; }
+.txn-toast--auction .txn-toast__amt { color: #b45309; }
 .txn-toast__sign {
   font-weight: 900;
 }
