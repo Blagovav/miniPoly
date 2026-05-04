@@ -165,9 +165,19 @@ async function loadFriendsList() {
   }
 }
 
-function openInvite() {
+async function openInvite() {
+  // Load co-players first. If the list comes back empty there's nothing
+  // to choose from in the modal — it would just show a title and the
+  // same "Пригласить ещё" button that already kicked us off, which is
+  // what the playtester flagged as redundant («нажимаю пригласить, а
+  // там та же кнопка»). Skip the modal entirely and go straight to the
+  // Telegram share flow in that case.
+  await loadFriendsList();
+  if (friendsList.value.length === 0) {
+    void share();
+    return;
+  }
   inviteOpen.value = true;
-  void loadFriendsList();
 }
 function closeInvite() {
   inviteOpen.value = false;

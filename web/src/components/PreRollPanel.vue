@@ -7,6 +7,7 @@ import { computed, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import type { Player, PreRollBracket, RoomState } from "../../../shared/types";
 import Dice from "./Dice.vue";
+import { capTypeFor } from "../shop/cosmetics";
 
 const props = defineProps<{
   room: RoomState;
@@ -118,7 +119,14 @@ const subtitle = computed(() => {
             'preroll__row--tied': tiedIds.has(p.id),
           }"
         >
-          <span class="preroll__dot" :style="{ background: colorFor(p) }" />
+          <span class="preroll__token" :style="{ background: colorFor(p) }">
+            <img
+              class="preroll__cap"
+              :src="`/figma/shop/caps/${capTypeFor(p.token)}.webp`"
+              :alt="p.name"
+              draggable="false"
+            />
+          </span>
           <span class="preroll__name">{{ p.name }}</span>
           <span v-if="seatByPid[p.id]" class="preroll__seat">#{{ seatByPid[p.id] }}</span>
           <span v-else-if="p.id === currentRollerId" class="preroll__pending">
@@ -224,12 +232,27 @@ const subtitle = computed(() => {
 .preroll__row--tied {
   background: #fde9e6;
 }
-.preroll__dot {
-  width: 14px;
-  height: 14px;
+/* Player chip — coloured disc with the equipped cap figurine inside.
+   Same identity language as the leaderboard / turn-slider so the same
+   silhouette identifies the player across every surface. */
+.preroll__token {
+  position: relative;
+  width: 28px;
+  height: 28px;
   border-radius: 50%;
   flex-shrink: 0;
-  box-shadow: inset 0 1px 2px rgba(255, 255, 255, 0.4), 0 1px 1px rgba(0, 0, 0, 0.15);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border: 1.5px solid rgba(0, 0, 0, 0.18);
+}
+.preroll__cap {
+  width: 110%;
+  height: 110%;
+  object-fit: contain;
+  pointer-events: none;
+  user-select: none;
 }
 .preroll__name {
   flex: 1;
