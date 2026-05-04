@@ -205,18 +205,21 @@ const L = computed(() => locale.value === "ru"
 .card-pop__badge {
   display: inline-flex;
   align-items: center;
-  padding: 8px 12px;
+  text-align: center;
+  padding: 6px 14px;
   border-radius: 100px;
   font-family: 'Unbounded', sans-serif;
   font-weight: 700;
-  font-size: 14px;
+  font-size: 13px;
   line-height: 16px;
   color: #fff;
   text-shadow: 0.2px 0.2px 0 rgba(0, 0, 0, 0.6);
-  white-space: nowrap;
+  /* The longest case is RU "Общественная казна — ваша карта" (~32 chars).
+     Truncation hid the eyebrow's last word ("ва..."), so allow wrap and
+     drop the ellipsis-on-overflow path entirely. */
+  white-space: normal;
   max-width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  word-break: keep-all;
 }
 .card-pop__badge--chance { background: #e2776e; }
 .card-pop__badge--chest  { background: #688ee2; }
