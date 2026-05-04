@@ -894,50 +894,31 @@ function mapBtnClass(m: MapEntry) {
 .shop2__chest-art {
   position: relative;
   flex-shrink: 0;
-  width: 132px;
-  height: 158px;
+  width: 148px;
+  height: 148px;
   display: flex;
   align-items: center;
   justify-content: center;
+  /* Bleed into the card's right padding so the marketing composition
+     extends to the rounded corner without the cat figurine getting
+     clipped by the card's outer edge. */
+  margin-right: -4px;
 }
-/* While the designer's chest art (image 170/171/172 from Figma node 100:10408)
-   is not yet exported into web/figma-src/shop/chests/, render an oversized
-   chest emoji as visual stand-in. Replace .shop2__chest-emoji with an <img>
-   referencing /figma/shop/chests/business.webp once the asset lands. */
+/* Emoji fallback — only used when no chest art (cardArt / artClosed) is
+   wired up. The marketing-style cardArt ships its own halo + lighting so
+   no extra CSS glow is layered on top. */
 .shop2__chest-emoji {
   font-size: 96px;
   line-height: 1;
   filter: drop-shadow(0 4px 8px rgba(255, 200, 80, 0.4));
 }
-/* Real chest illustration — overflows the 132×158 art slot slightly so the
-   tilt/shadow on the rendered piece doesn't get clipped by the rounded card
-   edge. The radial halo behind it is drawn here as a CSS layer rather than
-   shipping a second asset. */
 .shop2__chest-img {
   position: relative;
-  width: 142px;
-  height: 142px;
+  width: 100%;
+  height: 100%;
   object-fit: contain;
   pointer-events: none;
   user-select: none;
-  filter: drop-shadow(0 8px 16px rgba(255, 200, 80, 0.45));
-}
-.shop2__chest-art::before {
-  content: "";
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  width: 180px;
-  height: 180px;
-  transform: translate(-50%, -50%);
-  background: radial-gradient(
-    circle,
-    rgba(219, 53, 53, 0.45) 0%,
-    rgba(219, 53, 53, 0.15) 35%,
-    transparent 65%
-  );
-  filter: blur(14px);
-  pointer-events: none;
 }
 
 .shop2__btn-grad {

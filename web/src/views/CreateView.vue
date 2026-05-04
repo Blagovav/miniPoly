@@ -16,7 +16,6 @@ const { initData, userName, haptic } = useTelegram();
 const isPublic = ref(true);
 const maxPlayers = ref(3);
 const loading = ref(false);
-const realmName = ref("");
 const boardId = ref<string>("eldmark");
 const boardModalOpen = ref(false);
 
@@ -59,13 +58,11 @@ const isRu = computed(() => locale.value === "ru");
 const board = computed(() => findBoard(boardId.value));
 const boardName = computed(() => isRu.value ? board.value.ru : board.value.name);
 const boardDesc = computed(() => isRu.value ? board.value.desc.ru : board.value.desc.en);
-const placeholder = computed(() => userName.value || (isRu.value ? "Никита" : "Name"));
 
 const L = computed(() => isRu.value
   ? {
       title: "Создание партии",
       subtitle: "Настройки партии",
-      nameLabel: "Название комнаты",
       boardLabel: "Поле",
       generalLabel: "Общие настройки",
       players: "Количество игроков",
@@ -80,7 +77,6 @@ const L = computed(() => isRu.value
   : {
       title: "New Match",
       subtitle: "Match settings",
-      nameLabel: "Room name",
       boardLabel: "Map",
       generalLabel: "General",
       players: "Player count",
@@ -149,17 +145,6 @@ onUnmounted(() => {
     </div>
 
     <div ref="scrollEl" class="create-v2__scroll" @scroll="onScroll">
-      <!-- Room name -->
-      <section class="create-v2__section">
-        <div class="create-v2__label">{{ L.nameLabel }}</div>
-        <input
-          v-model="realmName"
-          class="create-v2__input"
-          :placeholder="placeholder"
-          maxlength="32"
-        />
-      </section>
-
       <!-- Board pick -->
       <section class="create-v2__section create-v2__section--card">
         <div class="create-v2__label">{{ L.boardLabel }}</div>
@@ -394,31 +379,6 @@ onUnmounted(() => {
   font-size: 18px;
   line-height: 26px;
   color: #000;
-}
-
-/* ── Input ── */
-.create-v2__input {
-  width: 100%;
-  box-sizing: border-box;
-  height: 40px;
-  padding: 8px 12px;
-  background: #fff;
-  border: 1px solid rgba(0, 0, 0, 0.16);
-  border-radius: 12px;
-  font-family: 'Unbounded', sans-serif;
-  font-weight: 700;
-  font-size: 12px;
-  line-height: 14px;
-  color: #000;
-  outline: none;
-  transition: border-color 120ms ease;
-}
-.create-v2__input::placeholder {
-  color: #000;
-  opacity: 0.4;
-}
-.create-v2__input:focus {
-  border-color: rgba(0, 0, 0, 0.4);
 }
 
 /* ── Board pick ── */
