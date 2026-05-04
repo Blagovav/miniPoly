@@ -101,10 +101,6 @@ const canAddBot = computed(
   },
 );
 
-// Deterministic colour per player from ORDERED_PLAYER_COLORS.
-function colorForIndex(idx: number): string {
-  return ORDERED_PLAYER_COLORS[idx % ORDERED_PLAYER_COLORS.length];
-}
 
 // Empty seats = maxPlayers − current player count (dashed placeholder rows).
 const emptySeats = computed(() => {
@@ -450,7 +446,7 @@ const L = computed(() => isRu.value
           v-else
           class="player-row__avatar"
           :name="p.name"
-          :color="colorForIndex(idx)"
+          :color="p.color"
           :size="40"
         />
         <div class="player-row__body">

@@ -4,8 +4,7 @@ import { useI18n } from "vue-i18n";
 import { BOARD, GROUP_COLORS } from "../../../shared/board";
 import type { Locale, StreetTile } from "../../../shared/types";
 import { useGameStore } from "../stores/game";
-import TokenArt, { type TokenArtId } from "./TokenArt.vue";
-import { tokenArtFor } from "../utils/palette";
+import { capTypeFor } from "../shop/cosmetics";
 
 const props = defineProps<{
   onBid: (amount: number) => void;
@@ -81,18 +80,8 @@ const tileKindLabel = computed(() => {
   return "";
 });
 
-// Figma bidder-chip palette, keyed by seat index. Same family the leader-
-// board uses so every player is visually anchored to one colour across
-// the room UI (blue seat-1, coral seat-2, purple seat-3, brown seat-4+).
-const BIDDER_COLORS = ["#688ee2", "#e2776e", "#9251d5", "#8b5a2b"];
-function chipColor(playerId: string): string {
-  const idx = game.room?.players.findIndex((p) => p.id === playerId) ?? -1;
-  if (idx < 0) return BIDDER_COLORS[0];
-  return BIDDER_COLORS[idx % BIDDER_COLORS.length];
-}
-function chipTokenId(playerId: string): TokenArtId {
-  const p = game.room?.players.find((x) => x.id === playerId);
-  return tokenArtFor(p?.token || "knight");
+function chipCapSrc(token: string | undefined): string {
+  return `/figma/shop/caps/${capTypeFor(token)}.webp`;
 }
 
 /** Players who are still in the running (not passed, not bankrupt). */
@@ -145,21 +134,22 @@ const visible = computed(() => open.value && !!tile.value && !!auction.value && 
           </div>
         </div>
 
-        <!-- Bidder chips (active players only) — Figma pill uses player
-             token silhouette inside a colour-matched circle. -->
+        <!-- Bidder chips (active players only). Pill = player's server colour;
+             inner disc shows the player's actual cap figurine (same source as
+             the on-board pawn) so the auction reads at a glance. -->
         <div class="bidders">
           <span
             v-for="p in activeBidders"
             :key="p.id"
             class="bidder-chip"
-            :style="{ background: chipColor(p.id) }"
+            :style="{ background: p.color }"
           >
-            <span class="bidder-chip__token" :style="{ background: p.color }">
-              <TokenArt
-                :id="chipTokenId(p.id)"
-                :size="24"
-                color="#fff"
-                shadow="rgba(0,0,0,0.55)"
+            <span class="bidder-chip__token">
+              <img
+                class="bidder-chip__cap"
+                :src="chipCapSrc(p.token)"
+                alt=""
+                draggable="false"
               />
             </span>
             {{ p.name }}
@@ -379,14 +369,20 @@ const visible = computed(() => open.value && !!tile.value && !!auction.value && 
   width: 24px;
   height: 24px;
   border-radius: 50%;
+  background: rgba(0, 0, 0, 0.28);
   box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.3),
               inset 0 -1px 1px rgba(0, 0, 0, 0.25);
   flex-shrink: 0;
+  overflow: hidden;
 }
-.bidder-chip__token :deep(svg) {
-  width: 100%;
-  height: 100%;
+.bidder-chip__cap {
+  width: 110%;
+  height: 110%;
+  object-fit: contain;
   display: block;
+  filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.45));
+  pointer-events: none;
+  user-select: none;
 }
 
 /* ── Bid row ── */

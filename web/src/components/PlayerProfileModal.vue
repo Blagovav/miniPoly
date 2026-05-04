@@ -4,8 +4,8 @@ import { useI18n } from "vue-i18n";
 import { BOARD, GROUP_COLORS } from "../../../shared/board";
 import type { Locale, Player, StreetTile } from "../../../shared/types";
 import { useGameStore } from "../stores/game";
+import { capTypeFor } from "../shop/cosmetics";
 import Icon from "./Icon.vue";
-import Sigil from "./Sigil.vue";
 
 const props = defineProps<{
   player: Player | null;
@@ -107,10 +107,10 @@ const L = computed(() => isRu.value
     <div v-if="player" class="profile-scrim" role="dialog" aria-modal="true" @click.self="onClose">
       <div class="profile-stack">
         <div class="profile-card">
-          <!-- Head: avatar + name + colour chip. Designer feedback
-               2026-05-02 #5.23 — figma 75:5663 uses a character glyph
-               (image 35) inside the player-colour circle, not the
-               initial-on-color sigil we had. -->
+          <!-- Head: avatar + name + colour chip. Cap figurine inside the
+               player-colour circle is sourced from the player's actual
+               equipped token (capTypeFor) so it matches the on-board pawn
+               and leaderboard chip rather than a static placeholder. -->
           <div class="profile-head">
             <div
               class="profile-avatar"
@@ -118,7 +118,7 @@ const L = computed(() => isRu.value
             >
               <img
                 class="profile-avatar__art"
-                src="/figma/profile-popup/avatar.webp"
+                :src="`/figma/shop/caps/${capTypeFor(player.token)}.webp`"
                 alt=""
                 aria-hidden="true"
               />

@@ -7,7 +7,7 @@
 //
 // Live-data bindings preserved:
 //   • animatedPositions from the game store (for smooth hop animation)
-//   • per-player hue from ORDERED_PLAYER_COLORS
+//   • per-player hue from server-assigned player.color
 //   • ownerIsFriend highlighting via game.isFriend()
 //   • BoardTile click opens the TileInfoModal through game.selectTile()
 //   • TokenArt for pieces, tinted by player colour
@@ -16,7 +16,7 @@ import { BOARD } from "../../../shared/board";
 import type { Player, RoomState } from "../../../shared/types";
 import BoardTile from "./BoardTile.vue";
 import { useGameStore } from "../stores/game";
-import { ORDERED_PLAYER_COLORS, lighten } from "../utils/palette";
+import { lighten } from "../utils/palette";
 import { capTypeFor } from "../shop/cosmetics";
 
 const props = defineProps<{ room: RoomState }>();
@@ -57,23 +57,13 @@ const tiles = computed<PositionedTile[]>(() =>
   }),
 );
 
-/** Stable index of the player in room.players — used for deterministic colour. */
-function playerIndex(p: Player): number {
-  return props.room.players.findIndex((pp) => pp.id === p.id);
-}
-function playerHue(p: Player): string {
-  const i = playerIndex(p);
-  if (i < 0) return p.color;
-  return ORDERED_PLAYER_COLORS[i % ORDERED_PLAYER_COLORS.length];
-}
-
 /** Owner-colour halo on a tile (null for unowned). */
 function ownerHue(idx: number): string | null {
   const owned = props.room.properties[idx];
   if (!owned) return null;
   const owner = props.room.players.find((pp) => pp.id === owned.ownerId);
   if (!owner) return null;
-  return playerHue(owner);
+  return owner.color;
 }
 
 /** Is the owner of this tile a Telegram friend? — golden highlight if yes. */
@@ -108,7 +98,7 @@ const landedTileColor = computed(() => {
   const lt = game.landedTile;
   if (!lt) return "#d4a84a";
   const pl = props.room.players.find((p) => p.id === lt.playerId);
-  return pl ? playerHue(pl) : "#d4a84a";
+  return pl ? pl.color : "#d4a84a";
 });
 
 function positionOffset(idx: number, total: number): { dx: number; dy: number } {
@@ -145,7 +135,7 @@ const tokens = computed<PlacedPlayer[]>(() => {
       const { dx, dy } = positionOffset(i, list.length);
       out.push({
         player,
-        color: playerHue(player),
+        color: player.color,
         xPct,
         yPct,
         offsetX: dx,
