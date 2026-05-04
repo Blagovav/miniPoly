@@ -3,8 +3,7 @@ import { computed, ref } from "vue";
 import { useI18n } from "vue-i18n";
 import { useGameStore } from "../stores/game";
 import type { DrawnCard, Locale, Player } from "../../../shared/types";
-import TokenArt, { type TokenArtId } from "./TokenArt.vue";
-import { tokenArtFor } from "../utils/palette";
+import { capTypeFor } from "../shop/cosmetics";
 
 const props = defineProps<{ open: boolean; onClose: () => void }>();
 const { locale } = useI18n();
@@ -56,8 +55,8 @@ function playerName(id: string): string {
 function playerColor(id: string): string {
   return playerFor(id)?.color ?? "#484337";
 }
-function playerTokenId(id: string): TokenArtId {
-  return tokenArtFor(playerFor(id)?.token || "knight");
+function playerCapSrc(id: string): string {
+  return `/figma/shop/caps/${capTypeFor(playerFor(id)?.token)}.webp`;
 }
 function deckLabel(deck: DrawnCard["deck"]): string {
   return deck === "chance" ? L.value.deckChance : L.value.deckChest;
@@ -131,11 +130,11 @@ function timeAgo(ts: number): string {
                       class="card-task__player-token"
                       :style="{ background: playerColor(c.by) }"
                     >
-                      <TokenArt
-                        :id="playerTokenId(c.by)"
-                        :size="16"
-                        color="#fff"
-                        shadow="rgba(0,0,0,0.55)"
+                      <img
+                        class="card-task__player-cap"
+                        :src="playerCapSrc(c.by)"
+                        alt=""
+                        draggable="false"
                       />
                     </span>
                     <span
@@ -385,11 +384,16 @@ function timeAgo(ts: number): string {
   border-radius: 50%;
   box-shadow: inset 0 0.5px 0.5px rgba(255, 255, 255, 0.3),
               inset 0 -0.5px 0.5px rgba(0, 0, 0, 0.25);
+  overflow: hidden;
 }
-.card-task__player-token :deep(svg) {
-  width: 100%;
-  height: 100%;
+.card-task__player-cap {
+  width: 115%;
+  height: 115%;
+  object-fit: contain;
   display: block;
+  filter: drop-shadow(0 0.5px 1px rgba(0, 0, 0, 0.45));
+  pointer-events: none;
+  user-select: none;
 }
 .card-task__player-name {
   font-family: 'Unbounded', sans-serif;

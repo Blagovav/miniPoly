@@ -4,9 +4,8 @@ import { useI18n } from "vue-i18n";
 import { BOARD, GROUP_COLORS } from "../../../shared/board";
 import type { Locale, Player, StreetTile } from "../../../shared/types";
 import { useGameStore } from "../stores/game";
-import { ORDERED_PLAYER_COLORS } from "../utils/palette";
+import { capTypeFor } from "../shop/cosmetics";
 import Icon from "./Icon.vue";
-import Sigil from "./Sigil.vue";
 
 export interface TradePayload {
   toId: string;
@@ -78,9 +77,10 @@ const target = computed<Player | null>(() => {
 });
 
 function playerColor(p: Player): string {
-  if (!game.room) return "var(--ink-3)";
-  const idx = game.room.players.findIndex((pp) => pp.id === p.id);
-  return idx >= 0 ? ORDERED_PLAYER_COLORS[idx % ORDERED_PLAYER_COLORS.length] : "var(--ink-3)";
+  return p.color || "var(--ink-3)";
+}
+function playerCapSrc(p: Player): string {
+  return `/figma/shop/caps/${capTypeFor(p.token)}.webp`;
 }
 
 interface HoldingRow {
@@ -225,12 +225,9 @@ const L = computed(() => isRu.value
                 :style="{ background: playerColor(p) }"
                 @click="targetId = p.id"
               >
-                <Sigil
-                  class="trade-pill__sigil"
-                  :name="p.name"
-                  :color="playerColor(p)"
-                  :size="24"
-                />
+                <span class="trade-pill__sigil">
+                  <img :src="playerCapSrc(p)" alt="" draggable="false"/>
+                </span>
                 <span class="trade-pill__body">
                   <span class="trade-pill__name">{{ p.name }}</span>
                   <span class="trade-pill__cash">
@@ -484,7 +481,28 @@ const L = computed(() => isRu.value
 }
 .trade-pill--active { border-color: #000; }
 .trade-pill:active { transform: translateY(1px); }
-.trade-pill__sigil { flex-shrink: 0; }
+.trade-pill__sigil {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.28);
+  overflow: hidden;
+  box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.3),
+              inset 0 -1px 1px rgba(0, 0, 0, 0.25);
+}
+.trade-pill__sigil img {
+  width: 110%;
+  height: 110%;
+  object-fit: contain;
+  display: block;
+  filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.45));
+  pointer-events: none;
+  user-select: none;
+}
 .trade-pill__body {
   display: flex;
   flex-direction: column;

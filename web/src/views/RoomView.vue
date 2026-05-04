@@ -11,6 +11,7 @@ import { useRoute, useRouter } from "vue-router";
 import { useTelegram } from "../composables/useTelegram";
 import { playYourTurn } from "../composables/useSounds";
 import { useShake } from "../composables/useShake";
+import { useSettings } from "../composables/useSettings";
 import { useWs } from "../composables/useWs";
 import { useGameStore } from "../stores/game";
 import Board from "../components/Board.vue";
@@ -32,20 +33,13 @@ import TxnToast from "../components/TxnToast.vue";
 import Icon from "../components/Icon.vue";
 import LoadingScreen from "../components/LoadingScreen.vue";
 import CoronationModal from "../components/CoronationModal.vue";
-import { ORDERED_PLAYER_COLORS, tokenArtFor } from "../utils/palette";
-import TokenArt from "../components/TokenArt.vue";
-import { SHOP_ITEMS } from "../shop/items";
+import { capTypeFor } from "../shop/cosmetics";
 
-// Map shop token id → its emoji icon. Leaderboard + avatar fallbacks
-// render the actual token the player picked ("за какую фишку играет"),
-// not a generic silhouette. Default to a knight piece if the player
-// hasn't chosen anything yet.
-const TOKEN_ICON_BY_ID: Record<string, string> = Object.fromEntries(
-  SHOP_ITEMS.filter((it) => it.kind === "token").map((it) => [it.id, it.icon ?? "♟️"]),
-);
-function shopTokenIcon(tokenId: string | undefined): string {
-  if (tokenId && TOKEN_ICON_BY_ID[tokenId]) return TOKEN_ICON_BY_ID[tokenId];
-  return "♟️";
+/** Real cap figurine for a player — same source as the board pawn so the
+ *  turn-slider, leaderboard, and pawn never disagree on which piece a
+ *  player is using. */
+function capImgSrc(token: string | undefined): string {
+  return `/figma/shop/caps/${capTypeFor(token)}.webp`;
 }
 import { humanError } from "../utils/errors";
 import type { Player } from "../../../shared/types";
@@ -59,10 +53,14 @@ const { initData, userName, haptic, notify, setClosingConfirmation } = useTelegr
 const game = useGameStore();
 const ws = useWs();
 const shake = useShake();
-// One-shot: first roll tap requests DeviceMotion permission on iOS;
-// from then on the attached listener keeps firing every time the phone
-// gets a sharp jolt and it's our turn to roll.
-let shakeAttempted = false;
+const settings = useSettings();
+// Shake-to-roll is opt-in via Settings → Motion controls. We don't
+// auto-attach the DeviceMotion listener on first roll any more — iOS
+// would surface a "let this site read motion data" permission prompt
+// the moment the user pressed BROSIT' KUBIKI, which read as scary
+// (playtester 2026-05-04: "выходит будто оно подтверждение и отпугнет
+// людей"). Settings now guards a one-time permission request flow.
+let shakeStartedAt = 0;
 // Voice chat (WebRTC mesh over WS signalling). Mic acquired only after first tap.
 const voice = useVoice(ws, () => game.myPlayerId);
 
@@ -265,22 +263,35 @@ function rollIfAllowed() {
 }
 function roll() {
   rollIfAllowed();
-  if (!shakeAttempted) {
-    shakeAttempted = true;
-    // Shake fires any time the phone moves enough — guard the
-    // shake-driven roll so a buzz on the metro during an opponent's
-    // turn doesn't trigger haptics + a doomed WS send. Server would
-    // reject the message anyway; this just kills the noise.
-    shake.start(() => {
-      const phase = game.room?.phase;
-      const canRoll =
-        (phase === "rolling" && game.isMyTurn && !game.rolling) ||
-        (phase === "preRoll" && game.isMyPreRoll && !game.rolling);
-      if (!canRoll) return;
-      rollIfAllowed();
-    });
-  }
 }
+
+/* Shake-to-roll listener is attached only when the user has explicitly
+ * enabled "Motion controls" in Settings. We watch the toggle so a user
+ * who flips it on/off mid-session doesn't have to leave the room to
+ * see the change take effect. The first attach will surface the iOS
+ * permission prompt — the SettingsView already shows an explanation
+ * sheet before that happens, so the prompt no longer feels uninvited. */
+watch(
+  () => settings.value.motion,
+  (on) => {
+    if (on) {
+      if (shakeStartedAt) return;
+      shakeStartedAt = Date.now();
+      shake.start(() => {
+        const phase = game.room?.phase;
+        const canRoll =
+          (phase === "rolling" && game.isMyTurn && !game.rolling) ||
+          (phase === "preRoll" && game.isMyPreRoll && !game.rolling);
+        if (!canRoll) return;
+        rollIfAllowed();
+      });
+    } else if (shakeStartedAt) {
+      shake.stop();
+      shakeStartedAt = 0;
+    }
+  },
+  { immediate: true },
+);
 function buy() {
   haptic("medium");
   ws.send({ type: "buy" });
@@ -478,8 +489,7 @@ function handleMenu() {
 }
 
 // ── Header-icon actions (new Figma design) ──
-// Chat is driven by a window event so the Chat component stays
-// self-contained (matches App.vue's open-tour pattern).
+// Chat is driven by a window event so the Chat component stays self-contained.
 function toggleChat() {
   haptic("light");
   window.dispatchEvent(new CustomEvent("toggle-chat"));
@@ -549,14 +559,6 @@ const subtitle = computed(() => {
   }
   return `${n} ${n === 1 ? "player" : "players"}`;
 });
-
-// ── Redesign derived state ─────────────────────────────
-// Player colour lookup by stable index into room.players.
-function colorFor(p: Player): string {
-  if (!game.room) return ORDERED_PLAYER_COLORS[0];
-  const i = game.room.players.findIndex((pp) => pp.id === p.id);
-  return ORDERED_PLAYER_COLORS[i < 0 ? 0 : i % ORDERED_PLAYER_COLORS.length];
-}
 
 // Current-turn display: static 3-slot banner (prev / current / next).
 // Not a slider — per designer, it's a status indicator, not a menu,
@@ -703,24 +705,16 @@ const leaderboard = computed(() => {
     return sum;
   };
   return r.players
-    .map((p, seat) => ({
+    .map((p) => ({
       id: p.id,
       name: p.name,
       cash: p.cash,
       avatar: p.avatar,
       token: p.token,
+      color: p.color,
       worth: p.cash + propValue(p.id),
-      seat,
     }))
-    .sort((a, b) => b.worth - a.worth)
-    .map((row) => ({
-      id: row.id,
-      name: row.name,
-      cash: row.cash,
-      avatar: row.avatar,
-      token: row.token,
-      color: ORDERED_PLAYER_COLORS[row.seat % ORDERED_PLAYER_COLORS.length],
-    }));
+    .sort((a, b) => b.worth - a.worth);
 });
 
 // Leaderboard row → player profile modal. Carousel cards are purely
@@ -1102,12 +1096,12 @@ void t;
                   alt=""
                   referrerpolicy="no-referrer"
                 />
-                <TokenArt
+                <img
                   v-else
-                  :id="tokenArtFor(slot.player.token || 'knight')"
-                  :size="28"
-                  :color="slot.player.color"
-                  shadow="rgba(0,0,0,0.55)"
+                  class="turn-card__avatar-cap"
+                  :src="capImgSrc(slot.player.token)"
+                  alt=""
+                  draggable="false"
                 />
               </span>
               <div class="turn-card__body">
@@ -1177,9 +1171,13 @@ void t;
                   alt=""
                   referrerpolicy="no-referrer"
                 />
-                <span v-else class="leaderboard__avatar leaderboard__avatar--token" aria-hidden="true">
-                  {{ shopTokenIcon(p.token) }}
-                </span>
+                <img
+                  v-else
+                  class="leaderboard__avatar leaderboard__avatar--cap"
+                  :src="capImgSrc(p.token)"
+                  alt=""
+                  draggable="false"
+                />
                 <span class="leaderboard__name">{{ p.name }}</span>
               </div>
               <span class="leaderboard__cash">
@@ -1961,6 +1959,18 @@ void t;
   object-fit: cover;
   display: block;
 }
+/* Cap fallback: actual figurine the player picked, sized slightly larger
+   than the disc so the silhouette reads even at 40px. Matches the on-board
+   pawn so turn-slider, leaderboard and pawn never disagree. */
+.turn-card__avatar-cap {
+  width: 110%;
+  height: 110%;
+  object-fit: contain;
+  display: block;
+  filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.45));
+  pointer-events: none;
+  user-select: none;
+}
 .turn-card__body {
   min-width: 0;
   flex: 1;
@@ -2138,17 +2148,19 @@ void t;
   flex-shrink: 0;
   border-radius: 50%;
 }
-/* Token fallback: shop-item emoji on a dark disc (so colour emojis
-   like 🏎️/🐕/🎩 read against the bright pill background). Matches
-   Figma 32:2037 where each player's chosen shop token is the medallion. */
-.leaderboard__avatar--token {
+/* Cap fallback: real figurine on a dark disc so it reads against the bright
+   pill colour. Same source as the on-board pawn — turn-slider/leaderboard/
+   pawn always agree on which piece the player is using. */
+.leaderboard__avatar--cap {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   background: rgba(0, 0, 0, 0.28);
-  font-size: 16px;
-  line-height: 1;
-  overflow: hidden;
+  object-fit: contain;
+  padding: 2px;
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.45));
+  pointer-events: none;
+  user-select: none;
 }
 .leaderboard__name {
   font-family: 'Unbounded', sans-serif;

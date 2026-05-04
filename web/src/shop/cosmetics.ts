@@ -48,6 +48,11 @@ export interface ChestEntry {
   artClosed?: string;
   /** Path to the open-chest illustration with light rays (covers ~268×192). */
   artOpen?: string;
+  /** Path to the marketing-style preview composition shown ONLY on the
+   *  shop card (closed chest + floating cap figurines + halo). The modal
+   *  hero keeps using artClosed/artOpen so its details/result states stay
+   *  semantic. Falls back to artClosed when not set. */
+  cardArt?: string;
   /** Quantity options + Star price for each. */
   pricesByQty?: { qty: number; stars: number }[];
   /** Default selected qty in the modal — index into pricesByQty. */
@@ -92,10 +97,17 @@ export const SHOP_CHESTS: readonly ChestEntry[] = [
       ru: "Откройте сундук и получите редкую фишку. Соберите все, чтобы получить эксклюзивную карту.",
       en: "Open the chest to claim a rare token. Collect them all to unlock an exclusive map.",
     },
-    contains: ["hat", "cat", "ship", "ufo"],
-    containsExtra: 7,
-    artClosed: "/figma/shop/chests/business-closed.webp",
-    artOpen: "/figma/shop/chests/business-open.webp",
+    contains: ["hat", "cat", "ufo"],
+    containsExtra: 3,
+    /* The asset filenames were named opposite to what they depict —
+     * "business-closed.webp" is a wide-open chest with light beam,
+     * and "business-open.webp" is the locked/closed chest. We map
+     * them by their actual visuals: the shop card + modal-details
+     * show the locked chest (haven't opened yet), and the modal-result
+     * state reveals the beaming chest. */
+    artClosed: "/figma/shop/chests/business-open.webp",
+    artOpen: "/figma/shop/chests/business-closed.webp",
+    cardArt: "/figma/shop/chests/business-preview.webp",
     pricesByQty: [
       { qty: 1, stars: 299 },
       { qty: 3, stars: 799 },

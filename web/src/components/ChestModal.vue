@@ -272,30 +272,33 @@ function selectQty(i: number) {
               <Icon name="x" :size="14" color="#000" />
             </button>
 
-            <!-- ─── Hero (chest art + glow) ─── -->
-            <div class="chest-hero">
-              <div class="chest-hero__glow chest-hero__glow--bg" />
-              <div class="chest-hero__glow chest-hero__glow--fg" />
-              <img
-                class="chest-hero__art"
-                :class="{ 'chest-hero__art--open': mode === 'result' }"
-                :src="mode === 'result' ? chest.artOpen : chest.artClosed"
-                alt=""
-                draggable="false"
-              />
-            </div>
-
-            <!-- ─── Title block ─── -->
-            <div class="chest-titleblock">
-              <span class="chest-rarity" :style="{ background: chestRarityBg }">
-                {{ chestRarityLabel }}
-              </span>
-              <h2 class="chest-title">{{ titleText }}</h2>
-              <p v-if="subtitleText" class="chest-subtitle">{{ subtitleText }}</p>
-            </div>
-
-            <!-- ─── Body ─── -->
+            <!-- Single scroll surface — hero + title + body all scroll together
+                 so a tall items list can't push the CTA off the bottom and so
+                 the user can swipe the chest art out of the way to focus on
+                 drop chances. -->
             <div class="chest-body">
+              <!-- ─── Hero (chest art + glow) ─── -->
+              <div class="chest-hero">
+                <div class="chest-hero__glow chest-hero__glow--bg" />
+                <div class="chest-hero__glow chest-hero__glow--fg" />
+                <img
+                  class="chest-hero__art"
+                  :class="{ 'chest-hero__art--open': mode === 'result' }"
+                  :src="mode === 'result' ? chest.artOpen : chest.artClosed"
+                  alt=""
+                  draggable="false"
+                />
+              </div>
+
+              <!-- ─── Title block ─── -->
+              <div class="chest-titleblock">
+                <span class="chest-rarity" :style="{ background: chestRarityBg }">
+                  {{ chestRarityLabel }}
+                </span>
+                <h2 class="chest-title">{{ titleText }}</h2>
+                <p v-if="subtitleText" class="chest-subtitle">{{ subtitleText }}</p>
+              </div>
+
               <!-- ─── DETAILS mode ─── -->
               <template v-if="mode === 'details'">
                 <div v-if="chest.pricesByQty && chest.pricesByQty.length > 1" class="chest-qty">
@@ -462,8 +465,15 @@ function selectQty(i: number) {
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 24px;
-  padding-bottom: calc(24px + var(--tg-safe-area-inset-bottom, 0px));
+  /* Both insets matter: top so the close button never slips under TG's
+     system buttons (notch + chrome), bottom so the sticky CTA never slips
+     under the home indicator. --tg-safe-area covers the device notch,
+     --tg-content-safe-area covers the TG header pill — sum them like
+     style.css does for the app shell. */
+  padding:
+    calc(24px + var(--tg-safe-area-inset-top, 0px) + var(--tg-content-safe-area-inset-top, 0px))
+    24px
+    calc(24px + var(--tg-safe-area-inset-bottom, 0px) + var(--tg-content-safe-area-inset-bottom, 0px));
   z-index: 200;
 }
 
@@ -475,7 +485,11 @@ function selectQty(i: number) {
   background: #000;
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 24px;
-  padding: 0 16px 88px;       /* 88 leaves room for the sticky CTA */
+  /* Horizontal padding lives on .chest-body so the hero can bleed to the
+     modal edges via a negative margin without being clipped by an
+     intermediate scroll container. 76px bottom space reserves the 48 px
+     sticky CTA + 12 px bottom inset + 16 px gap above it. */
+  padding: 0 0 76px;
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -483,16 +497,17 @@ function selectQty(i: number) {
   font-family: 'Golos Text', var(--font-body);
 }
 
-/* Single scroll surface — hero+title+body all scroll together so a tall items
-   list can't push the CTA off the bottom. */
+/* Single scroll surface — hero + titleblock + sections all scroll together
+   so the items list can grow without pushing the CTA off the bottom and so
+   the user can swipe the chest art out of the way to focus on drop chances. */
 .chest-body {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
-  gap: 24px;
-  padding-bottom: 16px;
+  gap: 16px;
+  padding: 0 16px 12px;
 }
 .chest-body::-webkit-scrollbar { width: 4px; }
 .chest-body::-webkit-scrollbar-thumb {
@@ -524,7 +539,7 @@ function selectQty(i: number) {
 /* ─── Hero (chest illustration + radial halo) ─── */
 .chest-hero {
   position: relative;
-  height: 192px;
+  height: 148px;
   flex-shrink: 0;
   display: flex;
   align-items: center;
@@ -559,8 +574,8 @@ function selectQty(i: number) {
 }
 .chest-hero__art {
   position: relative;
-  width: 152px;
-  height: 152px;
+  width: 124px;
+  height: 124px;
   object-fit: contain;
   pointer-events: none;
   user-select: none;
@@ -568,9 +583,9 @@ function selectQty(i: number) {
   transition: transform 360ms ease;
 }
 .chest-hero__art--open {
-  width: 240px;
-  height: 240px;
-  transform: translateY(-12px);
+  width: 196px;
+  height: 196px;
+  transform: translateY(-8px);
 }
 .chest-modal--opening .chest-hero__art {
   animation: chest-shake 0.3s ease-in-out infinite;
@@ -581,13 +596,22 @@ function selectQty(i: number) {
 }
 
 /* ─── Title block ─── */
+/* Sticks to the top of the scroll area once the hero scrolls past, so the
+   chest name stays anchored while drop chances are visible. The opaque black
+   background hides content scrolling behind it; the 56px horizontal padding
+   keeps the centered title clear of the absolute-positioned close button. */
 .chest-titleblock {
+  position: sticky;
+  top: 0;
+  z-index: 3;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 8px;
+  gap: 4px;
   flex-shrink: 0;
-  padding: 8px 0 0;
+  padding: 6px 48px 10px;
+  margin: 0 -16px;
+  background: #000;
 }
 .chest-rarity {
   display: inline-flex;
@@ -609,18 +633,18 @@ function selectQty(i: number) {
   margin: 0;
   font-family: 'Unbounded', sans-serif;
   font-weight: 600;
-  font-size: 28px;
-  line-height: 30px;
+  font-size: 22px;
+  line-height: 24px;
   color: #fff;
   text-align: center;
 }
 .chest-subtitle {
   margin: 0;
   font-family: 'Unbounded', sans-serif;
-  font-weight: 700;
-  font-size: 14px;
-  line-height: 18px;
-  color: #fff;
+  font-weight: 600;
+  font-size: 12px;
+  line-height: 15px;
+  color: rgba(255, 255, 255, 0.85);
   text-align: center;
   padding: 0 8px;
 }
@@ -639,14 +663,14 @@ function selectQty(i: number) {
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 10px;
+  padding: 7px;
   background: transparent;
   border: none;
   border-radius: 999px;
   font-family: 'Unbounded', sans-serif;
   font-weight: 500;
-  font-size: 14px;
-  line-height: 16px;
+  font-size: 13px;
+  line-height: 15px;
   color: #fff;
   cursor: pointer;
   transition: background 140ms ease, color 140ms ease;
@@ -660,14 +684,14 @@ function selectQty(i: number) {
 .chest-section {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 8px;
 }
 .chest-section__title {
   margin: 0;
   font-family: 'Unbounded', sans-serif;
   font-weight: 600;
-  font-size: 18px;
-  line-height: 20px;
+  font-size: 15px;
+  line-height: 18px;
   color: #fff;
   text-align: center;
 }
@@ -676,16 +700,16 @@ function selectQty(i: number) {
 .chest-bonus {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 10px 12px;
-  border-radius: 18px;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 14px;
   background: linear-gradient(226deg, #9126af 0%, #3a53d1 100%);
 }
 .chest-bonus__icon {
   flex-shrink: 0;
-  width: 48px;
-  height: 48px;
-  border-radius: 12px;
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -696,13 +720,13 @@ function selectQty(i: number) {
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 4px;
 }
 .chest-bonus__name {
   font-family: 'Golos Text', sans-serif;
   font-weight: 700;
-  font-size: 16px;
-  line-height: 18px;
+  font-size: 14px;
+  line-height: 16px;
   color: #fff;
   white-space: nowrap;
   overflow: hidden;
@@ -752,21 +776,21 @@ function selectQty(i: number) {
 .chest-items {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
 }
 .chest-item {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 10px 12px;
+  gap: 10px;
+  padding: 6px 10px;
   background: #2b2a34;
-  border-radius: 18px;
+  border-radius: 14px;
 }
 .chest-item__icon {
   flex-shrink: 0;
-  width: 48px;
-  height: 48px;
-  border-radius: 12px;
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -777,13 +801,13 @@ function selectQty(i: number) {
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 4px;
 }
 .chest-item__name {
   font-family: 'Golos Text', sans-serif;
   font-weight: 700;
-  font-size: 16px;
-  line-height: 18px;
+  font-size: 14px;
+  line-height: 16px;
   color: #fff;
   white-space: nowrap;
   overflow: hidden;
@@ -892,25 +916,25 @@ function selectQty(i: number) {
 /* ─── Sticky bottom CTA (КУПИТЬ / ОТКРЫТЬ ЕЩЁ) ─── */
 .chest-cta {
   position: absolute;
-  left: 16px;
-  right: 16px;
-  bottom: 16px;
-  height: 56px;
-  border-radius: 18px;
+  left: 12px;
+  right: 12px;
+  bottom: 12px;
+  height: 48px;
+  border-radius: 14px;
   border: 2px solid #000;
   background: linear-gradient(to left, #e069d0 0%, #718fff 100%);
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 10px;
+  gap: 8px;
   cursor: pointer;
-  box-shadow: inset 0 -6px 0 rgba(0, 0, 0, 0.2);
+  box-shadow: inset 0 -5px 0 rgba(0, 0, 0, 0.2);
   font-family: 'Golos Text', 'Unbounded', sans-serif;
   font-weight: 900;
-  font-size: 22px;
-  line-height: 26px;
+  font-size: 18px;
+  line-height: 22px;
   color: #fff;
-  text-shadow: 1.4px 1.4px 0 rgba(0, 0, 0, 0.6);
+  text-shadow: 1.2px 1.2px 0 rgba(0, 0, 0, 0.6);
   transition: transform 120ms ease, filter 120ms ease;
 }
 .chest-cta:disabled { opacity: 0.7; cursor: wait; }

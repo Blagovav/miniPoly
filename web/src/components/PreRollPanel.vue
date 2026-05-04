@@ -6,7 +6,6 @@
 import { computed, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import type { Player, PreRollBracket, RoomState } from "../../../shared/types";
-import { ORDERED_PLAYER_COLORS } from "../utils/palette";
 import Dice from "./Dice.vue";
 
 const props = defineProps<{
@@ -19,8 +18,7 @@ const props = defineProps<{
 const { locale } = useI18n();
 
 function colorFor(p: Player): string {
-  const i = props.room.players.findIndex((pp) => pp.id === p.id);
-  return ORDERED_PLAYER_COLORS[i < 0 ? 0 : i % ORDERED_PLAYER_COLORS.length];
+  return p.color || "#484337";
 }
 
 // Display-only snapshot of the pre-roll state. We intentionally lag behind

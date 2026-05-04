@@ -5,8 +5,7 @@ import { useI18n } from "vue-i18n";
 import type { Locale, StreetTile } from "../../../shared/types";
 import { useGameStore } from "../stores/game";
 import Icon from "./Icon.vue";
-import Sigil from "./Sigil.vue";
-import { ORDERED_PLAYER_COLORS } from "../utils/palette";
+import { capTypeFor } from "../shop/cosmetics";
 
 const props = defineProps<{
   onRespond: (accept: boolean) => void;
@@ -30,16 +29,8 @@ const fromPlayer = computed(() => {
   return game.room.players.find((p) => p.id === t.fromId) ?? null;
 });
 
-const fromIndex = computed(() => {
-  const t = offerForMe.value;
-  if (!t || !game.room) return -1;
-  return game.room.players.findIndex((p) => p.id === t.fromId);
-});
-
-const fromColor = computed(() => {
-  const idx = fromIndex.value;
-  return idx >= 0 ? ORDERED_PLAYER_COLORS[idx % ORDERED_PLAYER_COLORS.length] : ORDERED_PLAYER_COLORS[0];
-});
+const fromColor = computed(() => fromPlayer.value?.color ?? "#484337");
+const fromCapSrc = computed(() => `/figma/shop/caps/${capTypeFor(fromPlayer.value?.token)}.webp`);
 
 interface TileRow {
   idx: number;
@@ -104,7 +95,9 @@ void props;
       </div>
 
       <div class="trade-banner__who">
-        <Sigil :name="fromPlayer?.name ?? '?'" :color="fromColor" :size="32" />
+        <span class="trade-banner__cap" :style="{ background: fromColor }">
+          <img :src="fromCapSrc" alt="" draggable="false"/>
+        </span>
         <div class="trade-banner__from">{{ fromPlayer?.name }}</div>
       </div>
 
@@ -199,6 +192,27 @@ void props;
   align-items: center;
   gap: 10px;
   margin-bottom: 10px;
+}
+.trade-banner__cap {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  overflow: hidden;
+  box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.3),
+              inset 0 -1px 1px rgba(0, 0, 0, 0.25);
+}
+.trade-banner__cap img {
+  width: 110%;
+  height: 110%;
+  object-fit: contain;
+  display: block;
+  filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.45));
+  pointer-events: none;
+  user-select: none;
 }
 .trade-banner__from {
   font-family: var(--font-display);

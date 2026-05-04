@@ -5,7 +5,6 @@ import { useGameStore } from "../stores/game";
 import { useTelegram } from "../composables/useTelegram";
 import Icon from "./Icon.vue";
 import Sigil from "./Sigil.vue";
-import { ORDERED_PLAYER_COLORS } from "../utils/palette";
 
 const props = defineProps<{ onSend: (text: string) => void }>();
 
@@ -17,13 +16,8 @@ const open = ref(false);
 const draft = ref("");
 const list = ref<HTMLDivElement | null>(null);
 
-function playerIndex(id: string): number {
-  return game.room?.players.findIndex((p) => p.id === id) ?? -1;
-}
 function playerColor(id: string): string {
-  const idx = playerIndex(id);
-  if (idx < 0) return ORDERED_PLAYER_COLORS[0];
-  return ORDERED_PLAYER_COLORS[idx % ORDERED_PLAYER_COLORS.length];
+  return game.room?.players.find((p) => p.id === id)?.color ?? "#484337";
 }
 function isMine(id: string): boolean {
   return !!game.me && id === game.me.id;

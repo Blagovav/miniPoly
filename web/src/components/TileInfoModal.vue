@@ -4,8 +4,7 @@ import { useI18n } from "vue-i18n";
 import { BOARD, GROUP_COLORS, GROUP_SIZE } from "../../../shared/board";
 import type { ColorGroup, Locale, StreetTile } from "../../../shared/types";
 import { useGameStore } from "../stores/game";
-import TokenArt, { type TokenArtId } from "./TokenArt.vue";
-import { tokenArtFor } from "../utils/palette";
+import { capTypeFor } from "../shop/cosmetics";
 
 const props = defineProps<{
   onBuildHouse?: (tileIndex: number) => void;
@@ -352,9 +351,9 @@ const mortgageButton = computed(() => {
   return { label: isRu.value ? "Залог" : "Mortgage", cost: mortgageValue.value, enabled: canMortgage.value };
 });
 
-// Owner's token figure for the red "ВЛАДЕЛЕЦ" banner. Falls back to the
-// knight silhouette when the player never picked a shop token.
-const ownerTokenId = computed<TokenArtId>(() => tokenArtFor(owner.value?.token || "knight"));
+// Owner's cap figurine for the "ВЛАДЕЛЕЦ" banner — same source as the
+// on-board pawn so the owner readout matches what's standing on the tile.
+const ownerCapSrc = computed(() => `/figma/shop/caps/${capTypeFor(owner.value?.token)}.webp`);
 </script>
 
 <template>
@@ -393,7 +392,7 @@ const ownerTokenId = computed<TokenArtId>(() => tokenArtFor(owner.value?.token |
             <div class="info-owner__label">{{ isRu ? "Владелец" : "Owner" }}</div>
             <div class="info-owner__row">
               <span class="info-owner__token" :style="{ background: owner.color }">
-                <TokenArt :id="ownerTokenId" :size="24" color="#fff" shadow="rgba(0,0,0,0.55)"/>
+                <img class="info-owner__cap" :src="ownerCapSrc" alt="" draggable="false"/>
               </span>
               <span class="info-owner__name">{{ owner.name }}</span>
               <span v-if="owned?.mortgaged" class="info-owner__chip">
@@ -500,8 +499,7 @@ const ownerTokenId = computed<TokenArtId>(() => tokenArtFor(owner.value?.token |
   inset: 0;
   background: rgba(0, 0, 0, 0.4);
   /* Above Chat (120) so a chat tap mid-modal doesn't cover the
-     property card. RouteLoader is 90, TourOverlay is 600 — modal
-     fits cleanly between Chat and Tour. */
+     property card. RouteLoader is 90, modal sits above. */
   z-index: 130;
   /* Bottom-anchored per Figma 75:5661 (designer feedback 2026-05-02
      #5.18), but only with the safe-area inset — NOT the +76 px the
@@ -655,11 +653,16 @@ const ownerTokenId = computed<TokenArtId>(() => tokenArtFor(owner.value?.token |
   box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.3),
               inset 0 -1px 1px rgba(0, 0, 0, 0.25);
   flex-shrink: 0;
+  overflow: hidden;
 }
-.info-owner__token :deep(svg) {
+.info-owner__cap {
+  width: 110%;
+  height: 110%;
+  object-fit: contain;
   display: block;
-  width: 100%;
-  height: 100%;
+  filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.45));
+  pointer-events: none;
+  user-select: none;
 }
 .info-owner__name {
   font-family: 'Unbounded', sans-serif;

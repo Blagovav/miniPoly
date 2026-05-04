@@ -30,7 +30,7 @@ const { isLoading } = useRouteLoader();
 .route-loader {
   position: fixed;
   inset: 0;
-  z-index: 90; /* above plain views; below Chat (120), modals (130), TourOverlay (600). */
+  z-index: 90; /* above plain views; below Chat (120) and modals (130). */
   display: flex;
   align-items: center;
   justify-content: center;
