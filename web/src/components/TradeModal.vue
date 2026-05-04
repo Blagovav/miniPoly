@@ -19,9 +19,7 @@ export interface TradePayload {
 
 const props = defineProps<{
   open: boolean;
-  // Preselect a target player when opened from the profile modal.
   initialTargetId?: string | null;
-  // Preselect a tile on "their" side when opened from TileInfoModal.
   initialTakeTile?: number | null;
   onClose: () => void;
   onSubmit: (payload: TradePayload) => void;
@@ -57,14 +55,12 @@ function resetForm() {
   }
 }
 
-// Re-seed the form every time the modal opens.
 watch(() => props.open, (o) => {
   if (o) resetForm();
 });
 
 const me = computed(() => game.me);
 
-// Eligible recipients: everyone else alive, not me, not bankrupt.
 const candidates = computed<Player[]>(() => {
   if (!game.room || !me.value) return [];
   return game.room.players.filter((p) => p.id !== me.value!.id && !p.bankrupt);
@@ -139,13 +135,11 @@ function clampInt(v: number | string, min: number, max: number): number {
   return Math.max(min, Math.min(max, n));
 }
 
-// Keep inputs in bounds reactively (paste / arrow spam).
 watch(giveCash, (v) => { giveCash.value = clampInt(v, 0, myCashMax.value); });
 watch(takeCash, (v) => { takeCash.value = clampInt(v, 0, theirCashMax.value); });
 watch(giveJail, (v) => { giveJail.value = clampInt(v, 0, myJailMax.value); });
 watch(takeJail, (v) => { takeJail.value = clampInt(v, 0, theirJailMax.value); });
 
-// Switching target wipes their side selections (tile sets are per-player).
 watch(targetId, () => {
   takeTiles.value = new Set();
   takeCash.value = 0;
@@ -157,6 +151,16 @@ const hasOffer = computed(() =>
 );
 
 const canSubmit = computed(() => !!target.value && hasOffer.value && game.isMyTurn);
+
+// Tooltip-ish label so the user understands why the CTA is greyed out.
+// Designer-feedback report flagged that "обмен не работает" was actually
+// the disabled CTA being silent — now we surface the reason visibly.
+const blockedReason = computed(() => {
+  if (game.isMyTurn === false) return isRu.value ? "Обмен только в свой ход" : "Trade only on your turn";
+  if (!target.value) return isRu.value ? "Выбери адресата" : "Pick a recipient";
+  if (!hasOffer.value) return isRu.value ? "Добавь хотя бы одну позицию" : "Add at least one item";
+  return "";
+});
 
 function submit() {
   if (!canSubmit.value || !target.value) return;
@@ -182,7 +186,6 @@ const L = computed(() => isRu.value
       selectTarget: "Выбери игрока",
       empty: "Нет улиц",
       confirm: "ПОДТВЕРДИТЬ",
-      notYourTurn: "Обмен только в свой ход",
     }
   : {
       eyebrow: "Send messenger",
@@ -194,7 +197,6 @@ const L = computed(() => isRu.value
       selectTarget: "Pick a player",
       empty: "No streets",
       confirm: "CONFIRM",
-      notYourTurn: "Trade only on your turn",
     });
 </script>
 
@@ -203,15 +205,11 @@ const L = computed(() => isRu.value
     <div v-if="open" class="trade-scrim" role="dialog" aria-modal="true" @click.self="onClose">
       <div class="trade-stack">
         <div class="trade-card">
-          <!-- Header: "Отправка гонца" eyebrow + "Предложение обмена" title -->
           <div class="trade-head">
             <span class="trade-eyebrow">{{ L.eyebrow }}</span>
             <h2 class="trade-title">{{ L.title }}</h2>
           </div>
 
-          <div v-if="!game.isMyTurn" class="trade-warn">{{ L.notYourTurn }}</div>
-
-          <!-- Addressee picker (white card with pills) -->
           <div class="trade-addressee">
             <div class="trade-addressee__label">{{ L.addressee }}</div>
             <div v-if="candidates.length === 0" class="trade-empty">{{ L.noCandidates }}</div>
@@ -239,9 +237,7 @@ const L = computed(() => isRu.value
             </div>
           </div>
 
-          <!-- Two columns: mine / theirs -->
           <div class="trade-cols">
-            <!-- My side -->
             <div class="trade-col">
               <div class="trade-col__label">{{ L.mine }}</div>
 
@@ -288,7 +284,6 @@ const L = computed(() => isRu.value
               </div>
             </div>
 
-            <!-- Their side -->
             <div class="trade-col">
               <div class="trade-col__label">{{ L.theirs }}</div>
 
@@ -339,6 +334,8 @@ const L = computed(() => isRu.value
             </div>
           </div>
 
+          <div v-if="blockedReason" class="trade-warn">{{ blockedReason }}</div>
+
           <button
             class="trade-cta"
             :disabled="!canSubmit"
@@ -362,12 +359,6 @@ const L = computed(() => isRu.value
   inset: 0;
   z-index: 510;
   background: rgba(0, 0, 0, 0.4);
-  /* Figma 75:5226 places the popup-history card at calc(50% + 34px) —
-     a touch below true centre. We centre vertically; the inner card
-     has max-height + overflow so a long holdings list still fits.
-     TradeModal stays centred per its own figma anchor — designer's
-     5.18 «76px from bottom» rule applies to the smaller popup-info
-     (75:5661) pattern, not the longer trade-proposal modal. */
   display: flex;
   flex-direction: column;
   justify-content: center;
@@ -387,6 +378,11 @@ const L = computed(() => isRu.value
   width: 100%;
   max-width: 345px;
   margin: 0 auto;
+  /* Stack itself fills the available height; the inner card grows up to
+     this much, and only the holdings columns scroll internally so the
+     header (eyebrow + title + addressee) stays visible. */
+  max-height: calc(100vh - 80px);
+  min-height: 0;
 }
 
 .trade-card {
@@ -396,21 +392,18 @@ const L = computed(() => isRu.value
   display: flex;
   flex-direction: column;
   gap: 16px;
-  max-height: calc(100vh - 120px);
-  overflow-y: auto;
-}
-.trade-card::-webkit-scrollbar { width: 3px; }
-.trade-card::-webkit-scrollbar-thumb {
-  background: rgba(0, 0, 0, 0.4);
-  border-radius: 100px;
+  /* Card fills the stack height; flex children with min-height: 0 inside
+     trade-cols give the property lists their own scroll context. */
+  flex: 1 1 auto;
+  min-height: 0;
 }
 
-/* ── Header ── */
 .trade-head {
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 6px;
+  flex-shrink: 0;
 }
 .trade-eyebrow {
   display: inline-flex;
@@ -432,10 +425,14 @@ const L = computed(() => isRu.value
   color: #000;
 }
 
+/* Trade-warn now lives just above the CTA so the user sees the reason the
+   button is disabled (not-your-turn / no-recipient / empty offer). Replaces
+   the silent grey button that read as "обмен не работает" in playtest. */
 .trade-warn {
+  flex-shrink: 0;
   padding: 8px 12px;
-  background: rgba(220, 38, 38, 0.1);
-  border: 1px solid rgba(220, 38, 38, 0.35);
+  background: rgba(220, 38, 38, 0.08);
+  border: 1px solid rgba(220, 38, 38, 0.3);
   border-radius: 12px;
   text-align: center;
   font-family: 'Unbounded', sans-serif;
@@ -445,8 +442,8 @@ const L = computed(() => isRu.value
   color: #8b1a1a;
 }
 
-/* ── Addressee card ── */
 .trade-addressee {
+  flex-shrink: 0;
   background: #fff;
   border: 1px solid rgba(0, 0, 0, 0.1);
   border-radius: 18px;
@@ -458,8 +455,8 @@ const L = computed(() => isRu.value
 .trade-addressee__label {
   font-family: 'Unbounded', sans-serif;
   font-weight: 700;
-  font-size: 16px;
-  line-height: 20px;
+  font-size: 14px;
+  line-height: 16px;
   color: #000;
 }
 .trade-addressee__row {
@@ -470,7 +467,7 @@ const L = computed(() => isRu.value
 .trade-pill {
   flex: 0 0 auto;
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: 6px;
   padding: 8px 12px 8px 8px;
   border: 2px solid transparent;
@@ -506,7 +503,7 @@ const L = computed(() => isRu.value
 .trade-pill__body {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 4px;
   justify-content: center;
   min-width: 0;
   text-align: left;
@@ -525,7 +522,7 @@ const L = computed(() => isRu.value
 .trade-pill__cash {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
   font-family: 'Unbounded', sans-serif;
   font-weight: 700;
   font-size: 12px;
@@ -541,7 +538,6 @@ const L = computed(() => isRu.value
   pointer-events: none;
 }
 
-/* ── Empty / warning strip ── */
 .trade-empty {
   padding: 8px 0;
   text-align: center;
@@ -551,11 +547,15 @@ const L = computed(() => isRu.value
   color: rgba(0, 0, 0, 0.55);
 }
 
-/* ── Two-column bargain ── */
+/* Two-column bargain. Each column is its own flex container; the inner
+   property list scrolls so the cash/jail inputs and the column title
+   never escape the viewport. */
 .trade-cols {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 8px;
+  gap: 4px;
+  flex: 1 1 auto;
+  min-height: 180px;
 }
 .trade-col {
   background: #fff;
@@ -566,6 +566,7 @@ const L = computed(() => isRu.value
   flex-direction: column;
   gap: 12px;
   min-width: 0;
+  min-height: 0;
 }
 .trade-col__label {
   font-family: 'Unbounded', sans-serif;
@@ -574,6 +575,7 @@ const L = computed(() => isRu.value
   line-height: 16px;
   color: #000;
   padding: 0 4px;
+  flex-shrink: 0;
 }
 .trade-col__empty {
   padding: 6px 4px;
@@ -581,14 +583,23 @@ const L = computed(() => isRu.value
   font-weight: 500;
   font-size: 11px;
   color: rgba(0, 0, 0, 0.55);
+  flex-shrink: 0;
 }
 .trade-col__list {
+  flex: 1 1 0;
+  min-height: 0;
+  overflow-y: auto;
   display: flex;
   flex-direction: column;
   gap: 4px;
+  scrollbar-width: thin;
+}
+.trade-col__list::-webkit-scrollbar { width: 3px; }
+.trade-col__list::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.25);
+  border-radius: 2px;
 }
 
-/* Property row — per-row white card with border. Active = green tint, locked = 45%. */
 .trade-row {
   display: flex;
   align-items: center;
@@ -599,6 +610,7 @@ const L = computed(() => isRu.value
   border-radius: 8px;
   cursor: pointer;
   text-align: left;
+  flex-shrink: 0;
   transition: background 120ms ease, border-color 120ms ease;
 }
 .trade-row:hover { background: rgba(0, 0, 0, 0.04); }
@@ -626,11 +638,11 @@ const L = computed(() => isRu.value
   text-overflow: ellipsis;
 }
 
-/* ── Cash / jail number inputs ── */
 .trade-input {
   display: flex;
   align-items: center;
   gap: 4px;
+  flex-shrink: 0;
 }
 .trade-input__icon {
   width: 24px;
@@ -647,8 +659,6 @@ const L = computed(() => isRu.value
   background: #fff;
   border: 1px solid rgba(0, 0, 0, 0.16);
   border-radius: 12px;
-  /* Figma inputs use SF Pro Text Medium — let the OS pick the closest
-     system UI font; falls back to the project sans on non-Apple. */
   font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, sans-serif;
   font-weight: 500;
   font-size: 14px;
@@ -674,9 +684,11 @@ const L = computed(() => isRu.value
   flex-shrink: 0;
 }
 
-/* ── CTA + close ── */
+/* Per Figma 75:5309 the CTA is fixed 297px wide, centred. */
 .trade-cta {
-  width: 100%;
+  align-self: center;
+  width: 297px;
+  max-width: 100%;
   height: 56px;
   padding: 0 18px;
   border: 2px solid #000;
@@ -690,11 +702,12 @@ const L = computed(() => isRu.value
   transition: transform 80ms ease, filter 120ms ease;
   font-family: 'Golos Text', 'Unbounded', sans-serif;
   font-weight: 900;
-  font-size: 22px;
+  font-size: 24px;
   line-height: 26px;
   color: #fff;
   text-shadow: 1px 1px 0 rgba(0, 0, 0, 0.6);
   letter-spacing: 0.01em;
+  flex-shrink: 0;
 }
 .trade-cta:active:not(:disabled) {
   transform: translateY(2px);
@@ -719,6 +732,7 @@ const L = computed(() => isRu.value
   transition: transform 0.1s ease;
   padding: 0;
   margin-top: 4px;
+  flex-shrink: 0;
 }
 .trade-close:active { transform: scale(0.94); }
 </style>

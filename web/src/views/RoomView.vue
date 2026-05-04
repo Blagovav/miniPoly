@@ -71,12 +71,26 @@ const inv = useInventoryStore();
 // the equipped token id the first time we're accepted into the room, and
 // refreshes the rejoin TS so the banner only disappears after real inactivity.
 let equippedApplied = false;
+// Surfaces the most recent server-side rejection ("sell buildings first",
+// "not your turn") for ~3.2s. Replaces the silent haptic-only treatment
+// that read as "trade just doesn't work" in playtest 2026-05-04.
+const errorMsg = ref<string>("");
+let errorClearTimer: ReturnType<typeof setTimeout> | null = null;
+
 const off = ws.onMessage((m) => {
   game.applyMessage(m);
   // Dice / move haptics are fired from the game store for my own actions only
   // (dice-land heavy, per-step light, landing medium, pass-GO heavy) — we no
   // longer buzz the phone for every opponent's roll.
-  if (m.type === "error") notify("error");
+  if (m.type === "error") {
+    notify("error");
+    const text = humanError(m.message, locale.value);
+    if (text) {
+      errorMsg.value = text;
+      if (errorClearTimer) clearTimeout(errorClearTimer);
+      errorClearTimer = setTimeout(() => { errorMsg.value = ""; }, 3200);
+    }
+  }
   if (m.type === "joined" && !equippedApplied) {
     equippedApplied = true;
     const tokenId = inv.equippedToken;
@@ -1533,6 +1547,12 @@ void t;
     />
     <TxnToast v-if="game.room" />
 
+    <transition name="err-slide">
+      <div v-if="errorMsg" class="err-toast" role="alert" aria-live="assertive">
+        {{ errorMsg }}
+      </div>
+    </transition>
+
     <!-- ── Connection-issue popup (Figma 133:14137). Mascot + status text
          sits on top of the still-visible board so the user can see the
          frozen state behind. Auto-dismisses on reconnect; no buttons —
@@ -1556,6 +1576,37 @@ void t;
 </template>
 
 <style scoped>
+/* Top-of-screen rejection banner — fires on `{type:"error"}` from the WS
+   so the user can see *why* an action (commonly trade) was refused. Sits
+   above TradeBanner (z 125) and modals (z 510+) so the message is the
+   front-most element while it's visible. */
+.err-toast {
+  position: fixed;
+  top: calc(12px + var(--tg-safe-area-inset-top, 0px));
+  left: 14px;
+  right: 14px;
+  max-width: 460px;
+  margin: 0 auto;
+  z-index: 600;
+  padding: 10px 16px;
+  background: #8b1a1a;
+  color: #fff;
+  border: 1.5px solid rgba(0, 0, 0, 0.4);
+  border-radius: 14px;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.25);
+  font-family: 'Unbounded', sans-serif;
+  font-weight: 600;
+  font-size: 13px;
+  line-height: 16px;
+  text-align: center;
+  text-shadow: 0.5px 0.5px 0 rgba(0, 0, 0, 0.6);
+  pointer-events: none;
+}
+.err-slide-enter-active,
+.err-slide-leave-active { transition: transform 0.22s ease, opacity 0.22s ease; }
+.err-slide-enter-from,
+.err-slide-leave-to { transform: translateY(-20px); opacity: 0; }
+
 .room {
   width: 100%;
   max-width: 820px;
