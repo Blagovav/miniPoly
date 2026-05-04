@@ -35,11 +35,11 @@ const fromCapSrc = computed(() => `/figma/shop/caps/${capTypeFor(fromPlayer.valu
 interface TileRow {
   idx: number;
   name: string;
-  band: string; // CSS color for the leading dot — group color for streets, neutral for railroad/utility
+  band: string;
 }
 function tileRow(idx: number): TileRow {
   const t = BOARD[idx];
-  let band = "var(--ink-3)";
+  let band = "rgba(0,0,0,0.4)";
   if (t?.kind === "street") band = GROUP_COLORS[(t as StreetTile).group] ?? band;
   else if (t?.kind === "railroad") band = "#000";
   else if (t?.kind === "utility") band = "#9ca3af";
@@ -59,24 +59,31 @@ const iGiveCash = computed(() => offerForMe.value?.takeCash ?? 0);
 const theyGiveJail = computed(() => offerForMe.value?.giveJailCards ?? 0);
 const iGiveJail = computed(() => offerForMe.value?.takeJailCards ?? 0);
 
+const theyGiveEmpty = computed(() =>
+  theyGiveTiles.value.length === 0 && theyGiveCash.value === 0 && theyGiveJail.value === 0,
+);
+const iGiveEmpty = computed(() =>
+  iGiveTiles.value.length === 0 && iGiveCash.value === 0 && iGiveJail.value === 0,
+);
+
 const L = computed(() => isRu.value
   ? {
-      eyebrow: "Гонец",
+      eyebrow: "ГОНЕЦ",
       title: "Предложение обмена",
-      youGet: "Тебе",
-      youGive: "Ты отдаёшь",
-      cash: "монет",
+      youGet: "ТЕБЕ",
+      youGive: "ТЫ ОТДАЁШЬ",
+      coins: "монет",
       jail: "карт «Выйти из тюрьмы»",
       nothing: "—",
       decline: "Отказать",
       accept: "Принять",
     }
   : {
-      eyebrow: "Messenger",
+      eyebrow: "MESSENGER",
       title: "Trade offer",
-      youGet: "You get",
-      youGive: "You give",
-      cash: "coin",
+      youGet: "YOU GET",
+      youGive: "YOU GIVE",
+      coins: "coin",
       jail: "jail cards",
       nothing: "—",
       decline: "Decline",
@@ -88,59 +95,73 @@ void props;
 
 <template>
   <transition name="slide">
-    <div v-if="offerForMe" class="trade-banner">
-      <div class="trade-banner__head">
+    <div v-if="offerForMe" class="trade-banner" role="dialog" aria-live="polite">
+      <!-- Header: eyebrow + title centred, divider underneath -->
+      <header class="trade-banner__head">
         <div class="trade-banner__eyebrow">{{ L.eyebrow }}</div>
-        <div class="trade-banner__title">{{ L.title }}</div>
-      </div>
+        <h2 class="trade-banner__title">{{ L.title }}</h2>
+      </header>
 
-      <div class="trade-banner__who">
+      <!-- Sender row: cap avatar + name -->
+      <div class="trade-banner__from">
         <span class="trade-banner__cap" :style="{ background: fromColor }">
           <img :src="fromCapSrc" alt="" draggable="false"/>
         </span>
-        <div class="trade-banner__from">{{ fromPlayer?.name }}</div>
+        <span class="trade-banner__from-name">{{ fromPlayer?.name }}</span>
       </div>
 
+      <!-- Deal: two pills with a ⇄ swap badge between them -->
       <div class="trade-banner__deal">
-        <div class="side side--get">
-          <div class="side__label">{{ L.youGet }}</div>
-          <ul class="side__list">
-            <li v-for="row in theyGiveTiles" :key="row.idx" class="side__tile">
-              <span class="side__dot" :style="{ background: row.band }" aria-hidden="true"/>
-              <span class="side__tile-name">{{ row.name }}</span>
+        <section class="trade-side">
+          <div class="trade-side__label">{{ L.youGet }}</div>
+          <ul v-if="!theyGiveEmpty" class="trade-side__list">
+            <li v-for="row in theyGiveTiles" :key="`g-${row.idx}`" class="trade-side__row">
+              <span class="trade-side__dot" :style="{ background: row.band }" aria-hidden="true"/>
+              <span class="trade-side__name">{{ row.name }}</span>
             </li>
-            <li v-if="theyGiveCash > 0" class="side__coin">◈ {{ theyGiveCash }} {{ L.cash }}</li>
-            <li v-if="theyGiveJail > 0">⛓ {{ theyGiveJail }} {{ L.jail }}</li>
-            <li v-if="theyGiveTiles.length === 0 && theyGiveCash === 0 && theyGiveJail === 0" class="side__none">
-              {{ L.nothing }}
+            <li v-if="theyGiveCash > 0" class="trade-side__row trade-side__row--coin">
+              <img class="trade-side__coin-icon" src="/figma/room/icon-money.webp" alt="" aria-hidden="true"/>
+              <span class="trade-side__name">{{ theyGiveCash }} {{ L.coins }}</span>
             </li>
-          </ul>
-        </div>
-        <div class="side-sep">⇄</div>
-        <div class="side side--give">
-          <div class="side__label">{{ L.youGive }}</div>
-          <ul class="side__list">
-            <li v-for="row in iGiveTiles" :key="row.idx" class="side__tile">
-              <span class="side__dot" :style="{ background: row.band }" aria-hidden="true"/>
-              <span class="side__tile-name">{{ row.name }}</span>
-            </li>
-            <li v-if="iGiveCash > 0" class="side__coin">◈ {{ iGiveCash }} {{ L.cash }}</li>
-            <li v-if="iGiveJail > 0">⛓ {{ iGiveJail }} {{ L.jail }}</li>
-            <li v-if="iGiveTiles.length === 0 && iGiveCash === 0 && iGiveJail === 0" class="side__none">
-              {{ L.nothing }}
+            <li v-if="theyGiveJail > 0" class="trade-side__row">
+              <img class="trade-side__coin-icon" src="/figma/room/tile-jail.webp" alt="" aria-hidden="true"/>
+              <span class="trade-side__name">×{{ theyGiveJail }}</span>
             </li>
           </ul>
-        </div>
+          <div v-else class="trade-side__nothing">{{ L.nothing }}</div>
+        </section>
+
+        <span class="trade-banner__swap" aria-hidden="true">⇄</span>
+
+        <section class="trade-side">
+          <div class="trade-side__label">{{ L.youGive }}</div>
+          <ul v-if="!iGiveEmpty" class="trade-side__list">
+            <li v-for="row in iGiveTiles" :key="`t-${row.idx}`" class="trade-side__row">
+              <span class="trade-side__dot" :style="{ background: row.band }" aria-hidden="true"/>
+              <span class="trade-side__name">{{ row.name }}</span>
+            </li>
+            <li v-if="iGiveCash > 0" class="trade-side__row trade-side__row--coin">
+              <img class="trade-side__coin-icon" src="/figma/room/icon-money.webp" alt="" aria-hidden="true"/>
+              <span class="trade-side__name">{{ iGiveCash }} {{ L.coins }}</span>
+            </li>
+            <li v-if="iGiveJail > 0" class="trade-side__row">
+              <img class="trade-side__coin-icon" src="/figma/room/tile-jail.webp" alt="" aria-hidden="true"/>
+              <span class="trade-side__name">×{{ iGiveJail }}</span>
+            </li>
+          </ul>
+          <div v-else class="trade-side__nothing">{{ L.nothing }}</div>
+        </section>
       </div>
 
+      <!-- Actions: white Decline + green Accept -->
       <div class="trade-banner__actions">
-        <button class="btn btn-ghost" @click="onRespond(false)">
-          <Icon name="x" :size="14" color="var(--ink-2)"/>
-          {{ L.decline }}
+        <button class="trade-btn trade-btn--decline" type="button" @click="onRespond(false)">
+          <Icon name="x" :size="14" color="#000"/>
+          <span>{{ L.decline }}</span>
         </button>
-        <button class="btn btn-emerald" @click="onRespond(true)">
+        <button class="trade-btn trade-btn--accept" type="button" @click="onRespond(true)">
           <Icon name="check" :size="14" color="#fff"/>
-          {{ L.accept }}
+          <span>{{ L.accept }}</span>
         </button>
       </div>
     </div>
@@ -148,57 +169,71 @@ void props;
 </template>
 
 <style scoped>
+/* Anchored under the topbar; cyan border + cream card per Figma. The
+   border colour matches the chest-modal/exotic accent so high-priority
+   modals share a visual language. */
 .trade-banner {
   position: fixed;
-  top: calc(70px + var(--tg-safe-area-inset-top, 0px));
-  left: 14px;
-  right: 14px;
+  top: calc(70px + var(--tg-safe-area-inset-top, 0px) + var(--tg-content-safe-area-inset-top, 0px));
+  left: 12px;
+  right: 12px;
   max-width: 460px;
   margin: 0 auto;
-  /* Above Chat (120) so an incoming trade banner stays visible
-     while the chat panel is open. */
+  /* Above Chat (120) so an incoming trade banner stays visible while
+     the chat panel is open. */
   z-index: 125;
-  background: var(--card-alt);
-  border: 2px solid var(--gold);
-  border-radius: var(--r-md);
-  padding: 14px 16px;
-  box-shadow:
-    0 12px 32px rgba(42, 29, 16, 0.25),
-    inset 0 1px 0 rgba(255, 255, 255, 0.3);
-  animation: trade-glow 2.4s ease-in-out infinite;
+  background: #faf3e2;
+  border: 3px solid #2dd4ff;
+  border-radius: 20px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.25);
+  font-family: 'Golos Text', sans-serif;
+  color: #000;
 }
 
+/* ── Header ── */
 .trade-banner__head {
   text-align: center;
-  margin-bottom: 10px;
-  padding-bottom: 8px;
-  border-bottom: 1px solid var(--divider);
+  padding-bottom: 10px;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.12);
 }
 .trade-banner__eyebrow {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: #ef4444;
+  color: #fff;
+  font-family: 'Unbounded', sans-serif;
+  font-weight: 800;
   font-size: 10px;
-  letter-spacing: 0.15em;
-  color: var(--ink-3);
-  text-transform: uppercase;
+  line-height: 12px;
+  letter-spacing: 0.08em;
+  margin-bottom: 6px;
 }
 .trade-banner__title {
-  font-family: var(--font-display);
-  font-size: 16px;
-  color: var(--ink);
-  margin-top: 2px;
+  margin: 0;
+  font-family: 'Unbounded', sans-serif;
+  font-weight: 700;
+  font-size: 18px;
+  line-height: 22px;
+  color: #000;
 }
 
-.trade-banner__who {
+/* ── Sender ── */
+.trade-banner__from {
   display: flex;
   align-items: center;
   gap: 10px;
-  margin-bottom: 10px;
 }
 .trade-banner__cap {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 32px;
-  height: 32px;
+  width: 36px;
+  height: 36px;
   border-radius: 50%;
   flex-shrink: 0;
   overflow: hidden;
@@ -206,123 +241,164 @@ void props;
               inset 0 -1px 1px rgba(0, 0, 0, 0.25);
 }
 .trade-banner__cap img {
-  width: 110%;
-  height: 110%;
+  width: 112%;
+  height: 112%;
   object-fit: contain;
   display: block;
   filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.45));
   pointer-events: none;
   user-select: none;
 }
-.trade-banner__from {
-  font-family: var(--font-display);
-  font-size: 14px;
-  color: var(--ink);
+.trade-banner__from-name {
+  font-family: 'Unbounded', sans-serif;
+  font-weight: 700;
+  font-size: 16px;
+  line-height: 18px;
+  color: #000;
 }
 
+/* ── Deal pills ── */
 .trade-banner__deal {
   display: grid;
   grid-template-columns: 1fr auto 1fr;
   gap: 8px;
   align-items: stretch;
-  margin-bottom: 12px;
 }
-.side {
-  background: var(--bg);
-  border: 1px dashed var(--line-strong);
-  border-radius: var(--r-sm);
-  padding: 8px 10px;
+.trade-side {
+  background: #fff;
+  border: 1.5px dashed rgba(0, 0, 0, 0.18);
+  border-radius: 14px;
+  padding: 10px 12px;
+  min-height: 70px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
   min-width: 0;
 }
-.side--get { border-color: rgba(45, 122, 79, 0.4); }
-.side--give { border-color: rgba(139, 26, 26, 0.3); }
-.side__label {
+.trade-side__label {
+  font-family: 'Unbounded', sans-serif;
+  font-weight: 700;
   font-size: 10px;
-  color: var(--ink-3);
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  margin-bottom: 4px;
+  line-height: 12px;
+  letter-spacing: 0.06em;
+  color: rgba(0, 0, 0, 0.55);
 }
-.side__list {
+.trade-side__list {
   list-style: none;
   padding: 0;
   margin: 0;
   display: flex;
   flex-direction: column;
   gap: 4px;
-  font-family: var(--font-display);
-  font-size: 12px;
-  color: var(--ink);
+  /* Cap the list so a trade with many tiles doesn't blow the banner past
+     the viewport. ~5 rows fit before the scrollbar takes over. */
+  max-height: 180px;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
 }
-/* Tile row — leading colour dot mirrors the colour-band system used in the
-   board / TradeModal, so the recipient instantly sees which group each
-   property belongs to (playtester feedback 2026-05-03 — "непонятно какие
-   территории и каких цветов предлагают"). */
-.side__tile {
+.trade-side__list::-webkit-scrollbar { width: 3px; }
+.trade-side__list::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.25);
+  border-radius: 100px;
+}
+.trade-side__row {
   display: flex;
   align-items: center;
   gap: 6px;
   min-width: 0;
+  font-family: 'Unbounded', sans-serif;
+  font-weight: 700;
+  font-size: 12px;
+  line-height: 14px;
+  color: #000;
 }
-.side__dot {
+.trade-side__row--coin .trade-side__name {
+  color: #2dd4ff;
+}
+.trade-side__dot {
   width: 8px;
   height: 8px;
   border-radius: 50%;
   flex-shrink: 0;
-  box-shadow: inset 0 -1px 1px rgba(0, 0, 0, 0.18), 0 0 0 1px rgba(0, 0, 0, 0.08);
+  box-shadow: inset 0 -1px 1px rgba(0, 0, 0, 0.18),
+              0 0 0 1px rgba(0, 0, 0, 0.08);
 }
-.side__tile-name {
+.trade-side__coin-icon {
+  width: 16px;
+  height: 16px;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+.trade-side__name {
   flex: 1 1 0;
   min-width: 0;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.side__coin {
-  font-family: var(--font-mono);
-  color: var(--gold);
-  font-weight: 600;
+.trade-side__nothing {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: 'Unbounded', sans-serif;
+  font-weight: 700;
+  font-size: 14px;
+  color: rgba(0, 0, 0, 0.4);
 }
-.side__none {
-  color: var(--ink-3);
-  font-style: italic;
-}
-.side-sep {
+.trade-banner__swap {
   align-self: center;
-  color: var(--ink-3);
-  font-size: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.06);
+  color: rgba(0, 0, 0, 0.55);
+  font-size: 16px;
+  font-weight: 700;
 }
 
+/* ── Actions ── */
 .trade-banner__actions {
   display: flex;
   gap: 8px;
 }
-.trade-banner__actions .btn {
+.trade-btn {
   flex: 1;
-  padding: 10px;
-  font-size: 13px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 44px;
+  border-radius: 999px;
+  font-family: 'Unbounded', sans-serif;
+  font-weight: 800;
+  font-size: 14px;
+  line-height: 16px;
+  cursor: pointer;
+  transition: transform 120ms ease, filter 120ms ease;
+}
+.trade-btn:active { transform: scale(0.97); }
+.trade-btn--decline {
+  background: #fff;
+  color: #000;
+  border: 1.5px solid rgba(0, 0, 0, 0.16);
+}
+.trade-btn--accept {
+  background: #1f7a3a;
+  color: #fff;
+  border: none;
+  box-shadow: inset 0 -4px 0 rgba(0, 0, 0, 0.2);
 }
 
+/* ── Slide entry ── */
 .slide-enter-active, .slide-leave-active {
   transition: transform 0.28s cubic-bezier(0.3, 1.2, 0.4, 1), opacity 0.22s ease;
 }
 .slide-enter-from, .slide-leave-to {
   transform: translateY(-30px);
   opacity: 0;
-}
-
-@keyframes trade-glow {
-  0%, 100% {
-    box-shadow:
-      0 12px 32px rgba(42, 29, 16, 0.25),
-      inset 0 1px 0 rgba(255, 255, 255, 0.3),
-      0 0 0 0 rgba(184, 137, 46, 0);
-  }
-  50% {
-    box-shadow:
-      0 16px 40px rgba(42, 29, 16, 0.3),
-      inset 0 1px 0 rgba(255, 255, 255, 0.3),
-      0 0 0 3px rgba(212, 168, 74, 0.25);
-  }
 }
 </style>

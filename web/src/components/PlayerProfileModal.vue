@@ -389,6 +389,20 @@ const L = computed(() => isRu.value
   display: flex;
   flex-direction: column;
   gap: 4px;
+  /* Cap the holdings list so a player with all 22+ properties doesn't
+     push the modal off the top of the viewport. ~6 rows fit at 50 px
+     each + the gap before the scrollbar kicks in. */
+  max-height: 300px;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  /* Inset scrollbar so the rounded white card edge doesn't get cut. */
+  padding-right: 4px;
+  margin-right: -4px;
+}
+.profile-owned__list::-webkit-scrollbar { width: 3px; }
+.profile-owned__list::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 100px;
 }
 .profile-owned__row {
   display: flex;

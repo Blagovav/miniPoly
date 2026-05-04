@@ -211,7 +211,8 @@ void lighten;
           class="passgo-burst"
           :style="{ left: `${goTileCenter.xPct}%`, top: `${goTileCenter.yPct}%` }"
         >
-          +◈200
+          <span class="passgo-burst__sign">+200</span>
+          <img class="passgo-burst__coin" src="/figma/room/icon-money.webp" alt="" aria-hidden="true"/>
         </div>
       </div>
 
@@ -365,19 +366,28 @@ void lighten;
 .passgo-burst {
   position: absolute;
   transform: translate(-50%, -50%);
-  font-family: var(--font-display);
-  font-weight: 700;
-  font-size: clamp(16px, 3.2vmin, 22px);
-  color: #fff8da;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-family: 'Unbounded', sans-serif;
+  font-weight: 900;
+  font-size: clamp(18px, 3.4vmin, 24px);
+  line-height: 1;
+  color: #fff;
   text-shadow:
-    0 0 10px #ffd86e,
-    0 0 20px rgba(255, 216, 110, 0.7),
-    0 2px 4px rgba(120, 80, 10, 0.5);
+    1.4px 1.4px 0 rgba(0, 0, 0, 0.7),
+    0 0 12px rgba(255, 216, 110, 0.55);
+  letter-spacing: 0.01em;
   white-space: nowrap;
-  letter-spacing: 0.03em;
   animation: passgo-burst 1.1s cubic-bezier(0.2, 0.8, 0.3, 1) forwards;
   pointer-events: none;
   z-index: 9;
+}
+.passgo-burst__coin {
+  width: 1em;
+  height: 1em;
+  object-fit: contain;
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.4));
 }
 @keyframes passgo-halo {
   0%   { transform: translate(-50%, -50%) scale(0.3); opacity: 0; }

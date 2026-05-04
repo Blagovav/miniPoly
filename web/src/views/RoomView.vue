@@ -509,6 +509,29 @@ function handleMenu() {
   }
 }
 
+/* In-game three-dot menu (settings + leave). Tapping settings routes to
+ * the standalone /settings view; tapping leave hands off to the same
+ * confirm flow handleMenu owns. The popover lives inline rather than as
+ * its own component because it has two entries and zero state of its
+ * own — splitting would just add prop-drilling for `onClose`. */
+const gameMenuOpen = ref(false);
+function openGameMenu() {
+  haptic("light");
+  gameMenuOpen.value = true;
+}
+function closeGameMenu() {
+  gameMenuOpen.value = false;
+}
+function gameMenuSettings() {
+  closeGameMenu();
+  haptic("light");
+  router.push({ name: "settings" });
+}
+function gameMenuLeave() {
+  closeGameMenu();
+  handleMenu();
+}
+
 // ── Header-icon actions (new Figma design) ──
 // Chat is driven by a window event so the Chat component stays self-contained.
 function toggleChat() {
@@ -996,16 +1019,20 @@ void t;
             aria-hidden="true"
           >{{ game.unreadChat > 9 ? '9+' : game.unreadChat }}</span>
         </button>
-        <!-- Red × leaves the match (Figma 133:13821 / 133:14512). Hamburger
-             was the old design's "menu" stand-in but the only entry it had
-             was leave-game, so the redesign cuts straight to a close icon
-             that opens the leave-confirm modal. -->
+        <!-- Three-dot game menu — settings + leave. Earlier it was a bare
+             X that jumped straight to the leave-confirm; playtester wanted
+             a step in between so settings (sound / vibration / shake) is
+             reachable mid-match without committing to leave. -->
         <button
-          class="room-topbar__menu-btn room-topbar__menu-btn--close"
-          :aria-label="locale === 'ru' ? 'Выйти' : 'Leave'"
-          @click="handleMenu"
+          class="room-topbar__menu-btn"
+          :aria-label="locale === 'ru' ? 'Меню' : 'Menu'"
+          @click="openGameMenu"
         >
-          <Icon name="x" :size="18" color="#000" />
+          <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
+            <circle cx="6" cy="12" r="2" fill="#000" />
+            <circle cx="12" cy="12" r="2" fill="#000" />
+            <circle cx="18" cy="12" r="2" fill="#000" />
+          </svg>
         </button>
       </div>
     </div>
@@ -1308,6 +1335,41 @@ void t;
       :fullscreen="true"
       :message="locale === 'ru' ? 'Загружаем игру…' : 'Loading the game…'"
     />
+
+    <!-- ── In-game three-dot menu (Settings + Leave). Bottom-anchored
+         sheet with two parchment rows; the leave entry routes through
+         the existing confirm flow so a misclick still has a brake. -->
+    <transition name="lobby-modal">
+      <div
+        v-if="gameMenuOpen"
+        class="lobby-modal-backdrop"
+        @click.self="closeGameMenu"
+      >
+        <div class="lobby-modal lobby-modal--menu">
+          <button class="game-menu__row" @click="gameMenuSettings">
+            <span class="game-menu__icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
+                <path
+                  d="M19.43 12.98a7.93 7.93 0 0 0 0-1.96l2.03-1.58a.5.5 0 0 0 .12-.64l-1.92-3.32a.5.5 0 0 0-.61-.22l-2.39.96a7.83 7.83 0 0 0-1.7-.98l-.36-2.54a.5.5 0 0 0-.5-.42h-3.84a.5.5 0 0 0-.5.42l-.36 2.54c-.62.25-1.19.58-1.7.98l-2.39-.96a.5.5 0 0 0-.61.22L2.78 8.8a.5.5 0 0 0 .12.64l2.03 1.58a7.93 7.93 0 0 0 0 1.96L2.9 14.56a.5.5 0 0 0-.12.64l1.92 3.32a.5.5 0 0 0 .61.22l2.39-.96c.51.4 1.08.73 1.7.98l.36 2.54a.5.5 0 0 0 .5.42h3.84a.5.5 0 0 0 .5-.42l.36-2.54a7.83 7.83 0 0 0 1.7-.98l2.39.96a.5.5 0 0 0 .61-.22l1.92-3.32a.5.5 0 0 0-.12-.64Zm-7.43 2.52a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7Z"
+                  fill="#000"
+                />
+              </svg>
+            </span>
+            <span class="game-menu__label">
+              {{ locale === 'ru' ? 'Настройки' : 'Settings' }}
+            </span>
+          </button>
+          <button class="game-menu__row game-menu__row--danger" @click="gameMenuLeave">
+            <span class="game-menu__icon" aria-hidden="true">
+              <Icon name="x" :size="18" color="#fff"/>
+            </span>
+            <span class="game-menu__label">
+              {{ locale === 'ru' ? 'Покинуть партию' : 'Leave match' }}
+            </span>
+          </button>
+        </div>
+      </div>
+    </transition>
 
     <!-- ── Confirm modals (Figma 133:15211 / 133:15948).
          Same sticky-bottom geometry the lobby's invite modal uses so the
@@ -2368,6 +2430,47 @@ void t;
   display: flex;
   flex-direction: column;
   gap: 24px;
+}
+/* Compact in-game menu sheet — two stacked rows, no header. */
+.lobby-modal--menu {
+  padding: 12px;
+  gap: 8px;
+}
+.game-menu__row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 14px 16px;
+  background: #fff;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  border-radius: 16px;
+  font-family: 'Unbounded', sans-serif;
+  font-weight: 700;
+  font-size: 14px;
+  line-height: 16px;
+  color: #000;
+  cursor: pointer;
+  text-align: left;
+  transition: transform 120ms ease;
+}
+.game-menu__row:active { transform: scale(0.98); }
+.game-menu__row--danger {
+  background: #ef4444;
+  border-color: #b91c1c;
+  color: #fff;
+}
+.game-menu__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  flex-shrink: 0;
+}
+.game-menu__label {
+  flex: 1;
+  min-width: 0;
 }
 .lobby-modal__head {
   display: flex;
