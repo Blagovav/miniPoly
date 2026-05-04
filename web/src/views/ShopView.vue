@@ -301,9 +301,9 @@ function mapBtnClass(m: MapEntry) {
           </div>
           <div class="shop2__chest-art" aria-hidden="true">
             <img
-              v-if="heroChest.artClosed"
+              v-if="heroChest.cardArt || heroChest.artClosed"
               class="shop2__chest-img"
-              :src="heroChest.artClosed"
+              :src="heroChest.cardArt || heroChest.artClosed"
               alt=""
               draggable="false"
             />
@@ -382,9 +382,9 @@ function mapBtnClass(m: MapEntry) {
           </div>
           <div class="shop2__chest-art" aria-hidden="true">
             <img
-              v-if="ch.artClosed"
+              v-if="ch.cardArt || ch.artClosed"
               class="shop2__chest-img"
-              :src="ch.artClosed"
+              :src="ch.cardArt || ch.artClosed"
               alt=""
               draggable="false"
             />

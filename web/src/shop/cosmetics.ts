@@ -48,6 +48,11 @@ export interface ChestEntry {
   artClosed?: string;
   /** Path to the open-chest illustration with light rays (covers ~268×192). */
   artOpen?: string;
+  /** Path to the marketing-style preview composition shown ONLY on the
+   *  shop card (closed chest + floating cap figurines + halo). The modal
+   *  hero keeps using artClosed/artOpen so its details/result states stay
+   *  semantic. Falls back to artClosed when not set. */
+  cardArt?: string;
   /** Quantity options + Star price for each. */
   pricesByQty?: { qty: number; stars: number }[];
   /** Default selected qty in the modal — index into pricesByQty. */
@@ -102,6 +107,7 @@ export const SHOP_CHESTS: readonly ChestEntry[] = [
      * state reveals the beaming chest. */
     artClosed: "/figma/shop/chests/business-open.webp",
     artOpen: "/figma/shop/chests/business-closed.webp",
+    cardArt: "/figma/shop/chests/business-preview.webp",
     pricesByQty: [
       { qty: 1, stars: 299 },
       { qty: 3, stars: 799 },
