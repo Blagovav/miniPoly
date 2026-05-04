@@ -94,8 +94,14 @@ export const SHOP_CHESTS: readonly ChestEntry[] = [
     },
     contains: ["hat", "cat", "ship", "ufo"],
     containsExtra: 7,
-    artClosed: "/figma/shop/chests/business-closed.webp",
-    artOpen: "/figma/shop/chests/business-open.webp",
+    /* The asset filenames were named opposite to what they depict —
+     * "business-closed.webp" is a wide-open chest with light beam,
+     * and "business-open.webp" is the locked/closed chest. We map
+     * them by their actual visuals: the shop card + modal-details
+     * show the locked chest (haven't opened yet), and the modal-result
+     * state reveals the beaming chest. */
+    artClosed: "/figma/shop/chests/business-open.webp",
+    artOpen: "/figma/shop/chests/business-closed.webp",
     pricesByQty: [
       { qty: 1, stars: 299 },
       { qty: 3, stars: 799 },
