@@ -20,6 +20,11 @@ const BOT_TURN_DELAY_MS = 2500;
 // all-bot auction doesn't drag, but not instant so humans can read
 // the bidding war.
 const BOT_AUCTION_DELAY_MS = 1200;
+// Delay before a bot accepts/declines a trade — long enough that the
+// human reads the trade banner ("Bot Alfred is thinking…") so the
+// outcome doesn't feel like a no-op, short enough to not stall a
+// motivated trader.
+const BOT_TRADE_DELAY_MS = 1500;
 
 const rooms = new Map<string, RoomState>();
 const turnTimers = new Map<string, NodeJS.Timeout>();
@@ -28,6 +33,10 @@ const turnTimers = new Map<string, NodeJS.Timeout>();
 // across multiple bots who aren't the current turn — each needs to be
 // nudged into placing a bid or passing, otherwise the auction freezes.
 const auctionTimers = new Map<string, NodeJS.Timeout>();
+// Pending bot-trade resolve timers, one per room. We dedup so a fast
+// chain of state changes (which all re-enter onStateChange) doesn't
+// pile up multiple resolves for the same pendingTrade.
+const tradeTimers = new Map<string, NodeJS.Timeout>();
 const notifiedTurns = new Map<string, string>();
 
 // Broadcasters are injected by the WS server on startup so the bot-turn
@@ -60,6 +69,9 @@ export function deleteRoom(id: string): void {
   const at = auctionTimers.get(id);
   if (at) clearTimeout(at);
   auctionTimers.delete(id);
+  const tt = tradeTimers.get(id);
+  if (tt) clearTimeout(tt);
+  tradeTimers.delete(id);
   notifiedTurns.delete(id);
 }
 
@@ -89,12 +101,14 @@ export function onStateChange(room: RoomState): void {
     return;
   }
 
-  // Trade targeted at a bot: evaluate and accept/decline so the game doesn't stall.
+  // Trade targeted at a bot: schedule a delayed accept/decline so the
+  // human briefly sees the trade banner, then broadcast the resolution.
+  // The earlier synchronous resolve fired before the WS handler had a
+  // chance to broadcast the pendingTrade snapshot — clients never saw
+  // the trade resolve, banner hung forever («обмен с ботами не работает»).
   if (room.pendingTrade) {
     const target = room.players.find((pl) => pl.id === room.pendingTrade!.toId);
-    if (target?.isBot) {
-      resolveTrade(room, target.id, botShouldAcceptTrade(room, target.id));
-    }
+    if (target?.isBot) scheduleBotTradeResolve(room, target.id);
   }
 
   // Auction running with non-current bots in the bidder list?
@@ -125,9 +139,16 @@ export function onStateChange(room: RoomState): void {
   const prev = notifiedTurns.get(room.id);
   if (prev !== p.id) {
     notifiedTurns.set(room.id, p.id);
-    // Push notification only for real humans who are offline. Bots have
-    // synthetic tgUserIds; the telegram notifier would 400 on those.
-    if (!p.connected && !p.isBot) {
+    // Push notification for any real human who isn't actively looking
+    // at the app — either fully disconnected (WS dropped) OR the WebApp
+    // is backgrounded (visibilitychange → hidden, p.foreground=false).
+    // The earlier `!p.connected` gate missed the backgrounded case
+    // because Telegram keeps the WS alive when the user swipes away,
+    // so playtesters stopped getting "ваш ход" pings on minimised
+    // sessions even though they used to. Bots are skipped — their
+    // synthetic tgUserIds would 400 on the bot push API.
+    const inForeground = p.foreground !== false;
+    if (!p.isBot && (!p.connected || !inForeground)) {
       notifyTurn(p.tgUserId, room.id, p.name);
     }
     resetTurnTimer(room);
@@ -302,6 +323,37 @@ function clearAuctionTimer(roomId: string): void {
   auctionTimers.delete(roomId);
 }
 
+function clearTradeTimer(roomId: string): void {
+  const t = tradeTimers.get(roomId);
+  if (t) clearTimeout(t);
+  tradeTimers.delete(roomId);
+}
+
+/**
+ * Bot is the recipient of a pending trade — schedule a delayed
+ * accept/decline so the human briefly sees the trade banner. After the
+ * bot resolves we MUST broadcast state ourselves: the WS handler that
+ * triggered onStateChange already sent its sendState BEFORE we got
+ * here, so the post-resolve mutation never reaches clients otherwise.
+ *
+ * Idempotent — re-entry while a timer is already armed for the same
+ * pending trade is a no-op.
+ */
+function scheduleBotTradeResolve(room: RoomState, botId: string): void {
+  if (tradeTimers.has(room.id)) return;
+  const timer = setTimeout(async () => {
+    tradeTimers.delete(room.id);
+    const fresh = getRoom(room.id);
+    if (!fresh || !fresh.pendingTrade) return;
+    if (fresh.pendingTrade.toId !== botId) return;
+    const accept = botShouldAcceptTrade(fresh, botId);
+    resolveTrade(fresh, botId, accept);
+    if (broadcastState) broadcastState(fresh.id);
+    onStateChange(fresh);
+  }, BOT_TRADE_DELAY_MS);
+  tradeTimers.set(room.id, timer);
+}
+
 /**
  * Pick the next bot in the auction's active bidder list that needs to
  * act (i.e. isn't already the high bidder, isn't passed, isn't
@@ -400,6 +452,11 @@ function botShouldAcceptTrade(room: RoomState, botId: string): boolean {
   const botGives =
     t.takeTiles.reduce((s, i) => s + tileValue(i), 0) + t.takeCash + t.takeJailCards * JAIL_CARD_VALUE;
 
-  // Нужно минимум на 20% выгоднее — иначе бот "думает" и отказывается.
-  return botReceives >= botGives * 1.2 && botReceives > 0;
+  // Accept any non-zero trade where the bot's haul covers the cost,
+  // plus a $50 cushion so the bot doesn't take a strict-equal trade
+  // (zero EV for the bot, only the human profits via inflated tile
+  // values vs cash). The earlier 1.2× hurdle rejected nearly every
+  // human-initiated trade, which playtesters read as «обмен с ботами
+  // не работает».
+  return botReceives >= botGives + 50 && botReceives > 0;
 }

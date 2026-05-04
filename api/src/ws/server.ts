@@ -292,9 +292,141 @@ function handleMessage(conn: Conn, ws: WebSocket, msg: ClientMessage): void {
       return handleVoiceLeave(conn);
     case "voiceSignal":
       return handleVoiceSignal(conn, msg.toId, msg.payload);
+    case "wsForeground":
+      return handleForeground(conn, msg.foreground);
+    case "friendRequest":
+      void handleFriendRequest(conn, msg.toUserId);
+      return;
+    case "friendRespond":
+      void handleFriendRespond(conn, msg.requestId, msg.accept);
+      return;
     default:
       conn.send({ type: "error", message: "unknown message" });
   }
+}
+
+function handleForeground(conn: Conn, foreground: boolean): void {
+  if (!conn.roomId || !conn.playerId) return;
+  const room = getRoom(conn.roomId);
+  if (!room) return;
+  const p = room.players.find((pl) => pl.id === conn.playerId);
+  if (!p) return;
+  if (p.foreground === foreground) return;
+  p.foreground = foreground;
+  // No state broadcast — foreground is a private signal that only
+  // affects manager.ts's notifyTurn gating. Pushing it to peers would
+  // trip an unnecessary re-render every visibility flip.
+}
+
+function sendToTgUser(tgUserId: number, msg: ServerMessage): boolean {
+  for (const [ws, c] of connections) {
+    if (c.tgUserId === tgUserId) {
+      try {
+        ws.send(JSON.stringify(msg));
+        return true;
+      } catch {
+        /* noop */
+      }
+    }
+  }
+  return false;
+}
+
+// Look up a tg user's name in the players of any active room before
+// hitting the DB. Avoids a Postgres round-trip on every friend
+// request/response when both users are mid-game and visible in memory.
+function nameForTgUser(tgUserId: number): string | null {
+  for (const [, conn] of connections) {
+    if (conn.tgUserId !== tgUserId || !conn.roomId || !conn.playerId) continue;
+    const room = getRoom(conn.roomId);
+    if (!room) continue;
+    const p = room.players.find((pl) => pl.id === conn.playerId);
+    if (p?.name) return p.name;
+  }
+  return null;
+}
+
+async function nameOrFetch(tgUserId: number): Promise<string> {
+  const cached = nameForTgUser(tgUserId);
+  if (cached) return cached;
+  const { getUserProfile } = await import("../db");
+  const p = await getUserProfile(tgUserId).catch(() => null);
+  return p?.name ?? "Игрок";
+}
+
+async function handleFriendRequest(conn: Conn, toUserId: number): Promise<void> {
+  if (!conn.tgUserId) {
+    conn.send({ type: "error", message: "not authenticated" });
+    return;
+  }
+  const fromUserId = conn.tgUserId;
+  if (fromUserId === toUserId) {
+    conn.send({ type: "error", message: "can't befriend yourself" });
+    return;
+  }
+  const { createFriendRequest } = await import("../db");
+  const res = await createFriendRequest(fromUserId, toUserId).catch(() => null);
+  if (!res) {
+    conn.send({ type: "error", message: "friend request failed" });
+    return;
+  }
+  if (res.alreadyExisted) {
+    if (res.status === "accepted") {
+      conn.send({ type: "error", message: "already friends" });
+    } else if (res.status === "pending") {
+      conn.send({ type: "error", message: "request already pending" });
+    } else {
+      conn.send({ type: "error", message: "previous request was declined" });
+    }
+    return;
+  }
+  // Push to recipient if they're online — they get the modal banner
+  // immediately. If they're offline, GET /api/users/:id/friends returns
+  // their pending list on next app boot.
+  const fromName = await nameOrFetch(fromUserId);
+  sendToTgUser(toUserId, {
+    type: "friendRequestIncoming",
+    requestId: res.id,
+    fromUserId,
+    fromName,
+  });
+}
+
+async function handleFriendRespond(
+  conn: Conn,
+  requestId: number,
+  accept: boolean,
+): Promise<void> {
+  if (!conn.tgUserId) {
+    conn.send({ type: "error", message: "not authenticated" });
+    return;
+  }
+  const { respondFriendRequest } = await import("../db");
+  const res = await respondFriendRequest(requestId, conn.tgUserId, accept).catch(
+    () => ({ ok: false }) as Awaited<ReturnType<typeof respondFriendRequest>>,
+  );
+  if (!res.ok || !res.fromUserId || !res.toUserId) {
+    conn.send({ type: "error", message: "respond failed" });
+    return;
+  }
+  const responderName = await nameOrFetch(conn.tgUserId);
+  const senderName = await nameOrFetch(res.fromUserId);
+  const status: "accepted" | "declined" = accept ? "accepted" : "declined";
+  // Tell the original sender how it went.
+  sendToTgUser(res.fromUserId, {
+    type: "friendStatusUpdate",
+    otherUserId: conn.tgUserId,
+    otherName: responderName,
+    status,
+  });
+  // Echo back to the responder so their own UI flips immediately
+  // (without round-tripping a fresh GET /friends).
+  conn.send({
+    type: "friendStatusUpdate",
+    otherUserId: res.fromUserId,
+    otherName: senderName,
+    status,
+  });
 }
 
 function handleVoiceJoin(conn: Conn): void {

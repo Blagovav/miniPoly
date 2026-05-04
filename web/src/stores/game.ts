@@ -41,21 +41,41 @@ export const useGameStore = defineStore("game", () => {
     selectedTileIndex.value = idx;
   }
 
-  // Друзья (tgUserId, с кем уже играл) — для подсветки в лобби/игре.
+  // In-game friends (independent of Telegram contacts) — backed by the
+  // server's friend_requests table, accepted-only. Loaded on app boot
+  // and on every friendStatusUpdate WS push.
   const friendIds = ref<Set<number>>(new Set());
+  // Pending incoming requests (someone wants to friend me, awaiting my
+  // accept/decline). Drives the global FriendRequestModal.
+  interface IncomingRequest { requestId: number; fromUserId: number; fromName: string }
+  const incomingFriendRequests = ref<IncomingRequest[]>([]);
+  // Outbound requests I've sent that are still pending — used by Lobby
+  // so the «В ДРУЗЬЯ» button flips to «Отправлено» right after I tap.
+  const sentFriendRequests = ref<Set<number>>(new Set());
+
   async function loadFriends(myTgUserId: number | null) {
     if (!myTgUserId) return;
     try {
       const base = (import.meta.env.VITE_API_URL as string) || "";
-      const res = await fetch(`${base}/api/users/${myTgUserId}/coplayers`);
+      const res = await fetch(`${base}/api/users/${myTgUserId}/friends`);
       if (!res.ok) return;
       const data = await res.json();
-      const ids = new Set<number>((data.players ?? []).map((p: any) => Number(p.tgUserId)));
+      const ids = new Set<number>((data.friends ?? []).map((p: any) => Number(p.tgUserId)));
       friendIds.value = ids;
+      incomingFriendRequests.value = (data.incoming ?? []).map((r: any) => ({
+        requestId: Number(r.id),
+        fromUserId: Number(r.fromUserId),
+        fromName: String(r.fromName ?? "Игрок"),
+      }));
     } catch {}
   }
   function isFriend(tgUserId: number): boolean {
     return friendIds.value.has(tgUserId);
+  }
+  function dismissIncomingRequest(requestId: number) {
+    incomingFriendRequests.value = incomingFriendRequests.value.filter(
+      (r) => r.requestId !== requestId,
+    );
   }
 
   const BOARD_LEN = 40;
@@ -187,6 +207,31 @@ export const useGameStore = defineStore("game", () => {
         if (chat.value.length > 100) chat.value.shift();
         unreadChat.value++;
         break;
+      case "friendRequestIncoming":
+        // Append unless already in queue (re-send while still pending).
+        if (!incomingFriendRequests.value.some((r) => r.requestId === m.requestId)) {
+          incomingFriendRequests.value = [
+            ...incomingFriendRequests.value,
+            { requestId: m.requestId, fromUserId: m.fromUserId, fromName: m.fromName },
+          ];
+        }
+        break;
+      case "friendStatusUpdate":
+        if (m.status === "accepted") {
+          const next = new Set(friendIds.value);
+          next.add(m.otherUserId);
+          friendIds.value = next;
+        }
+        // Either way clear any pending state on either side.
+        if (sentFriendRequests.value.has(m.otherUserId)) {
+          const next = new Set(sentFriendRequests.value);
+          next.delete(m.otherUserId);
+          sentFriendRequests.value = next;
+        }
+        incomingFriendRequests.value = incomingFriendRequests.value.filter(
+          (r) => r.fromUserId !== m.otherUserId,
+        );
+        break;
     }
   }
 
@@ -223,6 +268,9 @@ export const useGameStore = defineStore("game", () => {
     friendIds,
     loadFriends,
     isFriend,
+    incomingFriendRequests,
+    sentFriendRequests,
+    dismissIncomingRequest,
     me,
     currentPlayer,
     isMyTurn,

@@ -69,9 +69,24 @@ export function useWs(): WsClient {
     return () => listeners.delete(cb);
   }
 
+  // Background/foreground signalling. The server gates "ваш ход"
+  // Telegram pushes on this — when the WebApp is hidden (user swipes
+  // to another chat / background) the WS stays alive but we want the
+  // bot to ping. visibilitychange fires on Telegram WebView the
+  // moment the Mini App is hidden / shown, so this hook is enough
+  // without scraping Telegram-specific events.
+  function sendForeground(foreground: boolean) {
+    send({ type: "wsForeground", foreground });
+  }
+  function onVisibility() {
+    sendForeground(!document.hidden);
+  }
+  document.addEventListener("visibilitychange", onVisibility);
+
   function close() {
     closedByUser = true;
     if (reconnectTimer) clearTimeout(reconnectTimer);
+    document.removeEventListener("visibilitychange", onVisibility);
     ws?.close();
   }
 

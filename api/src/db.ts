@@ -38,6 +38,26 @@ export async function initDb(): Promise<void> {
     );
     CREATE INDEX IF NOT EXISTS idx_purchases_user ON stars_purchases (tg_user_id);
     CREATE UNIQUE INDEX IF NOT EXISTS uq_purchase_charge ON stars_purchases (tg_payment_charge_id) WHERE tg_payment_charge_id IS NOT NULL;
+
+    -- In-game friend network (independent of Telegram contacts). Direct
+    -- consent flow: A sends, B accepts → status flips to 'accepted'.
+    -- Pair uniqueness is enforced via an expression index over the
+    -- ordered (lo, hi) tuple so A→B and B→A can't coexist.
+    CREATE TABLE IF NOT EXISTS friend_requests (
+      id BIGSERIAL PRIMARY KEY,
+      from_user_id BIGINT NOT NULL,
+      to_user_id BIGINT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'pending', -- pending | accepted | declined
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      responded_at TIMESTAMPTZ,
+      CHECK (from_user_id <> to_user_id)
+    );
+    CREATE UNIQUE INDEX IF NOT EXISTS uq_friend_pair ON friend_requests (
+      LEAST(from_user_id, to_user_id),
+      GREATEST(from_user_id, to_user_id)
+    );
+    CREATE INDEX IF NOT EXISTS idx_friend_to_status ON friend_requests (to_user_id, status);
+    CREATE INDEX IF NOT EXISTS idx_friend_from_status ON friend_requests (from_user_id, status);
   `);
 }
 
@@ -127,6 +147,215 @@ export async function getUserPurchases(tgUserId: number): Promise<string[]> {
     [tgUserId],
   );
   return rows.map((r) => r.item_id);
+}
+
+export interface MatchHistoryRow {
+  id: number;
+  roomId: string;
+  endedAt: string;
+  won: boolean;
+  cashAtEnd: number;
+  /** Names of every other player at the table (humans + bots), in row order. */
+  opponentNames: string[];
+  /** Their final cash, same order as opponentNames. Bot rows still come back
+   *  here — recordMatch treats bots and humans identically. */
+  opponentCash: number[];
+  /** When neither side reached `won`, the engine never recorded the match,
+   *  so by definition every row in this table HAS a winner. The flag is
+   *  here for the UI's "не завершена" state which is derived elsewhere. */
+}
+
+/** History of a player's matches, newest first. Bots and humans are joined
+ *  through the users table (every player — bot or not — gets upsertUser'd
+ *  in recordMatch), so the opponent list shows real names instead of raw
+ *  ids. Used by GET /api/users/:id/history. */
+export async function getMatchHistory(
+  tgUserId: number,
+  limit = 50,
+): Promise<MatchHistoryRow[]> {
+  // The aggregate join: for each match row, look up names of every
+  // other player at the table. ARRAY_AGG with FILTER skips ids missing
+  // from users (shouldn't happen given recordMatch's upsert, but safe).
+  const { rows } = await pool.query(
+    `SELECT
+       mh.id,
+       mh.room_id,
+       mh.ended_at,
+       mh.won,
+       mh.cash_at_end,
+       COALESCE(
+         (
+           SELECT array_agg(u.name ORDER BY ord)
+           FROM unnest(mh.played_with) WITH ORDINALITY AS pw(id, ord)
+           LEFT JOIN users u ON u.tg_user_id = pw.id
+         ),
+         ARRAY[]::TEXT[]
+       ) AS opponent_names,
+       COALESCE(
+         (
+           SELECT array_agg(opp.cash_at_end ORDER BY pw.ord)
+           FROM unnest(mh.played_with) WITH ORDINALITY AS pw(id, ord)
+           LEFT JOIN match_history opp
+             ON opp.room_id = mh.room_id AND opp.tg_user_id = pw.id
+         ),
+         ARRAY[]::INT[]
+       ) AS opponent_cash
+     FROM match_history mh
+     WHERE mh.tg_user_id = $1
+     ORDER BY mh.ended_at DESC
+     LIMIT $2`,
+    [tgUserId, limit],
+  );
+  return rows.map((r) => ({
+    id: Number(r.id),
+    roomId: r.room_id,
+    endedAt: r.ended_at instanceof Date ? r.ended_at.toISOString() : String(r.ended_at),
+    won: !!r.won,
+    cashAtEnd: Number(r.cash_at_end),
+    opponentNames: (r.opponent_names ?? []) as string[],
+    opponentCash: ((r.opponent_cash ?? []) as (number | null)[]).map((v) => Number(v ?? 0)),
+  }));
+}
+
+// ───── Friend network ─────────────────────────────────────────────────
+
+export interface FriendRequestRow {
+  id: number;
+  fromUserId: number;
+  toUserId: number;
+  status: "pending" | "accepted" | "declined";
+  fromName: string | null;
+  toName: string | null;
+  createdAt: string;
+}
+
+/** Insert a pending request. Returns the row id, or null if a row for the
+ *  same unordered pair already exists (in any state). Caller decides what
+ *  to do — usually surface "уже отправлено" / "уже друзья". */
+export async function createFriendRequest(
+  fromUserId: number,
+  toUserId: number,
+): Promise<{ id: number; alreadyExisted: boolean; status: string } | null> {
+  if (fromUserId === toUserId) return null;
+  // Try insert. If the unique pair index trips, fetch the existing row so
+  // we can tell the client whether it's pending / accepted / declined.
+  try {
+    const { rows } = await pool.query(
+      `INSERT INTO friend_requests (from_user_id, to_user_id)
+       VALUES ($1, $2)
+       RETURNING id, status`,
+      [fromUserId, toUserId],
+    );
+    return { id: Number(rows[0].id), alreadyExisted: false, status: rows[0].status };
+  } catch (err: any) {
+    if (err?.code !== "23505") throw err; // 23505 = unique_violation
+    const { rows } = await pool.query(
+      `SELECT id, status FROM friend_requests
+       WHERE LEAST(from_user_id, to_user_id) = LEAST($1::bigint, $2::bigint)
+         AND GREATEST(from_user_id, to_user_id) = GREATEST($1::bigint, $2::bigint)
+       LIMIT 1`,
+      [fromUserId, toUserId],
+    );
+    if (rows.length === 0) return null;
+    return { id: Number(rows[0].id), alreadyExisted: true, status: rows[0].status };
+  }
+}
+
+/** Respond to a pending request. Only the original `to_user_id` can accept
+ *  or decline — anyone else gets {ok:false}. */
+export async function respondFriendRequest(
+  requestId: number,
+  responderId: number,
+  accept: boolean,
+): Promise<{ ok: boolean; fromUserId?: number; toUserId?: number; status?: string }> {
+  const status = accept ? "accepted" : "declined";
+  const { rows } = await pool.query(
+    `UPDATE friend_requests
+     SET status = $3, responded_at = NOW()
+     WHERE id = $1 AND to_user_id = $2 AND status = 'pending'
+     RETURNING from_user_id, to_user_id, status`,
+    [requestId, responderId, status],
+  );
+  if (rows.length === 0) return { ok: false };
+  return {
+    ok: true,
+    fromUserId: Number(rows[0].from_user_id),
+    toUserId: Number(rows[0].to_user_id),
+    status: rows[0].status,
+  };
+}
+
+/** Pending requests waiting on this user's response. Used to repopulate the
+ *  banner on app boot if a request was sent while they were offline. */
+export async function getIncomingFriendRequests(
+  tgUserId: number,
+): Promise<FriendRequestRow[]> {
+  const { rows } = await pool.query(
+    `SELECT fr.id, fr.from_user_id, fr.to_user_id, fr.status, fr.created_at,
+            uf.name AS from_name, ut.name AS to_name
+     FROM friend_requests fr
+     LEFT JOIN users uf ON uf.tg_user_id = fr.from_user_id
+     LEFT JOIN users ut ON ut.tg_user_id = fr.to_user_id
+     WHERE fr.to_user_id = $1 AND fr.status = 'pending'
+     ORDER BY fr.created_at DESC`,
+    [tgUserId],
+  );
+  return rows.map((r) => ({
+    id: Number(r.id),
+    fromUserId: Number(r.from_user_id),
+    toUserId: Number(r.to_user_id),
+    status: r.status,
+    fromName: r.from_name,
+    toName: r.to_name,
+    createdAt: r.created_at instanceof Date ? r.created_at.toISOString() : String(r.created_at),
+  }));
+}
+
+/** All friends (accepted only). Returns `UserProfile` for each so the UI can
+ *  render exactly like the existing coplayers list — same shape, same rows. */
+export async function getFriends(tgUserId: number): Promise<UserProfile[]> {
+  const { rows } = await pool.query(
+    `SELECT u.tg_user_id, u.name, u.avatar, u.games_played, u.games_won, u.total_earned
+     FROM friend_requests fr
+     JOIN users u ON u.tg_user_id = CASE
+       WHEN fr.from_user_id = $1 THEN fr.to_user_id ELSE fr.from_user_id
+     END
+     WHERE fr.status = 'accepted'
+       AND $1 IN (fr.from_user_id, fr.to_user_id)
+     ORDER BY u.name`,
+    [tgUserId],
+  );
+  return rows.map((r) => ({
+    tgUserId: Number(r.tg_user_id),
+    name: r.name,
+    avatar: r.avatar,
+    gamesPlayed: Number(r.games_played),
+    gamesWon: Number(r.games_won),
+    totalEarned: Number(r.total_earned),
+    winRate: Number(r.games_played) > 0 ? Number(r.games_won) / Number(r.games_played) : 0,
+  }));
+}
+
+/** Status of A→B friendship from A's perspective: 'none' (no row),
+ *  'pending-out' (A sent), 'pending-in' (B sent), 'accepted', 'declined'. */
+export async function getFriendStatus(
+  aUserId: number,
+  bUserId: number,
+): Promise<{ status: "none" | "pending-out" | "pending-in" | "accepted" | "declined"; requestId: number | null }> {
+  const { rows } = await pool.query(
+    `SELECT id, from_user_id, to_user_id, status FROM friend_requests
+     WHERE LEAST(from_user_id, to_user_id) = LEAST($1::bigint, $2::bigint)
+       AND GREATEST(from_user_id, to_user_id) = GREATEST($1::bigint, $2::bigint)
+     LIMIT 1`,
+    [aUserId, bUserId],
+  );
+  if (rows.length === 0) return { status: "none", requestId: null };
+  const r = rows[0];
+  if (r.status === "accepted") return { status: "accepted", requestId: Number(r.id) };
+  if (r.status === "declined") return { status: "declined", requestId: Number(r.id) };
+  // pending: which direction?
+  if (Number(r.from_user_id) === aUserId) return { status: "pending-out", requestId: Number(r.id) };
+  return { status: "pending-in", requestId: Number(r.id) };
 }
 
 /** Последние N соигроков — люди, с которыми недавно играл. */
