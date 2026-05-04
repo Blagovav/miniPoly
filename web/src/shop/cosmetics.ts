@@ -97,8 +97,8 @@ export const SHOP_CHESTS: readonly ChestEntry[] = [
       ru: "Откройте сундук и получите редкую фишку. Соберите все, чтобы получить эксклюзивную карту.",
       en: "Open the chest to claim a rare token. Collect them all to unlock an exclusive map.",
     },
-    contains: ["hat", "cat", "ship", "ufo"],
-    containsExtra: 7,
+    contains: ["hat", "cat", "ufo"],
+    containsExtra: 3,
     /* The asset filenames were named opposite to what they depict —
      * "business-closed.webp" is a wide-open chest with light beam,
      * and "business-open.webp" is the locked/closed chest. We map

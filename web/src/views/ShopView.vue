@@ -822,12 +822,11 @@ function mapBtnClass(m: MapEntry) {
   position: relative;
   display: flex;
   align-items: stretch;
-  gap: 12px;
+  gap: 8px;
   background: #000;
   border: 1px solid #e069d0;
   border-radius: 24px;
-  padding: 16px;
-  padding-right: 0;
+  padding: 14px 0 14px 14px;
   margin-bottom: 32px;
   overflow: hidden;
 }
@@ -835,15 +834,19 @@ function mapBtnClass(m: MapEntry) {
   flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 10px;
   min-width: 0;
+  /* z-index above the chest art so the floating-cap overflow doesn't
+     accidentally catch taps meant for the chips / CTA. */
+  position: relative;
+  z-index: 1;
 }
 .shop2__chest-name {
   margin: 0;
   font-family: 'Golos Text', sans-serif;
   font-weight: 700;
-  font-size: 22px;
-  line-height: 24px;
+  font-size: 18px;
+  line-height: 20px;
   color: #fff;
   white-space: nowrap;
   overflow: hidden;
@@ -852,17 +855,17 @@ function mapBtnClass(m: MapEntry) {
 .shop2__chest-row {
   display: flex;
   gap: 4px;
-  flex-wrap: wrap;
+  align-items: center;
 }
 .shop2__chest-chip {
-  width: 28px;
-  height: 28px;
-  border-radius: 8px;
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
   border: 0.4px solid rgba(255, 255, 255, 0.1);
   display: flex;
   align-items: center;
   justify-content: center;
-  background: transparent;
+  background: rgba(255, 255, 255, 0.06);
   flex-shrink: 0;
   overflow: hidden;
 }
@@ -874,35 +877,36 @@ function mapBtnClass(m: MapEntry) {
   font-family: 'Unbounded', sans-serif;
   font-weight: 800;
   font-size: 10px;
-  line-height: 16px;
+  line-height: 14px;
+  width: auto;
+  padding: 0 8px;
 }
 .shop2__chest-cta {
   margin-top: 2px;
-  height: 40px;
-  width: 100%;
+  align-self: flex-start;
+  height: 36px;
+  padding: 0 14px;
   border-radius: 999px;
   font-family: 'Unbounded', sans-serif;
   font-weight: 800;
-  font-size: 12px;
+  font-size: 11px;
   line-height: 14px;
+  letter-spacing: 0.01em;
   background: linear-gradient(104deg, #005eff 0%, #6f4bff 100%);
   color: #fff;
   border: none;
   cursor: pointer;
+  white-space: nowrap;
   box-shadow: inset 0 2px 8px rgba(255, 255, 255, 0.32);
 }
 .shop2__chest-art {
   position: relative;
   flex-shrink: 0;
-  width: 148px;
-  height: 148px;
+  align-self: stretch;
+  width: 138px;
   display: flex;
   align-items: center;
   justify-content: center;
-  /* Bleed into the card's right padding so the marketing composition
-     extends to the rounded corner without the cat figurine getting
-     clipped by the card's outer edge. */
-  margin-right: -4px;
 }
 /* Emoji fallback — only used when no chest art (cardArt / artClosed) is
    wired up. The marketing-style cardArt ships its own halo + lighting so
@@ -913,10 +917,15 @@ function mapBtnClass(m: MapEntry) {
   filter: drop-shadow(0 4px 8px rgba(255, 200, 80, 0.4));
 }
 .shop2__chest-img {
-  position: relative;
+  position: absolute;
+  inset: 0;
   width: 100%;
   height: 100%;
-  object-fit: contain;
+  object-fit: cover;
+  /* Anchor the chest at the bottom-right of the card, with the floating
+     caps spilling up + leftward — matches the Figma sticker placement
+     where the composition reads as "treasure overflowing the corner". */
+  object-position: right bottom;
   pointer-events: none;
   user-select: none;
 }
