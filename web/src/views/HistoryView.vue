@@ -16,15 +16,16 @@ const { locale } = useI18n();
 const router = useRouter();
 const { haptic } = useTelegram();
 
-// Placeholder data matching Figma 150:2113 until /api/history exists.
-// Designer reused the rooms-list UI for history (node 150:2206), so the
-// shape mirrors PublicRoomSummary.
-const rooms = ref<HistoryRoom[]>([
-  { id: "K23fx", hostName: "Дэн", playerCount: 1, maxPlayers: 4 },
-  { id: "hsWe1", hostName: "Дэн", playerCount: 1, maxPlayers: 4 },
-  { id: "iUsHv", hostName: "Nat", playerCount: 4, maxPlayers: 4 },
-  { id: "K23fx", hostName: "Alex", playerCount: 4, maxPlayers: 4 },
-]);
+// History list. Once `/api/history` exists this will fetch the user's
+// past matches; until then the array stays empty and the empty-state
+// ("Истории партий пока нет — Сыграй первую партию") covers the UI.
+//
+// The Figma layout (150:2113) reuses the rooms-list visuals (node
+// 150:2206), so the shape mirrors PublicRoomSummary. Hardcoded sample
+// rows that used to live here were leaking into the live build —
+// playtester saw four phantom "Дэн / Nat / Alex" rooms and thought
+// they were real lobbies.
+const rooms = ref<HistoryRoom[]>([]);
 const activeFilter = ref(0);
 
 const isRu = computed(() => locale.value === "ru");
