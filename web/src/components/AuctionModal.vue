@@ -93,8 +93,14 @@ const activeBidders = computed(() => {
   );
 });
 
-const hasDecision = computed(() => !myPassed.value && !iAmLeading.value);
-const visible = computed(() => open.value && !!tile.value && !!auction.value && hasDecision.value);
+/* The modal stays mounted for the whole auction phase, even while I'm
+ * the high bidder, so a "+10 → I lead → modal closes → opponent +10 →
+ * modal reopens" cycle no longer flickers. Bid buttons disable
+ * themselves via canBidCustom when iAmLeading is true, so the leading
+ * state still reads clearly inside the open card. We only hide on
+ * explicit pass (myPassed) or when the auction itself ends server-
+ * side (auction === null after the winner is announced). */
+const visible = computed(() => open.value && !!tile.value && !!auction.value && !myPassed.value);
 </script>
 
 <template>

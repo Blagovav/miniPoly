@@ -232,6 +232,27 @@ onUnmounted(() => {
   document.body.classList.remove("lobby-figma-root");
 });
 
+// Auto-pop the tile-info card when I land on an unowned property and the
+// server flips us into buyPrompt — playtester 2026-05-04: "тебе в любом
+// случае надо либо покупать, либо на аукцион, должна сразу открываться
+// карточка". The bottom bar still owns the БРОСИТЬ / КУПИТЬ buttons; the
+// modal just shows me the rent ladder + colour band so I can decide.
+// Gate on isMyTurn so the modal doesn't pop on every opponent's landing,
+// and on `animatingPlayerId === null` so it waits for the pawn to stop.
+watch(
+  () => [phase.value, game.isMyTurn, game.animatingPlayerId] as const,
+  ([p, mine, anim], prev) => {
+    if (p !== "buyPrompt" || !mine || anim !== null) return;
+    // Only fire on the rolling → buyPrompt edge (not on every reactive
+    // dep change while we're already in buyPrompt) so the modal doesn't
+    // re-open if the user manually closed it.
+    if (prev?.[0] === "buyPrompt") return;
+    const me = game.me;
+    if (!me) return;
+    game.selectTile(me.position);
+  },
+);
+
 const playerCount = computed(() => game.room?.players.length ?? 0);
 const isHostMe = computed(() => {
   if (!game.room || !game.myPlayerId) return false;
@@ -960,13 +981,20 @@ void t;
         </button>
         <!-- Speech-bubble PNG (imgImage28) → text chat toggle. nav-home.png
              /nav-chat.png were mis-named on download; the bubble file is
-             on disk under nav-home.png. -->
+             on disk under nav-home.png. Red unread badge piggy-backs on
+             game.unreadChat so a player who's mid-board still notices
+             when an opponent typed. -->
         <button
           class="room-topbar__nav-btn"
           :aria-label="locale === 'ru' ? 'Чат' : 'Chat'"
           @click="toggleChat"
         >
           <img src="/figma/room/nav-home.webp" alt="" />
+          <span
+            v-if="game.unreadChat > 0"
+            class="room-topbar__nav-badge"
+            aria-hidden="true"
+          >{{ game.unreadChat > 9 ? '9+' : game.unreadChat }}</span>
         </button>
         <!-- Red × leaves the match (Figma 133:13821 / 133:14512). Hamburger
              was the old design's "menu" stand-in but the only entry it had
@@ -1663,14 +1691,42 @@ void t;
      whole topbar — that's where it was landing because no ancestor
      between had `position: relative`. */
   position: relative;
+  /* Press-and-hold on the voice button used to surface iOS' text-
+     selection / "Copy" callout. Disable selection + the long-press
+     callout so push-to-talk feels like a button, not a piece of text. */
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
 }
 .room-topbar__nav-btn img {
   width: 58px;
   height: 58px;
   object-fit: contain;
   pointer-events: none;
+  -webkit-user-drag: none;
 }
 .room-topbar__nav-btn:active { transform: scale(0.92); }
+/* Unread badge for the chat button — sits in the top-right corner and
+   wraps the count if 2+ messages came in while the panel was closed.
+   Mirrors `.voice-dot` placement so both anchors read consistently. */
+.room-topbar__nav-badge {
+  position: absolute;
+  top: 0;
+  right: -2px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: #ef4444;
+  color: #fff;
+  font-family: 'Unbounded', sans-serif;
+  font-weight: 800;
+  font-size: 10px;
+  line-height: 18px;
+  text-align: center;
+  pointer-events: none;
+  box-shadow: 0 0 0 2px #f0e4c8;
+}
 /* Voice status dot — sits in the top-right of the voice nav button.
    Always rendered so the user has an affordance signaling the button is
    the voice control: subtle grey (idle), red (joined+muted), pulsing
