@@ -746,24 +746,14 @@ function openCurrentTileInfo() {
   game.selectTile(pos);
 }
 
-// Leaderboard: sort by total worth (cash + property face value) so rich-
-// in-assets players still rank high, but DISPLAY pure cash next to the
-// money icon — same metric as the budget pill and the current-turn card,
-// so the numbers match across the screen.
+// Leaderboard: sort by cash to match the number we display. Earlier
+// version sorted by net worth (cash + property face value) but kept the
+// pill showing pure cash — playtester reported the rows looked
+// out-of-order because the visible $-numbers weren't monotonic. Same
+// metric for sort and display fixes that.
 const leaderboard = computed(() => {
   const r = game.room;
   if (!r) return [] as { id: string; name: string; cash: number; color: string; avatar?: string; token: string }[];
-  const propValue = (pid: string): number => {
-    let sum = 0;
-    for (const op of Object.values(r.properties)) {
-      if (op.ownerId !== pid) continue;
-      const tile = BOARD[op.tileIndex];
-      if (tile && (tile.kind === "street" || tile.kind === "railroad" || tile.kind === "utility")) {
-        sum += tile.price;
-      }
-    }
-    return sum;
-  };
   return r.players
     .map((p) => ({
       id: p.id,
@@ -772,9 +762,8 @@ const leaderboard = computed(() => {
       avatar: p.avatar,
       token: p.token,
       color: p.color,
-      worth: p.cash + propValue(p.id),
     }))
-    .sort((a, b) => b.worth - a.worth);
+    .sort((a, b) => b.cash - a.cash);
 });
 
 // Leaderboard row → player profile modal. Carousel cards are purely
