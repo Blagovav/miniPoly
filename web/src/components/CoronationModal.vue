@@ -526,7 +526,6 @@ watch(
   max-width: 320px;
   height: 100%;
   object-fit: contain;
-  filter: drop-shadow(0 12px 24px rgba(0, 0, 0, 0.45));
 }
 
 /* ─── Title block ─── */
@@ -547,7 +546,6 @@ watch(
   font-size: 22px;
   line-height: 24px;
   color: #fffdf5;
-  text-shadow: 0 0 24px rgba(255, 255, 255, 0.4);
 }
 .cor-title__rank {
   margin: 0;
@@ -556,19 +554,15 @@ watch(
   font-size: 40px;
   line-height: 42px;
   color: #fcc101;
-  text-shadow: 0 0 40px rgba(252, 193, 1, 0.7);
 }
 .cor-card--rank-2 .cor-title__rank {
   color: #c3d6ed;
-  text-shadow: 0 0 40px rgba(195, 214, 237, 0.7);
 }
 .cor-card--rank-3 .cor-title__rank {
   color: #cd7f32;
-  text-shadow: 0 0 40px rgba(205, 127, 50, 0.7);
 }
 .cor-card--rank-4 .cor-title__rank {
   color: #d8d8d8;
-  text-shadow: 0 0 24px rgba(216, 216, 216, 0.4);
 }
 
 /* ─── Reward (crown + +N) ─── */
@@ -590,7 +584,6 @@ watch(
   font-size: 24px;
   line-height: 26px;
   color: #fffdf5;
-  text-shadow: 0 0 24px rgba(255, 255, 255, 0.4);
 }
 
 /* ─── Leaderboard ─── */
@@ -627,8 +620,6 @@ watch(
   border: 1px solid rgba(0, 0, 0, 0.2);
   flex-shrink: 0;
   position: relative;
-  /* Subtle inner shadow at the bottom — same trick as Lobby cards. */
-  box-shadow: inset 0 -4px 0 rgba(0, 0, 0, 0.2);
 }
 .cor-row--rank-1 {
   background: linear-gradient(
@@ -684,7 +675,6 @@ watch(
   height: 50px;
   object-fit: contain;
   margin-top: -2px;
-  filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.35));
 }
 .cor-row__trophy-num {
   width: 32px;
@@ -698,7 +688,6 @@ watch(
   font-weight: 700;
   font-size: 14px;
   color: #fff;
-  text-shadow: 0.4px 0.4px 0 rgba(0, 0, 0, 0.6);
 }
 
 .cor-row__cap {
@@ -727,7 +716,6 @@ watch(
   font-size: 14px;
   line-height: 16px;
   color: #fff;
-  text-shadow: 0.4px 0.4px 0 rgba(0, 0, 0, 0.6);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -755,7 +743,6 @@ watch(
    flip the colour back to white. */
 .cor-row--rank-4 .cor-row__stat {
   color: #fff;
-  text-shadow: 0.4px 0.4px 0 rgba(0, 0, 0, 0.6);
 }
 
 /* ─── Sticky CTAs at the bottom of the card ─── */
@@ -780,7 +767,9 @@ watch(
   line-height: 26px;
   color: #fff;
   cursor: pointer;
-  text-shadow: 1.4px 1.4px 0 rgba(0, 0, 0, 0.6);
+  /* Inset bottom shadow on buttons is intentional: it's the 3D press
+     affordance (lighter on press), not a decorative shadow. Kept on
+     purpose alongside the deshadowing of the rest of the modal. */
   box-shadow: inset 0 -6px 0 rgba(0, 0, 0, 0.2);
   transition: transform 120ms ease, filter 120ms ease, box-shadow 120ms ease;
 }

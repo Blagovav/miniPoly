@@ -15,7 +15,7 @@ const game = useGameStore();
 
 type Toast = {
   id: string;
-  dir: "in" | "out" | "buy" | "forced" | "auction" | "info"; // color/glyph variant
+  dir: "in" | "out" | "buy" | "forced" | "auction" | "info" | "system"; // color/glyph variant
   amount: number;
   tileName: string;
   counterparty: string;
@@ -27,6 +27,9 @@ type Toast = {
   // Sub-kind so the "info" dir can pick the right title (a buy and a rent
   // both come through as info, but their wording differs).
   infoKind?: "buy" | "rent";
+  // Sub-kind for player-lifecycle "system" toasts so the same dir can
+  // render distinct titles for "left" vs "went bankrupt".
+  systemKind?: "left" | "bankrupt";
 };
 
 const active = ref<Toast | null>(null);
@@ -165,6 +168,58 @@ watch(
   },
 );
 
+// Player-lifecycle toasts: surface "X left" / "X went bankrupt" so
+// every player sees who's still in the running. Server doesn't emit
+// structured events for these — just plain log strings — so we diff the
+// players list against a snapshot stored across renders. Skipped on the
+// first non-empty render to avoid spamming on reconnect.
+type LifecycleSnap = { name: string; bankrupt: boolean };
+const lifecycleSnap = new Map<string, LifecycleSnap>();
+let lifecycleSeeded = false;
+
+function emitSystemToast(name: string, kind: "left" | "bankrupt") {
+  const t: Toast = {
+    id: `system-${kind}-${name}-${Date.now()}`,
+    dir: "system",
+    amount: 0,
+    tileName: "",
+    counterparty: name,
+    systemKind: kind,
+  };
+  if (game.animatingPlayerId || game.rolling) pendingToast = t;
+  else show(t);
+}
+
+watch(
+  () => game.room?.players,
+  (players) => {
+    if (!players) return;
+    const next = new Map<string, LifecycleSnap>();
+    for (const p of players) next.set(p.id, { name: p.name, bankrupt: p.bankrupt });
+    if (!lifecycleSeeded) {
+      lifecycleSeeded = true;
+      for (const [k, v] of next) lifecycleSnap.set(k, v);
+      return;
+    }
+    // Departures — id was in prev snapshot, gone from current room.
+    for (const [id, prev] of lifecycleSnap) {
+      if (!next.has(id)) emitSystemToast(prev.name, "left");
+    }
+    // Bankruptcies — bankrupt flag flipped false → true. Skipped if me
+    // is the bankrupted player; the existing bankruptcy / coronation
+    // modals already cover that case more emphatically than a toast.
+    for (const [id, cur] of next) {
+      const prev = lifecycleSnap.get(id);
+      if (prev && !prev.bankrupt && cur.bankrupt && id !== game.myPlayerId) {
+        emitSystemToast(cur.name, "bankrupt");
+      }
+    }
+    lifecycleSnap.clear();
+    for (const [k, v] of next) lifecycleSnap.set(k, v);
+  },
+  { deep: true },
+);
+
 // Auction wrap-up toast: surfaces "X won Y for $Z" the moment the
 // auction modal closes. Server logs the win but doesn't emit structured
 // `txn` data for it, so the regular log-watcher path can't pick it up.
@@ -207,10 +262,10 @@ function show(t: Toast) {
     if (t.actorId && t.actorId === game.myPlayerId) playBuy();
     else playCashIn();
   }
-  else if (t.dir === "info") {
-    // Third-party events (someone else bought / paid rent to someone
-    // else) — silent. With 4–6 players, sound on every txn would be a
-    // constant drumbeat; the visual toast alone is enough.
+  else if (t.dir === "info" || t.dir === "system") {
+    // Third-party / lifecycle events — silent. With 4–6 players, sound
+    // on every txn would be a constant drumbeat; the visual toast alone
+    // is enough.
   }
   else playCashIn();
   if (clearTimer) clearTimeout(clearTimer);
@@ -276,6 +331,23 @@ const label = computed(() => {
       sign: "" as const,
     };
   }
+  if (t.dir === "system") {
+    if (t.systemKind === "bankrupt") {
+      return {
+        title: isRu ? `${t.counterparty} обанкротился` : `${t.counterparty} went bankrupt`,
+        sub: "",
+        amount: "",
+        sign: "" as const,
+      };
+    }
+    // left
+    return {
+      title: isRu ? `${t.counterparty} покинул игру` : `${t.counterparty} left the game`,
+      sub: "",
+      amount: "",
+      sign: "" as const,
+    };
+  }
   return {
     title: isRu ? `Аренда ← ${t.counterparty}` : `Rent ← ${t.counterparty}`,
     sub: t.tileName,
@@ -296,7 +368,7 @@ const label = computed(() => {
     >
       <span class="txn-toast__badge">{{ label.title }}</span>
       <span v-if="label.sub" class="txn-toast__sub">{{ label.sub }}</span>
-      <span class="txn-toast__amt">
+      <span v-if="label.amount" class="txn-toast__amt">
         <span class="txn-toast__sign">{{ label.sign }}</span>
         <img class="txn-toast__icon" src="/figma/room/icon-money.webp" alt="" aria-hidden="true"/>
         {{ active.amount }}
@@ -357,6 +429,9 @@ const label = computed(() => {
    the saturated green/red/blue toasts that fire when the player is
    personally involved. */
 .txn-toast--info    .txn-toast__badge { background: #6b7280; }
+/* Darker slate for player-lifecycle events (left / bankrupt). Reads as
+   "out of the running" without being alarmist red. */
+.txn-toast--system  .txn-toast__badge { background: #4b5563; }
 
 .txn-toast__sub {
   flex: 1 1 0;
