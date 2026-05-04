@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, onBeforeUnmount, ref, watch } from "vue";
+import { computed, onMounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { useI18n } from "vue-i18n";
 import { useTelegram } from "./composables/useTelegram";
@@ -9,7 +9,6 @@ import Icon from "./components/Icon.vue";
 import LoadingScreen from "./components/LoadingScreen.vue";
 import MaintenanceScreen from "./components/MaintenanceScreen.vue";
 import RouteLoader from "./components/RouteLoader.vue";
-import TourOverlay from "./components/TourOverlay.vue";
 import {
   preloadAll,
   HOME_ASSETS,
@@ -17,8 +16,6 @@ import {
   ROOM_ASSETS,
   CREATE_ASSETS,
 } from "./utils/assets";
-
-const TOUR_KEY = "tourV1";
 
 const router = useRouter();
 const route = useRoute();
@@ -33,16 +30,6 @@ const game = useGameStore();
 // the splash from flashing sub-perceptibly when the API is hot.
 const booting = ref(true);
 const MIN_BOOT_MS = 700;
-
-// First-time tour. Fires after boot completes on the very first session;
-// dismissing (or finishing) writes to localStorage so it never re-appears
-// on its own. Users can re-open via the welcome hero's "?" pill.
-const showTour = ref(false);
-function openTour() { showTour.value = true; }
-function closeTour() {
-  showTour.value = false;
-  try { localStorage.setItem(TOUR_KEY, "1"); } catch {}
-}
 
 async function runBoot() {
   const startedAt = Date.now();
@@ -91,25 +78,7 @@ async function runBoot() {
 
   if (targetRoom) {
     router.replace({ name: "room", params: { id: targetRoom } });
-    return; // skip tour when deep-linking into a match
   }
-
-  // First-session tour — only runs if we haven't already dismissed it.
-  try {
-    if (!localStorage.getItem(TOUR_KEY)) {
-      showTour.value = true;
-    }
-  } catch { /* localStorage disabled — skip */ }
-}
-
-// Expose globally so HomeView / any screen can re-open the tour via
-// window.dispatchEvent(new CustomEvent('open-tour')). Keeps App free of
-// child prop-drilling for a tiny feature. App.vue is the root and never
-// unmounts in production, but cleanup matters for HMR / Vitest where
-// the same listener would otherwise pile up across reloads.
-if (typeof window !== "undefined") {
-  window.addEventListener("open-tour", openTour);
-  onBeforeUnmount(() => window.removeEventListener("open-tour", openTour));
 }
 
 onMounted(() => {
@@ -209,7 +178,6 @@ function go(routeName: string) {
     </main>
   </div>
   <RouteLoader />
-  <TourOverlay :open="showTour" @close="closeTour" />
 </template>
 
 <style>
