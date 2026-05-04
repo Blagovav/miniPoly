@@ -826,7 +826,10 @@ function mapBtnClass(m: MapEntry) {
   background: #000;
   border: 1px solid #e069d0;
   border-radius: 24px;
-  padding: 14px 0 14px 14px;
+  /* No outer padding — the chest art column needs to bleed all the way
+     to the top, bottom, and right card edges. .shop2__chest-content
+     re-introduces breathing room only on the text side. */
+  padding: 0;
   margin-bottom: 32px;
   overflow: hidden;
 }
@@ -836,6 +839,7 @@ function mapBtnClass(m: MapEntry) {
   flex-direction: column;
   gap: 10px;
   min-width: 0;
+  padding: 14px 0 14px 14px;
   /* z-index above the chest art so the floating-cap overflow doesn't
      accidentally catch taps meant for the chips / CTA. */
   position: relative;

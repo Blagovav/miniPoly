@@ -11,6 +11,7 @@ import { useRoute, useRouter } from "vue-router";
 import { useTelegram } from "../composables/useTelegram";
 import { playYourTurn } from "../composables/useSounds";
 import { useShake } from "../composables/useShake";
+import { useSettings } from "../composables/useSettings";
 import { useWs } from "../composables/useWs";
 import { useGameStore } from "../stores/game";
 import Board from "../components/Board.vue";
@@ -52,10 +53,14 @@ const { initData, userName, haptic, notify, setClosingConfirmation } = useTelegr
 const game = useGameStore();
 const ws = useWs();
 const shake = useShake();
-// One-shot: first roll tap requests DeviceMotion permission on iOS;
-// from then on the attached listener keeps firing every time the phone
-// gets a sharp jolt and it's our turn to roll.
-let shakeAttempted = false;
+const settings = useSettings();
+// Shake-to-roll is opt-in via Settings → Motion controls. We don't
+// auto-attach the DeviceMotion listener on first roll any more — iOS
+// would surface a "let this site read motion data" permission prompt
+// the moment the user pressed BROSIT' KUBIKI, which read as scary
+// (playtester 2026-05-04: "выходит будто оно подтверждение и отпугнет
+// людей"). Settings now guards a one-time permission request flow.
+let shakeStartedAt = 0;
 // Voice chat (WebRTC mesh over WS signalling). Mic acquired only after first tap.
 const voice = useVoice(ws, () => game.myPlayerId);
 
@@ -258,22 +263,35 @@ function rollIfAllowed() {
 }
 function roll() {
   rollIfAllowed();
-  if (!shakeAttempted) {
-    shakeAttempted = true;
-    // Shake fires any time the phone moves enough — guard the
-    // shake-driven roll so a buzz on the metro during an opponent's
-    // turn doesn't trigger haptics + a doomed WS send. Server would
-    // reject the message anyway; this just kills the noise.
-    shake.start(() => {
-      const phase = game.room?.phase;
-      const canRoll =
-        (phase === "rolling" && game.isMyTurn && !game.rolling) ||
-        (phase === "preRoll" && game.isMyPreRoll && !game.rolling);
-      if (!canRoll) return;
-      rollIfAllowed();
-    });
-  }
 }
+
+/* Shake-to-roll listener is attached only when the user has explicitly
+ * enabled "Motion controls" in Settings. We watch the toggle so a user
+ * who flips it on/off mid-session doesn't have to leave the room to
+ * see the change take effect. The first attach will surface the iOS
+ * permission prompt — the SettingsView already shows an explanation
+ * sheet before that happens, so the prompt no longer feels uninvited. */
+watch(
+  () => settings.value.motion,
+  (on) => {
+    if (on) {
+      if (shakeStartedAt) return;
+      shakeStartedAt = Date.now();
+      shake.start(() => {
+        const phase = game.room?.phase;
+        const canRoll =
+          (phase === "rolling" && game.isMyTurn && !game.rolling) ||
+          (phase === "preRoll" && game.isMyPreRoll && !game.rolling);
+        if (!canRoll) return;
+        rollIfAllowed();
+      });
+    } else if (shakeStartedAt) {
+      shake.stop();
+      shakeStartedAt = 0;
+    }
+  },
+  { immediate: true },
+);
 function buy() {
   haptic("medium");
   ws.send({ type: "buy" });

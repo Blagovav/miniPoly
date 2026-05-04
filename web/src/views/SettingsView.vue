@@ -17,23 +17,31 @@ const L = computed(() => isRu.value
       title: "Настройки",
       sound: "Звук",
       vibration: "Вибрация",
-      motion: "Управлять движением",
+      motion: "Тряска для броска",
       language: "Язык игры",
       langTitle: "Язык игры",
       langRu: "Русский",
       langEn: "English",
       backAria: "Закрыть",
+      motionTitle: "Включить тряску?",
+      motionBody: "Сейчас iOS попросит доступ к датчикам движения. Это нужно только чтобы кубики бросались встряхиванием телефона — мы не отправляем данные о движении на сервер и не можем по ним определить ваше местоположение.",
+      motionEnable: "Включить",
+      motionCancel: "Отмена",
     }
   : {
       title: "Settings",
       sound: "Sound",
       vibration: "Vibration",
-      motion: "Motion controls",
+      motion: "Shake to roll",
       language: "Language",
       langTitle: "Language",
       langRu: "Русский",
       langEn: "English",
       backAria: "Close",
+      motionTitle: "Enable shake-to-roll?",
+      motionBody: "iOS will ask for access to motion sensors. We only use this to roll the dice when you shake your phone — motion data never leaves the device and can't be used to track your location.",
+      motionEnable: "Enable",
+      motionCancel: "Cancel",
     });
 
 const langLabel = computed(() => locale.value === "ru" ? L.value.langRu : L.value.langEn);
@@ -45,9 +53,38 @@ function close() {
   router.back();
 }
 
-function toggle(key: "sound" | "vibration" | "motion") {
+function toggle(key: "sound" | "vibration") {
   haptic("light");
   settings.value[key] = !settings.value[key];
+}
+
+/* Motion is a special case: enabling triggers the iOS DeviceMotion
+ * permission prompt, which scares people if it shows up uninvited.
+ * Show an explanation sheet first so the prompt arrives in a context
+ * the user has already opted into. Disabling can flip immediately —
+ * we don't need consent to stop listening. */
+const motionConfirmOpen = ref(false);
+function toggleMotion() {
+  haptic("light");
+  if (settings.value.motion) {
+    settings.value.motion = false;
+    return;
+  }
+  motionConfirmOpen.value = true;
+}
+function confirmMotionEnable() {
+  haptic("medium");
+  motionConfirmOpen.value = false;
+  // Flip the setting — RoomView's watcher picks this up and calls
+  // shake.start(), which is what surfaces the iOS permission prompt.
+  // If the user denies the prompt we leave the toggle on; useShake
+  // resolves false but the listener never attaches, so the toggle
+  // stays cosmetic until they re-grant via OS settings.
+  settings.value.motion = true;
+}
+function cancelMotionEnable() {
+  haptic("light");
+  motionConfirmOpen.value = false;
 }
 
 function openLang() {
@@ -133,7 +170,7 @@ onUnmounted(() => {
       <button
         type="button"
         class="settings-v2__row"
-        @click="toggle('motion')"
+        @click="toggleMotion"
       >
         <span class="settings-v2__row-label">
           <img class="settings-v2__icon" src="/figma/settings/motion.webp" alt="" />
@@ -172,6 +209,37 @@ onUnmounted(() => {
         </span>
       </button>
     </div>
+
+    <!-- ── Motion-permission explainer. Surfaces BEFORE the iOS
+         DeviceMotion prompt so the user knows what's about to happen
+         and why it's safe — playtester 2026-05-04 reported the bare
+         OS prompt felt intrusive. Tapping Enable flips the setting,
+         which makes RoomView call shake.start() → triggers the OS
+         dialog from a user-gesture context. -->
+    <transition name="lang-fade">
+      <div
+        v-if="motionConfirmOpen"
+        class="lang-backdrop"
+        @click.self="cancelMotionEnable"
+      >
+        <div class="lang-card lang-card--explain">
+          <h2 class="lang-card__title">{{ L.motionTitle }}</h2>
+          <p class="lang-card__body">{{ L.motionBody }}</p>
+          <div class="lang-card__actions">
+            <button
+              type="button"
+              class="lang-action lang-action--ghost"
+              @click="cancelMotionEnable"
+            >{{ L.motionCancel }}</button>
+            <button
+              type="button"
+              class="lang-action lang-action--primary"
+              @click="confirmMotionEnable"
+            >{{ L.motionEnable }}</button>
+          </div>
+        </div>
+      </div>
+    </transition>
 
     <!-- ── Language picker (Figma 138:16665). Bottom-anchored parchment
          card with radio rows + a separate close-back FAB below. -->
@@ -453,6 +521,48 @@ onUnmounted(() => {
   transition: opacity 160ms ease, transform 160ms ease;
 }
 .lang-radio--on .lang-radio__dot { opacity: 1; transform: scale(1); }
+
+/* Variant of the bottom sheet used for the motion-permission explainer:
+   smaller body copy + two-up action buttons instead of a radio list. */
+.lang-card--explain { gap: 16px; }
+.lang-card__body {
+  margin: 0;
+  width: 100%;
+  text-align: center;
+  font-family: 'Golos Text', sans-serif;
+  font-weight: 500;
+  font-size: 13px;
+  line-height: 18px;
+  color: rgba(0, 0, 0, 0.7);
+}
+.lang-card__actions {
+  display: flex;
+  gap: 8px;
+  width: 100%;
+}
+.lang-action {
+  flex: 1;
+  height: 44px;
+  border-radius: 999px;
+  border: none;
+  font-family: 'Unbounded', sans-serif;
+  font-weight: 800;
+  font-size: 13px;
+  line-height: 16px;
+  cursor: pointer;
+  transition: transform 120ms ease, filter 120ms ease;
+}
+.lang-action:active { transform: scale(0.98); }
+.lang-action--ghost {
+  background: #fff;
+  color: #000;
+  border: 1px solid rgba(0, 0, 0, 0.16);
+}
+.lang-action--primary {
+  background: linear-gradient(104deg, #005eff 0%, #6f4bff 100%);
+  color: #fff;
+  box-shadow: inset 0 2px 8px rgba(255, 255, 255, 0.32);
+}
 
 .lang-close {
   margin-top: 32px;
