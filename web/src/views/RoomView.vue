@@ -602,11 +602,8 @@ const turnSlots = computed<{ key: string; player: Player; role: "prev" | "curren
   const cur  = r.players[i];
   const next = r.players[(i + 1) % n];
   // 3+ players: key by player.id so Vue's TransitionGroup FLIP slides
-  // persistent cards (current→prev, next→current, fresh next fades in).
-  // 2-player: prev === next — duplicate player.id keys would crash Vue, so
-  // prefix with role to keep them unique. FLIP persistence is lost but the
-  // visual stays a 3-slot banner with the red current card centered, which
-  // is what the designer intended.
+  // persistent cards (current → prev, next → current, fresh next fades
+  // in from the right, old prev fades out to the left).
   if (n >= 3) {
     return [
       { key: prev.id, player: prev, role: "prev" as const },
@@ -614,10 +611,21 @@ const turnSlots = computed<{ key: string; player: Player; role: "prev" | "curren
       { key: next.id, player: next, role: "next" as const },
     ];
   }
+  // 2-player: prev and next are the SAME player (circular). Player-id
+  // keys would collide, and the previously-used `prev-${id}` /
+  // `current-${id}` / `next-${id}` workaround swapped every key on
+  // every turn flip, so Vue ran an enter+leave on all three cards at
+  // once — playtester reported the slider "беспорядочно бегает". Use
+  // role-stable keys instead: cards stay mounted, only their content
+  // changes, and the `transition: background/padding/color` rule on
+  // `.turn-card` morphs the red highlight smoothly between the two
+  // seats. No FLIP slide (there's only ever two unique players to
+  // shuffle, and the centred-red-card layout is what the designer
+  // wanted regardless), but no chaotic flicker either.
   return [
-    { key: `prev-${prev.id}`,    player: prev, role: "prev" as const },
-    { key: `current-${cur.id}`,  player: cur,  role: "current" as const },
-    { key: `next-${next.id}`,    player: next, role: "next" as const },
+    { key: "slot-prev",    player: prev, role: "prev" as const },
+    { key: "slot-current", player: cur,  role: "current" as const },
+    { key: "slot-next",    player: next, role: "next" as const },
   ];
 });
 
