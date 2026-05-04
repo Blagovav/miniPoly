@@ -662,6 +662,20 @@ const currentTileInfo = computed<{ name: string; value: number | null } | null>(
   return { name, value: null };
 });
 
+// Open the full TileInfoModal for whatever tile the active player
+// currently stands on. Bound to the cream pill below the turn slider —
+// playtester wanted to read the full rent ladder + owner banner + own-
+// the-tile actions without waiting for the property to come around.
+function openCurrentTileInfo() {
+  const r = game.room;
+  const cp = game.currentPlayer;
+  if (!r || !cp) return;
+  const animPos = game.animatedPositions?.[cp.id];
+  const pos = typeof animPos === "number" ? animPos : cp.position;
+  haptic("light");
+  game.selectTile(pos);
+}
+
 // Leaderboard: sort by total worth (cash + property face value) so rich-
 // in-assets players still rank high, but DISPLAY pure cash next to the
 // money icon — same metric as the budget pill and the current-turn card,
@@ -1103,14 +1117,22 @@ void t;
              player stands on. Per the latest Figma it's a cream/rounded
              pill below the slider, NOT folded into a card. Sized big
              enough that long Russian names ("Пенсильвания-авеню") never
-             truncate. Hidden during pre-roll. -->
-        <div v-if="currentTileInfo && !isPreRoll" class="tile-info">
+             truncate. Hidden during pre-roll. Tap → open TileInfoModal
+             for that tile (rent table, owner banner, build/mortgage
+             actions if it's mine).  -->
+        <button
+          v-if="currentTileInfo && !isPreRoll"
+          type="button"
+          class="tile-info tile-info--btn"
+          :aria-label="locale === 'ru' ? `Открыть карточку ${currentTileInfo.name}` : `Open ${currentTileInfo.name} info`"
+          @click="openCurrentTileInfo"
+        >
           <span class="tile-info__name">{{ currentTileInfo.name }}</span>
           <span v-if="currentTileInfo.value !== null" class="tile-info__value">
             <img src="/figma/room/icon-money.webp" alt="" />
             {{ currentTileInfo.value }}
           </span>
-        </div>
+        </button>
 
         <!-- Leaderboard — tap a row to open that player's profile/assets.
              Per Figma 32:2037: 24px medal on the left, coloured pill with
@@ -1997,6 +2019,22 @@ void t;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
+}
+/* Tap target — same visual as the static plate, just made an interactive
+   button. Reset the default <button> chrome (no border, no background-
+   change-on-hover, full text-align) so it looks identical to the old
+   div, then add an active-state press for tactile feedback. */
+.tile-info--btn {
+  width: 100%;
+  border: none;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: transform 80ms ease, filter 120ms ease;
+}
+.tile-info--btn:active {
+  transform: translateY(1px);
+  filter: brightness(0.96);
 }
 .tile-info__name {
   font-family: 'Unbounded', sans-serif;

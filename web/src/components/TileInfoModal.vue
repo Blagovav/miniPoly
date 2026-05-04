@@ -503,15 +503,18 @@ const ownerTokenId = computed<TokenArtId>(() => tokenArtFor(owner.value?.token |
      property card. RouteLoader is 90, TourOverlay is 600 — modal
      fits cleanly between Chat and Tour. */
   z-index: 130;
-  /* Designer feedback 2026-05-02 #5.18 — in-game popups dock to bottom
-     76px from figma 75:5661 instead of centring, so the player keeps
-     the board visible above the popup. */
+  /* Bottom-anchored per Figma 75:5661 (designer feedback 2026-05-02
+     #5.18), but only with the safe-area inset — NOT the +76 px the
+     previous version added. With the long-rent street card (Базовая
+     20, Монополия 40, 1–4 дома, Отель + Предложить-обмен button)
+     the +76 pushed the card off-screen on small viewports. The
+     `.rent-table` now scrolls internally if it would overflow. */
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: flex-end;
   padding: 16px;
-  padding-bottom: calc(76px + var(--sab, 0px) + var(--csab, 0px));
+  padding-bottom: max(16px, var(--sab, 0px));
 }
 
 .info-wrap {
@@ -521,7 +524,10 @@ const ownerTokenId = computed<TokenArtId>(() => tokenArtFor(owner.value?.token |
   display: flex;
   flex-direction: column;
   align-items: center;
-  max-height: calc(100vh - 32px - var(--csab, 0px));
+  /* Hard-cap so a tall card with full rent ladder + actions never
+     extends past the visible viewport; .rent-table soaks up the
+     overflow with its own scroll. */
+  max-height: calc(100dvh - 32px - var(--sab, 0px));
 }
 
 .info-card {
@@ -684,10 +690,15 @@ const ownerTokenId = computed<TokenArtId>(() => tokenArtFor(owner.value?.token |
 
 /* ── Rent table — Figma 32:3273 / 61:615: clean rows with thin
    separators on a transparent surface (lets the parchment card
-   bleed through) instead of the previous boxed/alternating fill. */
+   bleed through) instead of the previous boxed/alternating fill.
+   Capped at ~4 rows visible (185px) and scrolled internally so a
+   full street ladder (Базовая → Монополия → 1–4 дома → Отель)
+   doesn't push the rest of the card past the viewport edge. */
 .rent-table {
   border-radius: 12px;
-  overflow: hidden;
+  max-height: 185px;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
 }
 .rent-row {
   display: flex;
