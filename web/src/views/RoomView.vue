@@ -1154,21 +1154,14 @@ void t;
                 : undefined"
             >
               <span class="turn-card__avatar">
-                <!-- Prefer the player's Telegram photo when present
-                     (same wiring as 3.9 in Lobby). Falls back to the
-                     heraldic token for bots and accounts with no
-                     TG photo set. Playtester 2026-05-03 — turn-slider
-                     was always rendering the token even when we have
-                     a real avatar URL. -->
+                <!-- Always show the cap figurine here — playtester
+                     2026-05-04: "у меня показана аватарка во всех
+                     местах, но нет какая у меня фишка". The Telegram
+                     photo lives in the leaderboard row instead, where
+                     "who's the human behind this seat" is the question
+                     being answered. The turn slider answers "which
+                     pawn is up next" so the cap is the right glyph. -->
                 <img
-                  v-if="slot.player.avatar"
-                  class="turn-card__avatar-photo"
-                  :src="slot.player.avatar"
-                  alt=""
-                  referrerpolicy="no-referrer"
-                />
-                <img
-                  v-else
                   class="turn-card__avatar-cap"
                   :src="capImgSrc(slot.player.token)"
                   alt=""
