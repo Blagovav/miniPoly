@@ -9,7 +9,7 @@ const { locale } = useI18n();
 const router = useRouter();
 const route = useRoute();
 const inv = useInventoryStore();
-const { haptic, notify, userName, setUserName, tg, initData } = useTelegram();
+const { haptic, userName, setUserName, tg, initData } = useTelegram();
 
 const isRu = computed(() => locale.value === "ru");
 const L = computed(() => isRu.value
@@ -22,7 +22,6 @@ const L = computed(() => isRu.value
       history: "История",
       shop:    "Магазин",
       profile: "Профиль",
-      daily:   "Ежедневный бонус",
       settingsAria: "Настройки",
       playerFallback: "Игрок",
       rejoinEyebrow: "Активная партия",
@@ -49,7 +48,6 @@ const L = computed(() => isRu.value
       history: "History",
       shop:    "Shop",
       profile: "Profile",
-      daily:   "Daily bonus",
       settingsAria: "Settings",
       playerFallback: "Player",
       rejoinEyebrow: "Active match",
@@ -67,10 +65,6 @@ const L = computed(() => isRu.value
       leaveConfirmYes: "LEAVE",
       leaveConfirmNo: "BACK TO GAME",
     });
-
-// ── Daily bonus toast (unchanged from prior design) ──
-const bonusAmount = ref(0);
-const bonusToast = ref(false);
 
 // ── Rejoin banner — surfaces if a roomId was saved in localStorage within
 // the last REJOIN_TTL_MS. After 5 min the room has almost certainly been
@@ -94,13 +88,10 @@ function loadActiveRoom() {
 }
 
 onMounted(() => {
-  const got = inv.claimDailyBonus();
-  if (got > 0) {
-    bonusAmount.value = got;
-    bonusToast.value = true;
-    notify("success");
-    setTimeout(() => (bonusToast.value = false), 3500);
-  }
+  // Daily-bonus coins are still credited silently — the popup that used
+  // to surface here ("ЕЖЕДНЕВНЫЙ БОНУС +1000") was UX clutter and the
+  // user asked for it removed. Coins arrive in inventory regardless.
+  inv.claimDailyBonus();
   loadActiveRoom();
   // index.html и style.css красят html/body в parchment #f0e4c8.
   // Для нового синего редизайна главной переопределяем фон на уровне
@@ -346,16 +337,6 @@ const statusPopupSub = computed(() =>
         </button>
       </nav>
     </div>
-
-    <transition name="bonus">
-      <div v-if="bonusToast" class="bonus-toast">
-        <div class="bonus-toast__icon">🎁</div>
-        <div>
-          <div class="bonus-toast__title">{{ L.daily }}</div>
-          <div class="bonus-toast__val">+{{ bonusAmount }} ◈</div>
-        </div>
-      </div>
-    </transition>
 
     <!-- ── Auto-close status popups (Figma 133:15574 / 133:5992). Rendered
          over the welcome screen because there's nothing left to show on the
@@ -853,38 +834,9 @@ const statusPopupSub = computed(() =>
 }
 .home-v2__nav-item:active { transform: scale(0.92); }
 
-/* ── Bonus toast ── */
-.bonus-toast {
-  position: fixed;
-  top: calc(12px + var(--tg-safe-area-inset-top, 0px));
-  left: 50%;
-  transform: translateX(-50%);
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 12px 18px;
-  background: #fff;
-  border-radius: 16px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
-  color: #000;
-  z-index: 90;
-}
-.bonus-toast__icon { font-size: 28px; }
-.bonus-toast__title {
-  font-family: 'Unbounded', sans-serif;
-  font-weight: 700;
-  font-size: 10px;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: rgba(0, 0, 0, 0.6);
-}
-.bonus-toast__val {
-  font-weight: 700;
-  font-size: 18px;
-  color: #0d68db;
-  margin-top: 2px;
-  font-family: 'Golos Text', sans-serif;
-}
+/* "bonus" transition is shared with the auto-close status popup below
+   (Figma 133:15574). The .bonus-toast pill it was originally written
+   for has been removed — coins are credited silently now. */
 .bonus-enter-active, .bonus-leave-active {
   transition: transform 0.3s cubic-bezier(0.3, 1.2, 0.4, 1), opacity 0.2s;
 }
