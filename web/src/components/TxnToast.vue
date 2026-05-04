@@ -15,11 +15,18 @@ const game = useGameStore();
 
 type Toast = {
   id: string;
-  dir: "in" | "out" | "buy" | "forced" | "auction"; // color/glyph variant
+  dir: "in" | "out" | "buy" | "forced" | "auction" | "info"; // color/glyph variant
   amount: number;
   tileName: string;
   counterparty: string;
   actorId?: string; // used by auction toast to pick the right SFX for me-vs-other
+  // Set for third-party toasts so the title can render "<Actor> bought X"
+  // / "<Actor> → <Other>: rent". Empty for me-involved toasts (existing
+  // `dir`-keyed labels already encode the perspective).
+  actorName?: string;
+  // Sub-kind so the "info" dir can pick the right title (a buy and a rent
+  // both come through as info, but their wording differs).
+  infoKind?: "buy" | "rent";
 };
 
 const active = ref<Toast | null>(null);
@@ -81,6 +88,33 @@ function entryToToast(entry: GameLogEntry): Toast | null {
       amount: t.amount,
       tileName: tileName(t.tileIndex),
       counterparty: "",
+    };
+  }
+  // Third-party events — playtester wanted "all these logs shown to
+  // everyone", not just to the me-actor / me-counterparty. Surface buys
+  // and rent transfers as cream-coloured info toasts so spectators see
+  // the cash flow happening on the board. Skipped when me is involved
+  // because the cases above already render a more specific banner.
+  if (t.kind === "buy" && t.actorId !== me) {
+    return {
+      id: entry.id,
+      dir: "info",
+      amount: t.amount,
+      tileName: tileName(t.tileIndex),
+      counterparty: "",
+      actorName: playerName(t.actorId),
+      infoKind: "buy",
+    };
+  }
+  if (t.kind === "rent" && t.actorId !== me && t.counterpartyId !== me) {
+    return {
+      id: entry.id,
+      dir: "info",
+      amount: t.amount,
+      tileName: tileName(t.tileIndex),
+      counterparty: playerName(t.counterpartyId),
+      actorName: playerName(t.actorId),
+      infoKind: "rent",
     };
   }
   return null;
@@ -173,6 +207,11 @@ function show(t: Toast) {
     if (t.actorId && t.actorId === game.myPlayerId) playBuy();
     else playCashIn();
   }
+  else if (t.dir === "info") {
+    // Third-party events (someone else bought / paid rent to someone
+    // else) — silent. With 4–6 players, sound on every txn would be a
+    // constant drumbeat; the visual toast alone is enough.
+  }
   else playCashIn();
   if (clearTimer) clearTimeout(clearTimer);
   clearTimer = setTimeout(() => {
@@ -212,6 +251,27 @@ const label = computed(() => {
     return {
       title: isRu ? "Аукцион" : "Auction",
       sub: `${t.counterparty} → ${t.tileName}`,
+      amount: `◈ ${t.amount}`,
+      sign: "" as const,
+    };
+  }
+  if (t.dir === "info") {
+    if (t.infoKind === "buy") {
+      return {
+        title: isRu
+          ? `${t.actorName} купил`
+          : `${t.actorName} bought`,
+        sub: t.tileName,
+        amount: `◈ ${t.amount}`,
+        sign: "" as const,
+      };
+    }
+    // rent
+    return {
+      title: isRu
+        ? `${t.actorName} → ${t.counterparty}`
+        : `${t.actorName} → ${t.counterparty}`,
+      sub: t.tileName,
       amount: `◈ ${t.amount}`,
       sign: "" as const,
     };
@@ -292,6 +352,11 @@ const label = computed(() => {
 /* Gold for auction wins — distinct from buy (green) so the player can
    tell at a glance "this is a contested win, not a quiet purchase". */
 .txn-toast--auction .txn-toast__badge { background: #d97706; }
+/* Slate for third-party events — informational, not me-actionable. The
+   greyer hue keeps "someone else paid someone else" from competing with
+   the saturated green/red/blue toasts that fire when the player is
+   personally involved. */
+.txn-toast--info    .txn-toast__badge { background: #6b7280; }
 
 .txn-toast__sub {
   flex: 1 1 0;
@@ -322,6 +387,7 @@ const label = computed(() => {
 .txn-toast--buy .txn-toast__amt    { color: #2d7a4f; }
 .txn-toast--forced .txn-toast__amt { color: #c2410c; }
 .txn-toast--auction .txn-toast__amt { color: #b45309; }
+.txn-toast--info    .txn-toast__amt { color: #374151; }
 .txn-toast__sign {
   font-weight: 900;
 }
