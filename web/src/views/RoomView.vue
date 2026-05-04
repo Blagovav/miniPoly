@@ -301,26 +301,31 @@ function roll() {
 }
 
 /* Shake-to-roll listener is attached only when the user has explicitly
- * enabled "Motion controls" in Settings. We watch the toggle so a user
- * who flips it on/off mid-session doesn't have to leave the room to
- * see the change take effect. The first attach will surface the iOS
- * permission prompt — the SettingsView already shows an explanation
- * sheet before that happens, so the prompt no longer feels uninvited. */
+ * enabled "Motion controls" in Settings AND the room is actually about
+ * to expect a dice roll (preRoll / rolling phases). Without the phase
+ * gate, RoomView mount in the lobby fired shake.start() immediately,
+ * which surfaces the iOS DeviceMotion permission prompt on a screen
+ * that has nothing to do with rolling — playtester: «избавиться от
+ * постоянного запроса, хотя бы там где нужно». Once armed mid-game we
+ * leave the listener running until either motion is turned off or the
+ * component unmounts (room exit), so subsequent turns within the same
+ * room don't re-trigger the prompt. */
 watch(
-  () => settings.value.motion,
-  (on) => {
-    if (on) {
+  () => [settings.value.motion, game.room?.phase] as const,
+  ([on, phase]) => {
+    const isRollPhase = phase === "rolling" || phase === "preRoll";
+    if (on && isRollPhase) {
       if (shakeStartedAt) return;
       shakeStartedAt = Date.now();
       shake.start(() => {
-        const phase = game.room?.phase;
+        const ph = game.room?.phase;
         const canRoll =
-          (phase === "rolling" && game.isMyTurn && !game.rolling) ||
-          (phase === "preRoll" && game.isMyPreRoll && !game.rolling);
+          (ph === "rolling" && game.isMyTurn && !game.rolling) ||
+          (ph === "preRoll" && game.isMyPreRoll && !game.rolling);
         if (!canRoll) return;
         rollIfAllowed();
       });
-    } else if (shakeStartedAt) {
+    } else if (!on && shakeStartedAt) {
       shake.stop();
       shakeStartedAt = 0;
     }
