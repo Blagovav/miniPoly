@@ -126,6 +126,11 @@ export interface OwnedProperty {
   houses: number;
   hotel: boolean;
   mortgaged: boolean;
+  // Absolute turn index (room.turnCount) at the moment the property
+  // was last mortgaged. Used to foreclose tiles that have been sitting
+  // mortgaged for too long — see FORECLOSURE_TURNS in shared/board.ts.
+  // Cleared back to undefined on unmortgage.
+  mortgagedAtTurn?: number;
 }
 
 export type GamePhase =
@@ -238,6 +243,11 @@ export interface RoomState {
   isPublic: boolean;
   maxPlayers: number;
   settings: RoomSettings;
+  // Monotonically increasing index of how many turns have elapsed in
+  // this room (room turn boundary, not per-player). Doubles don't bump
+  // it — one player rolling twice is still one turn. Used by the
+  // mortgage-foreclosure rule (see FORECLOSURE_TURNS).
+  turnCount: number;
   players: Player[];
   currentTurn: number;
   phase: GamePhase;
