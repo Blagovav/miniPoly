@@ -152,6 +152,15 @@ export const useGameStore = defineStore("game", () => {
   function applyMessage(m: ServerMessage) {
     switch (m.type) {
       case "state":
+        // Switching rooms wipes the chat backlog — old chat would be
+        // misleading attached to a different game. Same-room reconnects
+        // (e.g. after a settings round-trip) keep the buffer so users
+        // don't lose their conversation. Playtester 2026-05-05: «зашел в
+        // настройки игры вернулся и диалоги в чате пропали».
+        if (room.value && room.value.id !== m.room.id) {
+          chat.value = [];
+          unreadChat.value = 0;
+        }
         room.value = m.room;
         break;
       case "joined":
@@ -239,8 +248,11 @@ export const useGameStore = defineStore("game", () => {
     room.value = null;
     myPlayerId.value = null;
     lastError.value = null;
-    chat.value = [];
-    unreadChat.value = 0;
+    // Chat survives reset on purpose — RoomView calls reset() on every
+    // unmount (incl. brief route trips like Settings), and wiping the
+    // backlog here made the chat appear empty after coming back. The
+    // "state" handler above clears it explicitly when the room.id
+    // changes, so a true room switch still resets cleanly.
     landedTile.value = null;
     passedGo.value = null;
     animatedPositions.value = {};
