@@ -30,6 +30,17 @@ const props = defineProps<{
   onPlayAgain?: () => void;
   onConfigure?: () => void;
   onReadyToggle?: () => void;
+  // Friend integration (Figma 166:3320 / 166:3792 / 166:4212 / 166:4614).
+  // Optional so the modal stays renderable in storybook-style previews
+  // without the live store. When `onFriendRequest` is omitted, the
+  // per-row "+" / check pills hide entirely.
+  friendIds?: Set<number>;
+  sentFriendRequests?: Set<number>;
+  onFriendRequest?: (toUserId: number) => void;
+  // Tapping a player row opens their full profile (assets, history,
+  // etc.). When omitted, the row stays inert — same fallback as the
+  // friend pill above so storybook previews keep working.
+  onProfileOpen?: (player: Player) => void;
 }>();
 
 const { locale } = useI18n();
@@ -241,6 +252,50 @@ function onReadyToggleClick() {
   if (props.onReadyToggle) props.onReadyToggle();
 }
 
+// ── In-game friend invite (Figma 166:3320 / 166:3792 / 166:4212) ───
+// Per-row "+" / check pill. Mirrors Lobby.vue's friendStateFor so the
+// state machine stays in one canonical shape across both surfaces.
+type FriendState = "self" | "bot" | "friend" | "pending" | "none";
+function friendStateFor(p: Player): FriendState {
+  if (p.isBot) return "bot";
+  if (p.id === props.myId) return "self";
+  if (props.friendIds?.has(p.tgUserId)) return "friend";
+  if (props.sentFriendRequests?.has(p.tgUserId)) return "pending";
+  return "none";
+}
+
+// Sender confirmation popup (Figma 166:3792). Tapping "+" opens it; the
+// invite isn't fired until the user confirms with «ПРИГЛАСИТЬ» — the
+// designer wants this to be a deliberate action, not a tap-and-regret
+// like the lobby's instant-send button.
+const inviteTarget = ref<Player | null>(null);
+function startInvite(p: Player) {
+  if (!props.onFriendRequest) return;
+  inviteTarget.value = p;
+}
+function cancelInvite() {
+  inviteTarget.value = null;
+}
+function confirmInvite() {
+  const p = inviteTarget.value;
+  if (!p || !props.onFriendRequest) {
+    inviteTarget.value = null;
+    return;
+  }
+  props.onFriendRequest(p.tgUserId);
+  inviteTarget.value = null;
+}
+
+// Tapping a row's avatar/name opens the existing PlayerProfileModal.
+// Bots have no real profile — and tapping yourself just to see your own
+// stats reads as noise — so both are no-ops.
+function openRowProfile(p: Player) {
+  if (!props.onProfileOpen) return;
+  if (p.isBot) return;
+  if (p.id === props.myId) return;
+  props.onProfileOpen(p);
+}
+
 // Auto-surface the "Партия готова" prompt once everyone's ready. Reset
 // the dismissed flag the moment readiness drops, so the prompt re-fires
 // on the next clean all-ready streak. Only the host ever sees it.
@@ -302,29 +357,42 @@ watch(
                 <span v-else class="cor-row__trophy-num">{{ entry.rank }}</span>
               </div>
 
-              <!-- Token (cap) -->
-              <div class="cor-row__cap">
-                <CosmeticsCaps
-                  :type="capTypeFor(entry.player.token)"
-                  :rarity="capRarityFor(entry.player.token)"
-                  :size="32"
-                />
-              </div>
-
-              <!-- Name + stats -->
-              <div class="cor-row__text">
-                <p class="cor-row__name">{{ entry.player.name }}</p>
-                <div class="cor-row__stats">
-                  <span class="cor-row__stat">
-                    <img src="/figma/room/icon-money.webp" alt=""/>
-                    {{ fmt(entry.player.cash) }}
-                  </span>
-                  <span class="cor-row__stat">
-                    <img src="/figma/room/icon-chair.webp" alt=""/>
-                    {{ entry.propertyCount }}
-                  </span>
+              <!-- Tap target — cap + name + stats. Wrapped in a button so
+                   tapping the avatar/name opens the player's profile while
+                   the trophy column and the right-side friend pill keep
+                   their own click semantics. Inert for bots / self. -->
+              <button
+                type="button"
+                class="cor-row__main"
+                :class="{ 'cor-row__main--inert': !onProfileOpen || entry.player.isBot || entry.player.id === myId }"
+                :disabled="!onProfileOpen || entry.player.isBot || entry.player.id === myId"
+                :aria-label="isRu ? `Профиль ${entry.player.name}` : `${entry.player.name}'s profile`"
+                @click="openRowProfile(entry.player)"
+              >
+                <!-- Token (cap) -->
+                <div class="cor-row__cap">
+                  <CosmeticsCaps
+                    :type="capTypeFor(entry.player.token)"
+                    :rarity="capRarityFor(entry.player.token)"
+                    :size="32"
+                  />
                 </div>
-              </div>
+
+                <!-- Name + stats -->
+                <div class="cor-row__text">
+                  <p class="cor-row__name">{{ entry.player.name }}</p>
+                  <div class="cor-row__stats">
+                    <span class="cor-row__stat">
+                      <img src="/figma/room/icon-money.webp" alt=""/>
+                      {{ fmt(entry.player.cash) }}
+                    </span>
+                    <span class="cor-row__stat">
+                      <img src="/figma/room/icon-chair.webp" alt=""/>
+                      {{ entry.propertyCount }}
+                    </span>
+                  </div>
+                </div>
+              </button>
 
               <!-- Ready check pill — only visible during the host's restart
                    ready-check state (Figma 133:3980 / 133:4390 / 133:4794). -->
@@ -343,6 +411,61 @@ watch(
                   />
                 </svg>
               </span>
+
+              <!-- Friend invite pill — Figma 166:3320 / 166:4212.
+                   Hidden during ready-check so the readiness check doesn't
+                   compete with the invite control. Three states:
+                     none   → "+" tap-target, opens the invite confirm
+                     pending→ small check (request sent, awaiting accept)
+                     friend → green check (already friends) -->
+              <template v-if="uiState !== 'ready-check' && onFriendRequest">
+                <button
+                  v-if="friendStateFor(entry.player) === 'none'"
+                  type="button"
+                  class="cor-row__friend cor-row__friend--add"
+                  :aria-label="isRu ? 'Пригласить в друзья' : 'Send friend request'"
+                  @click="startInvite(entry.player)"
+                >
+                  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" aria-hidden="true">
+                    <path
+                      d="M12 5v14M5 12h14"
+                      stroke="#000"
+                      stroke-width="2.4"
+                      stroke-linecap="round"
+                    />
+                  </svg>
+                </button>
+                <span
+                  v-else-if="friendStateFor(entry.player) === 'pending'"
+                  class="cor-row__friend cor-row__friend--pending"
+                  :aria-label="isRu ? 'Заявка отправлена' : 'Request pending'"
+                >
+                  <svg viewBox="0 0 24 24" width="14" height="14" fill="none" aria-hidden="true">
+                    <path
+                      d="M5 12.5l4.2 4.2L19 7"
+                      stroke="#000"
+                      stroke-width="2.6"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    />
+                  </svg>
+                </span>
+                <span
+                  v-else-if="friendStateFor(entry.player) === 'friend'"
+                  class="cor-row__friend cor-row__friend--ok"
+                  :aria-label="isRu ? 'Уже в друзьях' : 'Already friends'"
+                >
+                  <svg viewBox="0 0 24 24" width="14" height="14" fill="none" aria-hidden="true">
+                    <path
+                      d="M5 12.5l4.2 4.2L19 7"
+                      stroke="#fff"
+                      stroke-width="2.6"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    />
+                  </svg>
+                </span>
+              </template>
             </div>
           </div>
         </div>
@@ -410,6 +533,42 @@ watch(
             <p class="cor-cta__hint cor-cta__hint--ok">{{ readyHint }}</p>
           </template>
         </div>
+
+        <!-- ── "Пригласить игрока в друзья?" sender confirm (Figma
+             166:3792). Same bottom-sheet language as the ready-check
+             prompt — the user explicitly confirms before the friend
+             request fires, so an accidental tap on the per-row "+"
+             can be cancelled. -->
+        <transition name="cor-choice">
+          <div
+            v-if="inviteTarget"
+            class="cor-choice-backdrop"
+            @click.self="cancelInvite"
+          >
+            <div class="cor-choice-card">
+              <div class="cor-choice-text">
+                <h3 class="cor-choice-title">
+                  {{ isRu ? "Пригласить игрока в друзья?" : "Send friend request?" }}
+                </h3>
+                <p class="cor-choice-sub">
+                  {{
+                    isRu
+                      ? "Игрок, принявший приглашение, будет отображаться в вашем списке друзей. Приглашать игрока в вашу партию тоже станет проще"
+                      : "Once the player accepts, they'll appear in your friend list and inviting them to future matches gets easier."
+                  }}
+                </p>
+              </div>
+              <div class="cor-choice-buttons">
+                <button class="cor-btn cor-btn--cancel-invite" @click="cancelInvite">
+                  {{ isRu ? "ОТМЕНА" : "CANCEL" }}
+                </button>
+                <button class="cor-btn cor-btn--again" @click="confirmInvite">
+                  {{ isRu ? "ПРИГЛАСИТЬ" : "INVITE" }}
+                </button>
+              </div>
+            </div>
+          </div>
+        </transition>
 
         <!-- ── "Партия готова" choice popup (Figma 133:5203 / popup-info
              133:5597). Bottom-anchored card overlaid on the ready-check
@@ -660,6 +819,33 @@ watch(
   color: #fff;
 }
 
+/* Clickable avatar+name area. Strips the default <button> chrome so it
+   reads as plain row content, then re-introduces a subtle press
+   feedback when the row is actually interactive (not self / bot). */
+.cor-row__main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0;
+  margin: 0;
+  border: none;
+  background: transparent;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: transform 80ms ease, filter 120ms ease;
+}
+.cor-row__main:not(.cor-row__main--inert):active {
+  transform: translateY(1px);
+  filter: brightness(0.95);
+}
+.cor-row__main--inert {
+  cursor: default;
+}
+
 .cor-row__cap {
   flex-shrink: 0;
   width: 40px;
@@ -801,6 +987,43 @@ watch(
   align-items: center;
   justify-content: center;
   box-shadow: inset 0 -2px 0 rgba(0, 0, 0, 0.2);
+}
+
+/* Friend invite pill (Figma 166:3320). Three visual states sharing the
+   same 24px circular footprint so the row height never jumps as the
+   button morphs between idle/pending/accepted. */
+.cor-row__friend {
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: default;
+}
+.cor-row__friend--add {
+  background: rgba(255, 255, 255, 0.85);
+  cursor: pointer;
+  transition: transform 80ms ease, background 120ms ease;
+  box-shadow: inset 0 -2px 0 rgba(0, 0, 0, 0.18);
+}
+.cor-row__friend--add:active {
+  transform: translateY(1px);
+  background: #fff;
+}
+.cor-row__friend--pending {
+  background: rgba(255, 255, 255, 0.6);
+}
+.cor-row__friend--ok {
+  background: #43c22d;
+  box-shadow: inset 0 -2px 0 rgba(0, 0, 0, 0.2);
+}
+
+.cor-btn--cancel-invite {
+  background: #f34822;
 }
 
 /* ── "Партия готова" choice popup (Figma 133:5203) — bottom-anchored card

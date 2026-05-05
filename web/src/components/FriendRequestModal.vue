@@ -9,16 +9,21 @@ const props = defineProps<{
 
 const { locale } = useI18n();
 const isRu = computed(() => locale.value === "ru");
+// Copy comes straight from Figma 166:4614 — the receiver popup. The
+// designer wanted a longer body explaining the perk so newcomers
+// understand why the prompt is even worth answering.
 const L = computed(() => isRu.value
   ? {
-      title: "Запрос в друзья",
-      body: (name: string) => `${name} хочет добавить тебя в друзья`,
+      title: "Вас приглашают в друзья",
+      body: (name: string) =>
+        `Игрок ${name} приглашает вас стать другом. Примите приглашение и вы сможете быстрее добавить друг друга в партию и отображаться друг у друга в списке друзей в профиле`,
       accept: "ПРИНЯТЬ",
-      decline: "ОТКЛОНИТЬ",
+      decline: "ОТКАЗАТЬСЯ",
     }
   : {
-      title: "Friend request",
-      body: (name: string) => `${name} wants to add you as a friend`,
+      title: "You have a friend request",
+      body: (name: string) =>
+        `${name} wants to add you as a friend. Accept and you'll be able to invite each other to matches faster and show up in each other's friend list.`,
       accept: "ACCEPT",
       decline: "DECLINE",
     });
@@ -34,8 +39,10 @@ function decline() {
 <template>
   <div class="friend-req-backdrop" role="dialog" aria-modal="true">
     <div class="friend-req-card">
-      <h3 class="friend-req-card__title">{{ L.title }}</h3>
-      <p class="friend-req-card__body">{{ L.body(request.fromName) }}</p>
+      <div class="friend-req-card__text">
+        <h3 class="friend-req-card__title">{{ L.title }}</h3>
+        <p class="friend-req-card__body">{{ L.body(request.fromName) }}</p>
+      </div>
       <div class="friend-req-card__actions">
         <button
           type="button"
@@ -53,66 +60,74 @@ function decline() {
 </template>
 
 <style scoped>
+/* Bottom-anchored sheet (Figma 166:4614). The dark scrim covers the
+   end-of-game results so the receiver focuses on the prompt. */
 .friend-req-backdrop {
   position: fixed;
   inset: 0;
   z-index: 600;
-  background: rgba(0, 0, 0, 0.45);
+  background: rgba(0, 0, 0, 0.4);
   display: flex;
-  align-items: center;
+  align-items: flex-end;
   justify-content: center;
-  padding: 24px;
+  padding: 16px calc(24px + var(--sa-l, 0px)) calc(16px + var(--csab, 0px)) calc(24px + var(--sa-r, 0px));
 }
 .friend-req-card {
   width: 100%;
-  max-width: 360px;
+  max-width: 345px;
   background: #faf3e2;
-  border: 2px solid #000;
-  border-radius: 22px;
-  padding: 20px 18px;
+  border-radius: 18px;
+  padding: 24px;
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 24px;
   font-family: 'Unbounded', 'Golos Text', sans-serif;
+}
+.friend-req-card__text {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  text-align: center;
 }
 .friend-req-card__title {
   margin: 0;
-  font-weight: 900;
-  font-size: 18px;
-  line-height: 22px;
+  font-family: 'Unbounded', sans-serif;
+  font-weight: 700;
+  font-size: 22px;
+  line-height: 24px;
   color: #000;
-  text-align: center;
 }
 .friend-req-card__body {
   margin: 0;
+  font-family: 'Unbounded', sans-serif;
   font-weight: 500;
   font-size: 14px;
-  line-height: 18px;
-  color: #1a0f05;
-  text-align: center;
+  line-height: 20px;
+  color: #000;
 }
 .friend-req-card__actions {
   display: flex;
-  gap: 10px;
+  flex-direction: column;
+  gap: 12px;
 }
 .friend-req-btn {
-  flex: 1;
-  height: 44px;
-  border-radius: 14px;
+  width: 100%;
+  height: 56px;
+  border-radius: 18px;
   border: 2px solid #000;
-  font-family: 'Golos Text', sans-serif;
+  font-family: 'Golos Text', 'Unbounded', sans-serif;
   font-weight: 900;
-  font-size: 15px;
-  line-height: 18px;
+  font-size: 22px;
+  line-height: 26px;
   color: #fff;
   cursor: pointer;
-  box-shadow: inset 0 -4px 0 rgba(0, 0, 0, 0.2);
-  transition: transform 80ms ease, box-shadow 120ms ease;
+  box-shadow: inset 0 -6px 0 rgba(0, 0, 0, 0.2);
+  transition: transform 120ms ease, filter 120ms ease, box-shadow 120ms ease;
 }
 .friend-req-btn:active {
-  transform: translateY(1px);
-  box-shadow: inset 0 -2px 0 rgba(0, 0, 0, 0.2);
+  transform: translateY(2px);
+  box-shadow: inset 0 -3px 0 rgba(0, 0, 0, 0.2);
 }
-.friend-req-btn--accept { background: #43c22d; }
-.friend-req-btn--decline { background: #fff; color: #000; }
+.friend-req-btn--accept  { background: #43c22d; }
+.friend-req-btn--decline { background: #f34822; }
 </style>
