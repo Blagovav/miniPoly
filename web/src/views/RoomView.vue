@@ -717,7 +717,14 @@ const turnSlots = computed<{ key: string; player: Player; role: "prev" | "curren
 //   street / railroad / utility → price (unowned) or rent (owned)
 //   tax                         → tax amount
 //   go / chest / chance / jail / parking / goToJail → no value
-const currentTileInfo = computed<{ name: string; value: number | null } | null>(() => {
+// Subtitle + bar colour follow Figma 166:2194/2204/2159/2184 — owner name +
+// owner colour for owned property, "Ничья"/"Нейтральная" + grey otherwise.
+const currentTileInfo = computed<{
+  name: string;
+  subtitle: string;
+  barColor: string;
+  value: number | null;
+} | null>(() => {
   const r = game.room;
   const cp = game.currentPlayer;
   if (!r || !cp) return null;
@@ -730,7 +737,11 @@ const currentTileInfo = computed<{ name: string; value: number | null } | null>(
   const pos = typeof animPos === "number" ? animPos : cp.position;
   const tile = BOARD[pos];
   if (!tile) return null;
-  const name = locale.value === "ru" ? tile.name.ru : tile.name.en;
+  const isRu = locale.value === "ru";
+  const name = isRu ? tile.name.ru : tile.name.en;
+  const neutralLabel = isRu ? "Нейтральная" : "Neutral";
+  const unownedLabel = isRu ? "Ничья" : "Unowned";
+  const greyBar = "#d9d9d9";
 
   if (tile.kind === "street" || tile.kind === "railroad" || tile.kind === "utility") {
     const owned = r.properties[tile.index];
@@ -739,12 +750,21 @@ const currentTileInfo = computed<{ name: string; value: number | null } | null>(
       const idx = Math.min(owned.houses + (owned.hotel ? 5 : 0), tile.rent.length - 1);
       value = tile.rent[idx];
     }
-    return { name, value };
+    if (owned) {
+      const owner = r.players.find((p) => p.id === owned.ownerId);
+      return {
+        name,
+        subtitle: owner?.name ?? unownedLabel,
+        barColor: owner?.color ?? greyBar,
+        value,
+      };
+    }
+    return { name, subtitle: unownedLabel, barColor: greyBar, value };
   }
   if (tile.kind === "tax") {
-    return { name, value: tile.amount };
+    return { name, subtitle: neutralLabel, barColor: greyBar, value: tile.amount };
   }
-  return { name, value: null };
+  return { name, subtitle: neutralLabel, barColor: greyBar, value: null };
 });
 
 // Open the full TileInfoModal for whatever tile the active player
@@ -1184,13 +1204,11 @@ void t;
           </TransitionGroup>
         </div>
 
-        <!-- Current-tile plate — name + price/rent of the tile the active
-             player stands on. Per the latest Figma it's a cream/rounded
-             pill below the slider, NOT folded into a card. Sized big
-             enough that long Russian names ("Пенсильвания-авеню") never
-             truncate. Hidden during pre-roll. Tap → open TileInfoModal
-             for that tile (rent table, owner banner, build/mortgage
-             actions if it's mine).  -->
+        <!-- Current-tile plate — Figma 166:2194/2204/2159/2184. Cream pill
+             with a coloured left bar (owner colour or grey for neutral),
+             two-line label (tile name + owner-or-neutral), and an optional
+             cash group on the right (price/rent/tax amount). Hidden during
+             pre-roll. Tap → open TileInfoModal for that tile.  -->
         <button
           v-if="currentTileInfo && !isPreRoll"
           type="button"
@@ -1198,10 +1216,20 @@ void t;
           :aria-label="locale === 'ru' ? `Открыть карточку ${currentTileInfo.name}` : `Open ${currentTileInfo.name} info`"
           @click="openCurrentTileInfo"
         >
-          <span class="tile-info__name">{{ currentTileInfo.name }}</span>
+          <span class="tile-info__left">
+            <span
+              class="tile-info__bar"
+              :style="{ background: currentTileInfo.barColor }"
+              aria-hidden="true"
+            ></span>
+            <span class="tile-info__text">
+              <span class="tile-info__name">{{ currentTileInfo.name }}</span>
+              <span class="tile-info__sub">{{ currentTileInfo.subtitle }}</span>
+            </span>
+          </span>
           <span v-if="currentTileInfo.value !== null" class="tile-info__value">
             <img src="/figma/room/icon-money.webp" alt="" />
-            {{ currentTileInfo.value }}
+            <span class="tile-info__amount">{{ currentTileInfo.value }}</span>
           </span>
         </button>
 
@@ -1333,6 +1361,10 @@ void t;
         :my-id="game.myPlayerId"
         :host-id="game.room?.hostId ?? null"
         :properties="game.room?.properties ?? {}"
+        :friend-ids="game.friendIds"
+        :sent-friend-requests="game.sentFriendRequests"
+        :on-friend-request="sendFriendRequest"
+        :on-profile-open="openProfile"
         :on-close="() => router.replace({ name: 'home' })"
         :on-play-again="() => router.replace({ name: 'rooms' })"
         :on-configure="() => router.replace({ name: 'create' })"
@@ -2198,15 +2230,16 @@ void t;
   object-fit: contain;
 }
 
-/* ── Current-tile plate — Figma reference (Текущий ход + tile pill).
-   Cream/rounded pill below the slider, big bold tile name on the left,
-   coin + value on the right. Sized so long Russian names render at
-   full width without truncation. ── */
+/* ── Current-tile plate — Figma 166:2194/2204/2159/2184.
+   Cream pill (#faf3e2) with 16px radius and 12px padding. Left side:
+   24px coloured bar + two-line label (tile name 14/16 bold + owner-or-
+   neutral 12/14 medium). Right side: 24px money icon + bold amount,
+   visible only when the tile carries a price/rent/tax. ── */
 .tile-info {
   margin-top: 16px;
-  background: #f5efd9;
-  border-radius: 24px;
-  padding: 14px 20px;
+  background: #faf3e2;
+  border-radius: 16px;
+  padding: 12px;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -2228,11 +2261,41 @@ void t;
   transform: translateY(1px);
   filter: brightness(0.96);
 }
+.tile-info__left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+}
+.tile-info__bar {
+  flex-shrink: 0;
+  width: 4px;
+  height: 24px;
+  border-radius: 2px;
+}
+.tile-info__text {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: 1;
+  min-width: 0;
+}
 .tile-info__name {
   font-family: 'Unbounded', sans-serif;
-  font-weight: 900;
-  font-size: 18px;
-  line-height: 22px;
+  font-weight: 700;
+  font-size: 14px;
+  line-height: 16px;
+  color: #000;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.tile-info__sub {
+  font-family: 'Unbounded', sans-serif;
+  font-weight: 500;
+  font-size: 12px;
+  line-height: 14px;
   color: #000;
   white-space: nowrap;
   overflow: hidden;
@@ -2241,18 +2304,20 @@ void t;
 .tile-info__value {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  font-family: 'Unbounded', sans-serif;
-  font-weight: 900;
-  font-size: 18px;
-  line-height: 22px;
-  color: #000;
+  gap: 6px;
   flex-shrink: 0;
 }
 .tile-info__value img {
-  width: 28px;
-  height: 28px;
+  width: 24px;
+  height: 24px;
   object-fit: contain;
+}
+.tile-info__amount {
+  font-family: 'Unbounded', sans-serif;
+  font-weight: 700;
+  font-size: 14px;
+  line-height: 16px;
+  color: #000;
 }
 
 /* Designer feedback 2026-05-02 #5.14 — figma adds an «Игроки» heading
