@@ -769,6 +769,10 @@ watch(
 }
 
 /* ─── Player row ─── */
+/* Plain colour plates — no border, no gradients. Playtester (2026-05-05)
+   asked for "просто подложки без теней"; the dark border on a tinted
+   fill was reading as an embossed shadow even after the gradient bands
+   were removed. */
 .cor-row {
   display: flex;
   align-items: center;
@@ -776,12 +780,9 @@ watch(
   height: 64px;
   padding: 12px;
   border-radius: 16px;
-  border: 1px solid rgba(0, 0, 0, 0.2);
   flex-shrink: 0;
   position: relative;
 }
-/* Flat fills — playtester (2026-05-05) called the gradient bands
-   "тени" and asked for plain plates instead. */
 .cor-row--rank-1 { background: #fcc101; }
 .cor-row--rank-2 { background: #c3d6ed; }
 .cor-row--rank-3 { background: #cd7f32; }
