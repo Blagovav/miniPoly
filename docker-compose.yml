@@ -40,6 +40,9 @@ services:
       BOT_TOKEN: ${BOT_TOKEN}
       BOT_URL: http://bot:3001
       CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:5173}
+      # Empty default disables /admin (404s for everyone). Set in .env
+      # to enable the read-only admin dashboard at /admin?token=<value>.
+      ADMIN_TOKEN: ${ADMIN_TOKEN:-}
     ports:
       - "3000:3000"
     depends_on:
