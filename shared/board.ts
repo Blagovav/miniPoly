@@ -294,6 +294,12 @@ export const MIN_PLAYERS = 2;
 export const HOUSE_BANK_SIZE = 32;
 export const HOTEL_BANK_SIZE = 12;
 
+// Mortgage forecloses if not redeemed within this many room-level turns.
+// Custom rule discussed with playtester 2026-05-05: "когда закладываешь
+// вроде 15 ходов не выкупил клетка освобождается" — keeps the board
+// liquid in long games where a player parks tiles in mortgage forever.
+export const FORECLOSURE_TURNS = 15;
+
 export const PLAYER_COLORS = [
   "#ef4444", // red
   "#3b82f6", // blue

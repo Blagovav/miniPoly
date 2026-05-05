@@ -1,5 +1,5 @@
 import { nanoid } from "nanoid";
-import { BOARD, GO_SALARY, GROUP_SIZE, HOTEL_BANK_SIZE, HOUSE_BANK_SIZE, JAIL_FINE, JAIL_POSITION, MAX_PLAYERS, MIN_PLAYERS, PLAYER_COLORS, STARTING_CASH } from "../../../shared/board";
+import { BOARD, FORECLOSURE_TURNS, GO_SALARY, GROUP_SIZE, HOTEL_BANK_SIZE, HOUSE_BANK_SIZE, JAIL_FINE, JAIL_POSITION, MAX_PLAYERS, MIN_PLAYERS, PLAYER_COLORS, STARTING_CASH } from "../../../shared/board";
 import { CHANCE_CARDS, CHEST_CARDS, type CardDef } from "../../../shared/cards";
 import type {
   DrawnCard,
@@ -54,6 +54,7 @@ export function createRoom(
     settings: { ...DEFAULT_ROOM_SETTINGS, ...settings },
     players: [],
     currentTurn: 0,
+    turnCount: 0,
     phase: "lobby",
     dice: null,
     doublesInARow: 0,
@@ -546,6 +547,7 @@ export function mortgageProperty(room: RoomState, playerId: string, tileIndex: n
   if (owned.mortgaged) return { ok: false, error: "already mortgaged" };
   if (owned.houses > 0 || owned.hotel) return { ok: false, error: "sell buildings first" };
   owned.mortgaged = true;
+  owned.mortgagedAtTurn = room.turnCount;
   p.cash += tile.mortgage;
   log(
     room,
@@ -569,6 +571,7 @@ export function unmortgageProperty(room: RoomState, playerId: string, tileIndex:
   if (p.cash < cost) return { ok: false, error: "not enough cash" };
   p.cash -= cost;
   owned.mortgaged = false;
+  owned.mortgagedAtTurn = undefined;
   log(
     room,
     { en: `${p.name} unmortgaged ${tile.name.en} (-$${cost})`, ru: `${p.name} выкупил залог ${tile.name.ru} (-$${cost})` },
@@ -1263,11 +1266,41 @@ function nextTurn(room: RoomState): void {
         room.currentTurn = (room.currentTurn + 1) % room.players.length;
       } while (room.players[room.currentTurn].bankrupt);
     }
+    // Bump the room-level turn counter on real turn boundaries (not on
+    // doubles — that's the same player still going). foreclosing tiles
+    // is the next thing the new player should see.
+    room.turnCount++;
+    foreclosureSweep(room);
   }
   room.phase = "rolling";
   room.dice = null;
 
   checkWinCondition(room);
+}
+
+/**
+ * Mortgage foreclosure sweep — runs at the start of each room turn.
+ * Any mortgaged tile that has been sitting mortgaged for FORECLOSURE_TURNS
+ * room turns is released back to the bank (record removed from
+ * room.properties; the tile becomes claimable again on landing). Owner
+ * loses it without compensation — the rule is meant to keep the board
+ * liquid in long games, not be punitive on close calls, so the window
+ * is generous (15 turns ≈ a couple of full board passes).
+ */
+function foreclosureSweep(room: RoomState): void {
+  for (const idxStr of Object.keys(room.properties)) {
+    const idx = parseInt(idxStr, 10);
+    const prop = room.properties[idx];
+    if (!prop || !prop.mortgaged || prop.mortgagedAtTurn == null) continue;
+    if (room.turnCount - prop.mortgagedAtTurn < FORECLOSURE_TURNS) continue;
+    const tile = BOARD[idx];
+    const owner = room.players.find((pl) => pl.id === prop.ownerId);
+    delete room.properties[idx];
+    log(room, {
+      en: `${owner?.name ?? "Owner"} lost ${tile?.name.en ?? "a tile"} — mortgage expired`,
+      ru: `${owner?.name ?? "Владелец"} потерял ${tile?.name.ru ?? "клетку"} — залог истёк`,
+    });
+  }
 }
 
 function checkWinCondition(room: RoomState): void {
@@ -1373,6 +1406,7 @@ function liquidateForCash(room: RoomState, p: Player, target: number): void {
     if (tile.kind !== "street" && tile.kind !== "railroad" && tile.kind !== "utility") continue;
     p.cash += tile.mortgage;
     prop.mortgaged = true;
+    prop.mortgagedAtTurn = room.turnCount;
     log(
       room,
       {
