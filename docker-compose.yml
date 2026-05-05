@@ -28,12 +28,15 @@ services:
       retries: 10
 
   api:
+    # Production image bakes api/src + shared at build time. Code changes
+    # require a `--build` redeploy (not a hot-reload). For local
+    # development run `npm run dev` from api/ directly.
     build:
       context: .
       dockerfile: api/Dockerfile
     restart: unless-stopped
     environment:
-      NODE_ENV: ${NODE_ENV:-development}
+      NODE_ENV: ${NODE_ENV:-production}
       PORT: 3000
       DATABASE_URL: postgres://${POSTGRES_USER:-monopoly}:${POSTGRES_PASSWORD:-monopoly}@postgres:5432/${POSTGRES_DB:-monopoly}
       REDIS_URL: redis://redis:6379
@@ -50,9 +53,6 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-    volumes:
-      - ./api/src:/app/api/src
-      - ./shared:/app/shared
 
   bot:
     build:
@@ -60,17 +60,30 @@ services:
       dockerfile: bot/Dockerfile
     restart: unless-stopped
     environment:
-      NODE_ENV: ${NODE_ENV:-development}
+      NODE_ENV: ${NODE_ENV:-production}
       BOT_TOKEN: ${BOT_TOKEN}
+      BOT_USERNAME: ${BOT_USERNAME:-poly_mini_bot}
       WEBAPP_URL: ${WEBAPP_URL:-http://localhost:5173}
       API_URL: http://api:3000
       PORT: 3001
+      OG_IMAGE_URL: ${OG_IMAGE_URL:-}
+      # Force IPv4 DNS resolution. The VPS resolves api.telegram.org to
+      # an IPv6 address with no working outbound IPv6 route, so the
+      # default DNS order traps every grammy call into a timeout
+      # (PR #58 — Stars purchases broke without this).
+      NODE_OPTIONS: --dns-result-order=ipv4first
+    extra_hosts:
+      # Timeweb (the Moscow VPS provider) selectively blocks a subset of
+      # Telegram's edge IPs — 149.154.166.110 and 149.154.167.50 time
+      # out on TCP 443 from this host, but 149.154.167.220 answers in
+      # ~160ms. Without pinning, Node DNS occasionally lands on a blocked
+      # IP and every bot operation silently fails — createInvoiceLink
+      # failure is what broke Stars purchases (PR #59).
+      - "api.telegram.org:149.154.167.220"
     ports:
       - "3001:3001"
     depends_on:
       - api
-    volumes:
-      - ./bot/src:/app/bot/src
 
   web:
     # Multi-stage build: vite build → static dist → nginx :80. VITE_TURN_*
