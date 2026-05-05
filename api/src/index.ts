@@ -2,6 +2,7 @@ import Fastify from "fastify";
 import cors from "@fastify/cors";
 import { config } from "./config";
 import { registerWebSocket } from "./ws/server";
+import { registerAdminRoutes } from "./admin";
 import { allRooms, getRoom } from "./rooms/manager";
 import { BOARD } from "../../shared/board";
 import {
@@ -188,6 +189,8 @@ try {
 } catch (err) {
   app.log.error({ err }, "DB init failed — stats will not persist");
 }
+
+registerAdminRoutes(app);
 
 await registerWebSocket(app);
 
