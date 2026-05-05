@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, ref } from "vue";
 import { useI18n } from "vue-i18n";
 import { BOARD, GROUP_COLORS, GROUP_SIZE } from "../../../shared/board";
 import type { ColorGroup, Locale, StreetTile } from "../../../shared/types";
@@ -259,6 +259,23 @@ const buildCost = computed(() => {
 function build() { if (tile.value) props.onBuildHouse?.(tile.value.index); }
 function sell()  { if (tile.value) props.onSellHouse?.(tile.value.index); }
 
+// Sell-house confirmation: playtester (2026-05-05) lost two houses by
+// tapping what they thought was "Дом" — the same button silently swaps
+// to "Продать" once cash drops below houseCost (see houseButton below).
+// We keep the swap (it's good for cash flow), but interpose a confirm
+// dialog so a misclick can't quietly demolish a building.
+const sellConfirmIndex = ref<number | null>(null);
+function requestSell() {
+  if (tile.value) sellConfirmIndex.value = tile.value.index;
+}
+function confirmSell() {
+  const idx = sellConfirmIndex.value;
+  sellConfirmIndex.value = null;
+  if (idx !== null) props.onSellHouse?.(idx);
+}
+function cancelSell() { sellConfirmIndex.value = null; }
+const sellRefund = computed(() => Math.floor(buildCost.value / 2));
+
 const canPropose = computed(() => {
   const o = owned.value;
   const me = game.me;
@@ -340,7 +357,7 @@ const houseButton = computed(() => {
     return { label: isRu.value ? "Дом" : "House", cost: buildCost.value, onClick: build, enabled: true };
   }
   if (canSell.value) {
-    return { label: isRu.value ? "Продать" : "Sell", cost: Math.floor(buildCost.value / 2), onClick: sell, enabled: true };
+    return { label: isRu.value ? "Продать" : "Sell", cost: sellRefund.value, onClick: requestSell, enabled: true };
   }
   return { label: isRu.value ? "Дом" : "House", cost: buildCost.value, onClick: build, enabled: false };
 });
@@ -488,6 +505,49 @@ const ownerCapSrc = computed(() => `/figma/shop/caps/${capTypeFor(owner.value?.t
             />
           </svg>
         </button>
+      </div>
+    </div>
+  </transition>
+
+  <!-- Sell-house confirm: bottom-rising sheet matching the leave/disband
+       confirms in RoomView. Uses the existing .lobby-modal-* / .lobby-cta
+       classes so it reads as part of the same family. -->
+  <transition name="info-fade">
+    <div
+      v-if="sellConfirmIndex !== null"
+      class="info-scrim info-scrim--confirm"
+      @click.self="cancelSell"
+    >
+      <div class="sell-confirm-card" @click.stop>
+        <h2 class="sell-confirm-card__title">
+          {{ isRu ? "Продать дом?" : "Sell a house?" }}
+        </h2>
+        <p class="sell-confirm-card__subtitle">
+          {{ isRu
+            ? `Получишь ${sellRefund} за один дом`
+            : `You'll get ${sellRefund} for one house`
+          }}
+        </p>
+        <div class="sell-confirm-card__buttons">
+          <button
+            type="button"
+            class="action-btn action-btn--cancel"
+            @click="cancelSell"
+          >
+            <span class="action-btn__label">{{ isRu ? "Отмена" : "Cancel" }}</span>
+          </button>
+          <button
+            type="button"
+            class="action-btn action-btn--danger"
+            @click="confirmSell"
+          >
+            <span class="action-btn__label">{{ isRu ? "Продать" : "Sell" }}</span>
+            <span class="action-btn__cost">
+              <img src="/figma/room/icon-money.webp" alt="" />
+              <b>{{ sellRefund }}</b>
+            </span>
+          </button>
+        </div>
       </div>
     </div>
   </transition>
@@ -781,6 +841,45 @@ const ownerCapSrc = computed(() => `/figma/shop/caps/${capTypeFor(owner.value?.t
 }
 .action-btn__cost img { width: 24px; height: 24px; object-fit: contain; }
 .action-btn__cost b { font-weight: 900; }
+
+/* Sell-confirm sheet — sits on top of the property card so a misclick
+   on the swap "Продать" button can't quietly demolish a building. */
+.info-scrim--confirm { z-index: 140; }
+.sell-confirm-card {
+  width: 100%;
+  max-width: 345px;
+  background: #faf3e2;
+  border-radius: 18px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.24);
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  font-family: 'Unbounded', sans-serif;
+  color: #000;
+  text-align: center;
+}
+.sell-confirm-card__title {
+  margin: 0;
+  font-weight: 700;
+  font-size: 18px;
+  line-height: 22px;
+}
+.sell-confirm-card__subtitle {
+  margin: 0;
+  font-family: 'Golos Text', sans-serif;
+  font-weight: 500;
+  font-size: 14px;
+  line-height: 18px;
+  color: #5b4a2a;
+}
+.sell-confirm-card__buttons {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.action-btn--cancel { background: #c9c2ad; }
+.action-btn--danger { background: #d8553a; }
 
 .info-hint {
   margin: 0;

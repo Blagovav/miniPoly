@@ -968,8 +968,14 @@ function countOwnedOfKind(
   kind: "railroad" | "utility",
   ownerId: string,
 ): number {
+  // Mortgaged tiles do not count toward the rent multiplier (Hasbro rule):
+  // a mortgaged railroad is "out of service" and shouldn't bump the others'
+  // rent tier. Same for utilities.
   return BOARD.filter(
-    (t) => t.kind === kind && room.properties[t.index]?.ownerId === ownerId,
+    (t) =>
+      t.kind === kind &&
+      room.properties[t.index]?.ownerId === ownerId &&
+      !room.properties[t.index]?.mortgaged,
   ).length;
 }
 
