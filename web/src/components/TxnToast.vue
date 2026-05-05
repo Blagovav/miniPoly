@@ -24,9 +24,19 @@ type Toast = {
   // / "<Actor> → <Other>: rent". Empty for me-involved toasts (existing
   // `dir`-keyed labels already encode the perspective).
   actorName?: string;
-  // Sub-kind so the "info" dir can pick the right title (a buy and a rent
-  // both come through as info, but their wording differs).
-  infoKind?: "buy" | "rent";
+  // Sub-kind so the "info" dir can pick the right title. Each value maps
+  // 1-to-1 to a wording in the `label` computed below. The compound values
+  // ("build-house", "sell-hotel", …) keep the building tier in the same
+  // string instead of a parallel field.
+  infoKind?:
+    | "buy"
+    | "rent"
+    | "build-house"
+    | "build-hotel"
+    | "sell-house"
+    | "sell-hotel"
+    | "mortgage"
+    | "unmortgage";
   // Sub-kind for player-lifecycle "system" toasts so the same dir can
   // render distinct titles for "left" vs "went bankrupt".
   systemKind?: "left" | "bankrupt";
@@ -118,6 +128,33 @@ function entryToToast(entry: GameLogEntry): Toast | null {
       counterparty: playerName(t.counterpartyId),
       actorName: playerName(t.actorId),
       infoKind: "rent",
+    };
+  }
+  // Opponent build/sell/mortgage actions — playtester 2026-05-05 wanted
+  // to see when the other player builds, sells or mortgages so the board
+  // state changes don't feel silent. Skipped when me is the actor (no
+  // point telling the player what they themselves just clicked).
+  if (
+    (t.kind === "build" ||
+      t.kind === "sell" ||
+      t.kind === "mortgage" ||
+      t.kind === "unmortgage") &&
+    t.actorId !== me
+  ) {
+    const infoKind: Toast["infoKind"] =
+      t.kind === "build"
+        ? t.subKind === "hotel" ? "build-hotel" : "build-house"
+        : t.kind === "sell"
+          ? t.subKind === "hotel" ? "sell-hotel" : "sell-house"
+          : t.kind; // "mortgage" | "unmortgage"
+    return {
+      id: entry.id,
+      dir: "info",
+      amount: t.amount,
+      tileName: tileName(t.tileIndex),
+      counterparty: "",
+      actorName: playerName(t.actorId),
+      infoKind,
     };
   }
   return null;
@@ -316,6 +353,54 @@ const label = computed(() => {
         title: isRu
           ? `${t.actorName} купил`
           : `${t.actorName} bought`,
+        sub: t.tileName,
+        amount: `◈ ${t.amount}`,
+        sign: "" as const,
+      };
+    }
+    if (t.infoKind === "build-house") {
+      return {
+        title: isRu ? `${t.actorName} построил дом` : `${t.actorName} built a house`,
+        sub: t.tileName,
+        amount: `◈ ${t.amount}`,
+        sign: "" as const,
+      };
+    }
+    if (t.infoKind === "build-hotel") {
+      return {
+        title: isRu ? `${t.actorName} построил отель` : `${t.actorName} built a hotel`,
+        sub: t.tileName,
+        amount: `◈ ${t.amount}`,
+        sign: "" as const,
+      };
+    }
+    if (t.infoKind === "sell-house") {
+      return {
+        title: isRu ? `${t.actorName} продал дом` : `${t.actorName} sold a house`,
+        sub: t.tileName,
+        amount: `◈ ${t.amount}`,
+        sign: "" as const,
+      };
+    }
+    if (t.infoKind === "sell-hotel") {
+      return {
+        title: isRu ? `${t.actorName} продал отель` : `${t.actorName} sold a hotel`,
+        sub: t.tileName,
+        amount: `◈ ${t.amount}`,
+        sign: "" as const,
+      };
+    }
+    if (t.infoKind === "mortgage") {
+      return {
+        title: isRu ? `${t.actorName} заложил` : `${t.actorName} mortgaged`,
+        sub: t.tileName,
+        amount: `◈ ${t.amount}`,
+        sign: "" as const,
+      };
+    }
+    if (t.infoKind === "unmortgage") {
+      return {
+        title: isRu ? `${t.actorName} выкупил` : `${t.actorName} redeemed`,
         sub: t.tileName,
         amount: `◈ ${t.amount}`,
         sign: "" as const,

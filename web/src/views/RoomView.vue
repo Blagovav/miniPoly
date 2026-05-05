@@ -252,16 +252,27 @@ onUnmounted(() => {
 // случае надо либо покупать, либо на аукцион, должна сразу открываться
 // карточка". The bottom bar still owns the БРОСИТЬ / КУПИТЬ buttons; the
 // modal just shows me the rent ladder + colour band so I can decide.
-// Gate on isMyTurn so the modal doesn't pop on every opponent's landing,
-// and on `animatingPlayerId === null` so it waits for the pawn to stop.
+//
+// Two open cases (playtester 2026-05-05: "выход карточек нужно делать
+// когда фишка дошла до поля"):
+//   (a) phase just entered buyPrompt with the pawn already at rest →
+//       open immediately
+//   (b) phase was already buyPrompt while the pawn walked, and the walk
+//       just ended → open the moment animatingPlayerId flips to null
+// The previous version had a `prev?.[0] === "buyPrompt"` early return
+// meant to prevent re-opening after a manual close, but it also blocked
+// case (b) — the modal would never open once buyPrompt arrived ahead of
+// the walk, so the card popped early relative to the moving piece.
 watch(
   () => [phase.value, game.isMyTurn, game.animatingPlayerId] as const,
   ([p, mine, anim], prev) => {
-    if (p !== "buyPrompt" || !mine || anim !== null) return;
-    // Only fire on the rolling → buyPrompt edge (not on every reactive
-    // dep change while we're already in buyPrompt) so the modal doesn't
-    // re-open if the user manually closed it.
-    if (prev?.[0] === "buyPrompt") return;
+    if (p !== "buyPrompt" || !mine) return;
+    if (anim !== null) return; // pawn still walking — wait
+    const phaseJustEntered = prev?.[0] !== "buyPrompt";
+    const animJustEnded = prev?.[2] !== null;
+    // Skip when neither edge fired — usually a re-render after the user
+    // manually closed the modal, where both phase and anim are stable.
+    if (!phaseJustEntered && !animJustEnded) return;
     const me = game.me;
     if (!me) return;
     game.selectTile(me.position);
