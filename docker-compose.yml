@@ -81,6 +81,14 @@ services:
       # .env, causing CORS-blocked browser requests (incident 2026-05-05).
       VITE_API_URL: ${VITE_API_URL:-}
       VITE_WS_URL: ${VITE_WS_URL:-}
+      # WebRTC voice chat needs the TURN relay reachable from the browser.
+      # Without these vars buildIceServers() falls back to STUN-only, which
+      # breaks voice between players on different NATs (incident 2026-05-05:
+      # playtester reported voice silently broke even though .env had the
+      # values — compose just wasn't forwarding them into the container).
+      VITE_TURN_URL: ${VITE_TURN_URL:-}
+      VITE_TURN_USER: ${VITE_TURN_USER:-}
+      VITE_TURN_PASS: ${VITE_TURN_PASS:-}
     ports:
       - "5174:5173"
     volumes:
