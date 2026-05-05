@@ -155,13 +155,26 @@ export interface PreRollBracket {
 // Structured money-move metadata attached to log entries. The client uses it
 // to render transaction toasts (e.g. "-100 → Alex" when you land on a rented
 // tile) without brittle string parsing of the human-readable text.
-export type TxnKind = "buy" | "rent" | "salary" | "tax" | "jail" | "liquidation";
+export type TxnKind =
+  | "buy"
+  | "rent"
+  | "salary"
+  | "tax"
+  | "jail"
+  | "liquidation"
+  | "build"        // built a house or hotel — see TxnInfo.subKind for which
+  | "sell"         // sold a house or hotel
+  | "mortgage"
+  | "unmortgage";
 export interface TxnInfo {
   kind: TxnKind;
   amount: number; // always positive; client derives sign from my role
   actorId: string; // who triggered it (landing payer, buyer, taxpayer, ...)
   counterpartyId?: string; // rent owner on rent; undefined otherwise
   tileIndex?: number;
+  // Only set on build/sell — tells the client whether to label the toast
+  // "построил дом" vs "построил отель" without rebuilding from server text.
+  subKind?: "house" | "hotel";
 }
 
 export interface GameLogEntry {

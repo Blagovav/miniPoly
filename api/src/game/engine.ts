@@ -440,7 +440,11 @@ export function buildHouse(room: RoomState, playerId: string, tileIndex: number)
     room.hotelBank--;
     owned.houses = 0;
     owned.hotel = true;
-    log(room, { en: `${p.name} built a hotel on ${tile.name.en}`, ru: `${p.name} построил отель на ${tile.name.ru}` });
+    log(
+      room,
+      { en: `${p.name} built a hotel on ${tile.name.en}`, ru: `${p.name} построил отель на ${tile.name.ru}` },
+      { kind: "build", amount: tile.houseCost, actorId: p.id, tileIndex: tile.index, subKind: "hotel" },
+    );
     return { ok: true };
   }
   if (room.houseBank <= 0) return { ok: false, error: "no houses in bank" };
@@ -448,7 +452,11 @@ export function buildHouse(room: RoomState, playerId: string, tileIndex: number)
   p.cash -= tile.houseCost;
   room.houseBank--;
   owned.houses++;
-  log(room, { en: `${p.name} built a house on ${tile.name.en} (${owned.houses}/4)`, ru: `${p.name} построил дом на ${tile.name.ru} (${owned.houses}/4)` });
+  log(
+    room,
+    { en: `${p.name} built a house on ${tile.name.en} (${owned.houses}/4)`, ru: `${p.name} построил дом на ${tile.name.ru} (${owned.houses}/4)` },
+    { kind: "build", amount: tile.houseCost, actorId: p.id, tileIndex: tile.index, subKind: "house" },
+  );
   return { ok: true };
 }
 
@@ -488,13 +496,21 @@ export function sellHouse(room: RoomState, playerId: string, tileIndex: number):
       room.houseBank -= 4;
       room.hotelBank++;
       p.cash += refund;
-      log(room, { en: `${p.name} sold hotel on ${tile.name.en} (+$${refund})`, ru: `${p.name} продал отель на ${tile.name.ru} (+$${refund})` });
+      log(
+        room,
+        { en: `${p.name} sold hotel on ${tile.name.en} (+$${refund})`, ru: `${p.name} продал отель на ${tile.name.ru} (+$${refund})` },
+        { kind: "sell", amount: refund, actorId: p.id, tileIndex: tile.index, subKind: "hotel" },
+      );
     } else {
       owned.hotel = false;
       owned.houses = 0;
       room.hotelBank++;
       p.cash += refund;
-      log(room, { en: `${p.name} sold hotel on ${tile.name.en} (+$${refund}, no houses in bank)`, ru: `${p.name} продал отель на ${tile.name.ru} (+$${refund}, в банке нет домов)` });
+      log(
+        room,
+        { en: `${p.name} sold hotel on ${tile.name.en} (+$${refund}, no houses in bank)`, ru: `${p.name} продал отель на ${tile.name.ru} (+$${refund}, в банке нет домов)` },
+        { kind: "sell", amount: refund, actorId: p.id, tileIndex: tile.index, subKind: "hotel" },
+      );
     }
     return { ok: true };
   }
@@ -502,7 +518,11 @@ export function sellHouse(room: RoomState, playerId: string, tileIndex: number):
   owned.houses--;
   room.houseBank++;
   p.cash += refund;
-  log(room, { en: `${p.name} sold a house on ${tile.name.en} (+$${refund})`, ru: `${p.name} продал дом на ${tile.name.ru} (+$${refund})` });
+  log(
+    room,
+    { en: `${p.name} sold a house on ${tile.name.en} (+$${refund})`, ru: `${p.name} продал дом на ${tile.name.ru} (+$${refund})` },
+    { kind: "sell", amount: refund, actorId: p.id, tileIndex: tile.index, subKind: "house" },
+  );
   return { ok: true };
 }
 
@@ -519,7 +539,11 @@ export function mortgageProperty(room: RoomState, playerId: string, tileIndex: n
   if (owned.houses > 0 || owned.hotel) return { ok: false, error: "sell buildings first" };
   owned.mortgaged = true;
   p.cash += tile.mortgage;
-  log(room, { en: `${p.name} mortgaged ${tile.name.en} (+$${tile.mortgage})`, ru: `${p.name} заложил ${tile.name.ru} (+$${tile.mortgage})` });
+  log(
+    room,
+    { en: `${p.name} mortgaged ${tile.name.en} (+$${tile.mortgage})`, ru: `${p.name} заложил ${tile.name.ru} (+$${tile.mortgage})` },
+    { kind: "mortgage", amount: tile.mortgage, actorId: p.id, tileIndex: tile.index },
+  );
   return { ok: true };
 }
 
@@ -537,7 +561,11 @@ export function unmortgageProperty(room: RoomState, playerId: string, tileIndex:
   if (p.cash < cost) return { ok: false, error: "not enough cash" };
   p.cash -= cost;
   owned.mortgaged = false;
-  log(room, { en: `${p.name} unmortgaged ${tile.name.en} (-$${cost})`, ru: `${p.name} выкупил залог ${tile.name.ru} (-$${cost})` });
+  log(
+    room,
+    { en: `${p.name} unmortgaged ${tile.name.en} (-$${cost})`, ru: `${p.name} выкупил залог ${tile.name.ru} (-$${cost})` },
+    { kind: "unmortgage", amount: cost, actorId: p.id, tileIndex: tile.index },
+  );
   return { ok: true };
 }
 
