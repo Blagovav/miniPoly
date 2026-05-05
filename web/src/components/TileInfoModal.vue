@@ -440,31 +440,7 @@ const ownerCapSrc = computed(() => `/figma/shop/caps/${capTypeFor(owner.value?.t
             {{ isRu ? "Владельца нет" : "Unclaimed land" }}
           </div>
 
-          <!-- Buy / Auction CTAs — same handlers the bottom action bar
-               uses, surfaced inside the modal so the player can act
-               without dismissing it first (playtester request 2026-05-05). -->
-          <div v-if="showBuyAuction" class="buy-grid">
-            <button
-              type="button"
-              class="action-btn action-btn--buy"
-              :disabled="!canAffordBuy"
-              @click="buyClick"
-            >
-              <span class="action-btn__label">{{ isRu ? "Купить" : "Buy" }}</span>
-              <span class="action-btn__cost">
-                <img src="/figma/room/icon-money.webp" alt="" />
-                <b>{{ buyPrice }}</b>
-              </span>
-            </button>
-            <button
-              type="button"
-              class="action-btn action-btn--auction"
-              @click="auctionClick"
-            >
-              <span class="action-btn__label">{{ isRu ? "На аукцион" : "Auction" }}</span>
-            </button>
-          </div>
-          <div v-else-if="owner" class="info-owner">
+          <div v-if="owner" class="info-owner">
             <div class="info-owner__label">{{ isRu ? "Владелец" : "Owner" }}</div>
             <div class="info-owner__row">
               <span class="info-owner__token" :style="{ background: owner.color }">
@@ -544,6 +520,33 @@ const ownerCapSrc = computed(() => `/figma/shop/caps/${capTypeFor(owner.value?.t
 
           <!-- Hint (why Дом is disabled) -->
           <p v-if="buildHint" class="info-hint">{{ buildHint }}</p>
+
+          <!-- Buy / Auction CTAs — pinned at the bottom of the card
+               under all the rent info, stacked vertically (playtester
+               2026-05-05: «надо вниз карточки, друг под другом»). Same
+               handlers the bottom action bar uses, surfaced here so the
+               player can act without dismissing the modal. -->
+          <div v-if="showBuyAuction" class="buy-stack">
+            <button
+              type="button"
+              class="action-btn action-btn--buy"
+              :disabled="!canAffordBuy"
+              @click="buyClick"
+            >
+              <span class="action-btn__label">{{ isRu ? "Купить" : "Buy" }}</span>
+              <span class="action-btn__cost">
+                <img src="/figma/room/icon-money.webp" alt="" />
+                <b>{{ buyPrice }}</b>
+              </span>
+            </button>
+            <button
+              type="button"
+              class="action-btn action-btn--auction"
+              @click="auctionClick"
+            >
+              <span class="action-btn__label">{{ isRu ? "На аукцион" : "Auction" }}</span>
+            </button>
+          </div>
 
           <!-- Propose trade (non-owner) -->
           <button
@@ -901,14 +904,16 @@ const ownerCapSrc = computed(() => `/figma/shop/caps/${capTypeFor(owner.value?.t
 .action-btn__cost img { width: 24px; height: 24px; object-fit: contain; }
 .action-btn__cost b { font-weight: 900; }
 
-/* Buy / Auction grid — two big buttons stacked on the unclaimed-tile
-   card. Same colour language as the bottom action bar (green buy,
-   amber auction) so the affordance reads consistently. */
-.buy-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
+/* Buy / Auction stack — pinned at the bottom of the unclaimed-tile
+   card, one button per row so each is full-width and easy to tap.
+   Same colour language as the bottom action bar (green buy, amber
+   auction) so the affordance reads consistently. */
+.buy-stack {
+  display: flex;
+  flex-direction: column;
   gap: 8px;
 }
+.buy-stack .action-btn { min-height: 52px; }
 .action-btn--buy { background: #43c22d; }
 .action-btn--auction { background: #d69e36; }
 
