@@ -23,7 +23,11 @@ const CASH_PRESETS = [1000, 1500, 2000, 2500, 3000];
 const ENTRY_PRESETS = [0, 50, 100, 250, 500, 1000];
 const startingCash = ref(1500);
 const auctionsOn = ref(true);
-const fastPace = ref(false);
+// Auto-liquidate when a player can't cover rent / tax / a fine — server
+// sells houses + mortgages property on their behalf before declaring
+// bankruptcy. ON by default so existing playstyle is unchanged; host can
+// flip OFF for a stricter "you decide what to sell" classic mode.
+const fastPace = ref(true);
 const entryFee = ref(100);
 
 function cycle<T>(arr: readonly T[], current: T): T {
@@ -70,7 +74,7 @@ const L = computed(() => isRu.value
       rules: "Правила",
       ruleCash: "Стартовый капитал",
       ruleAuctions: "Аукционы",
-      rulePace: "Быстрый темп",
+      rulePace: "Авто-продажа",
       ruleEntry: "Вход",
       create: "СОЗДАТЬ ПАРТИЮ",
     }
@@ -84,7 +88,7 @@ const L = computed(() => isRu.value
       rules: "Rules",
       ruleCash: "Starting cash",
       ruleAuctions: "Auctions",
-      rulePace: "Fast pace",
+      rulePace: "Auto-sell",
       ruleEntry: "Entry",
       create: "CREATE MATCH",
     });
@@ -99,6 +103,7 @@ function createRoom() {
     name: userName.value,
     isPublic: isPublic.value,
     maxPlayers: maxPlayers.value,
+    settings: { fastMode: fastPace.value },
   });
 }
 

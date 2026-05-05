@@ -481,7 +481,7 @@ function handleCreate(conn: Conn, msg: ClientMessage & { type: "create" }): void
     conn.send({ type: "error", message: "auth failed" });
     return;
   }
-  const room = createRoom("pending", msg.isPublic ?? true, msg.maxPlayers ?? 6);
+  const room = createRoom("pending", msg.isPublic ?? true, msg.maxPlayers ?? 6, msg.settings ?? {});
   const player = addPlayer(room, auth.tgUserId, auth.displayName, auth.photoUrl);
   if (!player) {
     conn.send({ type: "error", message: "can't add player" });
