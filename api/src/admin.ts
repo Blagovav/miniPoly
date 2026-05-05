@@ -19,9 +19,11 @@ import { allRooms, getRoom } from "./rooms/manager";
 import { config } from "./config";
 import {
   getAdminStats,
+  getPurchaseById,
   listAdminMatches,
   listAdminPurchases,
   listAdminUsers,
+  markPurchaseRefunded,
 } from "./db";
 
 const LOG_TAIL = 80;
@@ -112,6 +114,56 @@ export function registerAdminRoutes(app: FastifyInstance): void {
     }
   });
 
+  // Refund a Stars purchase. Calls Telegram refundStarPayment → on
+  // success stamps refunded_at in our DB. Idempotent: replays return the
+  // already-refunded row without hitting Telegram a second time. Errors
+  // from Telegram (window expired, charge unknown, etc.) bubble up as
+  // 502 with the original description so the panel can surface it.
+  app.post<{ Params: { id: string } }>("/admin/purchases/:id/refund", async (req, reply) => {
+    if (!authorized(req)) return reject(reply);
+    const id = Number(req.params.id);
+    if (!Number.isFinite(id)) {
+      reply.code(400).send({ error: "bad id" });
+      return;
+    }
+    if (!config.botToken) {
+      reply.code(503).send({ error: "BOT_TOKEN not configured" });
+      return;
+    }
+    try {
+      const purchase = await getPurchaseById(id);
+      if (!purchase) {
+        reply.code(404).send({ error: "purchase not found" });
+        return;
+      }
+      if (purchase.refundedAt) {
+        return { ok: true, alreadyRefunded: true, purchase };
+      }
+      if (!purchase.chargeId) {
+        reply.code(400).send({ error: "purchase has no charge id (cannot refund)" });
+        return;
+      }
+      const tgRes = await fetch(`https://api.telegram.org/bot${config.botToken}/refundStarPayment`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          user_id: purchase.tgUserId,
+          telegram_payment_charge_id: purchase.chargeId,
+        }),
+      });
+      const tgJson = (await tgRes.json().catch(() => ({}))) as { ok?: boolean; description?: string };
+      if (!tgRes.ok || !tgJson.ok) {
+        reply.code(502).send({ error: tgJson.description ?? `Telegram returned ${tgRes.status}` });
+        return;
+      }
+      await markPurchaseRefunded(id);
+      const refreshed = await getPurchaseById(id);
+      return { ok: true, purchase: refreshed };
+    } catch (err) {
+      reply.code(500).send({ error: String(err) });
+    }
+  });
+
   app.get<{ Params: { id: string } }>("/admin/rooms/:id", async (req, reply) => {
     if (!authorized(req)) return reject(reply);
     const room = getRoom(req.params.id);
@@ -190,6 +242,9 @@ const DASHBOARD_HTML = String.raw`<!doctype html>
   .log__line:nth-child(odd) { color: #94a3c4; }
   button { background: #2746d4; color: #fff; border: 0; padding: 6px 12px; border-radius: 4px; cursor: pointer; font: inherit; }
   button:hover { background: #3858e8; }
+  button:disabled { opacity: 0.5; cursor: wait; }
+  .refund-btn { background: #7f1d1d; padding: 3px 8px; font-size: 11px; }
+  .refund-btn:hover { background: #b91c1c; }
   input { background: #08091a; color: #fff; border: 1px solid #1f2745; padding: 6px 10px; border-radius: 4px; font: inherit; }
   .muted { color: #607090; }
   .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
@@ -405,15 +460,46 @@ async function loadPurchases() {
   try {
     const r = await fetchJson('/admin/purchases?limit=30');
     if (!r.purchases.length) { body.innerHTML = '<span class="muted">no purchases yet</span>'; return; }
-    const rows = r.purchases.map((p) =>
-      '<tr><td>' + escape(p.userName ?? String(p.tgUserId)) + '</td>' +
-      '<td>' + escape(p.itemId) + '</td>' +
-      '<td class="num">⭐ ' + p.stars + '</td>' +
-      '<td class="muted">' + fmtAge(new Date(p.createdAt).getTime()) + '</td></tr>'
-    ).join('');
-    body.innerHTML = '<table><thead><tr><th>buyer</th><th>item</th><th>stars</th><th>when</th></tr></thead><tbody>' + rows + '</tbody></table>';
+    const rows = r.purchases.map((p) => {
+      const action = p.refundedAt
+        ? pill('refunded', 'bad')
+        : p.chargeId
+          ? '<button class="refund-btn" data-id="' + p.id + '">refund</button>'
+          : '<span class="muted">no charge id</span>';
+      return '<tr><td>' + escape(p.userName ?? String(p.tgUserId)) + '</td>' +
+        '<td>' + escape(p.itemId) + '</td>' +
+        '<td class="num">⭐ ' + p.stars + '</td>' +
+        '<td class="muted">' + fmtAge(new Date(p.createdAt).getTime()) + '</td>' +
+        '<td>' + action + '</td></tr>';
+    }).join('');
+    body.innerHTML = '<table><thead><tr><th>buyer</th><th>item</th><th>stars</th><th>when</th><th></th></tr></thead><tbody>' + rows + '</tbody></table>';
+    body.querySelectorAll('.refund-btn').forEach((btn) => { btn.onclick = onRefundClick; });
   } catch (e) {
     body.innerHTML = '<span class="err">' + e.message + '</span>';
+  }
+}
+
+async function onRefundClick(ev) {
+  const btn = ev.currentTarget;
+  const id = btn.dataset.id;
+  if (!confirm('Refund purchase #' + id + '? The user gets their stars back.')) return;
+  btn.disabled = true;
+  btn.textContent = '…';
+  try {
+    const res = await fetch(auth('/admin/purchases/' + id + '/refund'), { method: 'POST' });
+    const j = await res.json().catch(() => ({}));
+    if (!res.ok || !j.ok) {
+      alert('Refund failed: ' + (j.error || ('HTTP ' + res.status)));
+      btn.disabled = false;
+      btn.textContent = 'refund';
+      return;
+    }
+    loadPurchases();
+    loadStats();
+  } catch (e) {
+    alert('Refund failed: ' + e.message);
+    btn.disabled = false;
+    btn.textContent = 'refund';
   }
 }
 

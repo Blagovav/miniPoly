@@ -38,6 +38,9 @@ export async function initDb(): Promise<void> {
     );
     CREATE INDEX IF NOT EXISTS idx_purchases_user ON stars_purchases (tg_user_id);
     CREATE UNIQUE INDEX IF NOT EXISTS uq_purchase_charge ON stars_purchases (tg_payment_charge_id) WHERE tg_payment_charge_id IS NOT NULL;
+    -- Refund metadata (admin action). Null until refunded; set to the
+    -- moment Telegram acknowledges refundStarPayment.
+    ALTER TABLE stars_purchases ADD COLUMN IF NOT EXISTS refunded_at TIMESTAMPTZ;
 
     -- In-game friend network (independent of Telegram contacts). Direct
     -- consent flow: A sends, B accepts → status flips to 'accepted'.
@@ -495,12 +498,15 @@ export interface AdminPurchaseRow {
   userName: string | null;
   itemId: string;
   stars: number;
+  chargeId: string | null;
   createdAt: string;
+  refundedAt: string | null;
 }
 
 export async function listAdminPurchases(limit = 50): Promise<AdminPurchaseRow[]> {
   const { rows } = await pool.query(
-    `SELECT sp.id, sp.tg_user_id, u.name, sp.item_id, sp.stars, sp.created_at
+    `SELECT sp.id, sp.tg_user_id, u.name, sp.item_id, sp.stars,
+            sp.tg_payment_charge_id, sp.created_at, sp.refunded_at
        FROM stars_purchases sp
        LEFT JOIN users u ON u.tg_user_id = sp.tg_user_id
        ORDER BY sp.created_at DESC
@@ -513,6 +519,41 @@ export async function listAdminPurchases(limit = 50): Promise<AdminPurchaseRow[]
     userName: r.name ?? null,
     itemId: r.item_id,
     stars: Number(r.stars),
+    chargeId: r.tg_payment_charge_id ?? null,
     createdAt: r.created_at instanceof Date ? r.created_at.toISOString() : String(r.created_at),
+    refundedAt: r.refunded_at == null ? null : r.refunded_at instanceof Date ? r.refunded_at.toISOString() : String(r.refunded_at),
   }));
+}
+
+/** Look up a single purchase row — used by the refund flow so we can read
+ *  the user_id + charge_id to forward to Telegram before mutating. */
+export async function getPurchaseById(id: number): Promise<AdminPurchaseRow | null> {
+  const { rows } = await pool.query(
+    `SELECT sp.id, sp.tg_user_id, u.name, sp.item_id, sp.stars,
+            sp.tg_payment_charge_id, sp.created_at, sp.refunded_at
+       FROM stars_purchases sp
+       LEFT JOIN users u ON u.tg_user_id = sp.tg_user_id
+       WHERE sp.id = $1`,
+    [id],
+  );
+  const r = rows[0];
+  if (!r) return null;
+  return {
+    id: Number(r.id),
+    tgUserId: Number(r.tg_user_id),
+    userName: r.name ?? null,
+    itemId: r.item_id,
+    stars: Number(r.stars),
+    chargeId: r.tg_payment_charge_id ?? null,
+    createdAt: r.created_at instanceof Date ? r.created_at.toISOString() : String(r.created_at),
+    refundedAt: r.refunded_at == null ? null : r.refunded_at instanceof Date ? r.refunded_at.toISOString() : String(r.refunded_at),
+  };
+}
+
+/** Stamp the refund timestamp once Telegram has acknowledged the refund. */
+export async function markPurchaseRefunded(id: number): Promise<void> {
+  await pool.query(
+    `UPDATE stars_purchases SET refunded_at = NOW() WHERE id = $1 AND refunded_at IS NULL`,
+    [id],
+  );
 }
