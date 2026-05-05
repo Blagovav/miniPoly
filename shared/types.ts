@@ -215,11 +215,29 @@ export interface AuctionState {
   startedAt: number;
 }
 
+/**
+ * Per-room toggleable rules picked by the host on Create. Settings are
+ * frozen at room creation; mid-game changes aren't supported.
+ *
+ * fastMode: when a player can't cover rent / tax / a repair card, the
+ * engine auto-sells houses and mortgages property on their behalf
+ * before declaring bankruptcy. With fastMode=false the player goes
+ * straight to bankruptcy — slower-feel but matches the classic Hasbro
+ * "you choose what to liquidate" expectation. Default true to preserve
+ * the behaviour rooms had before the toggle existed.
+ */
+export interface RoomSettings {
+  fastMode: boolean;
+}
+
+export const DEFAULT_ROOM_SETTINGS: RoomSettings = { fastMode: true };
+
 export interface RoomState {
   id: string;
   hostId: string;
   isPublic: boolean;
   maxPlayers: number;
+  settings: RoomSettings;
   players: Player[];
   currentTurn: number;
   phase: GamePhase;
@@ -282,7 +300,7 @@ export interface ShopItem {
 // ---------- Client → Server messages ----------
 export type ClientMessage =
   | { type: "join"; roomId: string; tgInitData: string; name: string }
-  | { type: "create"; tgInitData: string; name: string; isPublic?: boolean; maxPlayers?: number }
+  | { type: "create"; tgInitData: string; name: string; isPublic?: boolean; maxPlayers?: number; settings?: Partial<RoomSettings> }
   | { type: "ready" }
   | { type: "start" }
   | { type: "roll" }

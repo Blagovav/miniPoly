@@ -9,11 +9,13 @@ import type {
   Player,
   PreRollBracket,
   PropertyTile,
+  RoomSettings,
   RoomState,
   StreetTile,
   Tile,
   TxnInfo,
 } from "../../../shared/types";
+import { DEFAULT_ROOM_SETTINGS } from "../../../shared/types";
 
 const RAILROAD_RENTS = [25, 50, 100, 200];
 
@@ -37,13 +39,19 @@ function shuffle<T>(arr: readonly T[]): T[] {
   return out;
 }
 
-export function createRoom(hostId: string, isPublic = true, maxPlayers = MAX_PLAYERS): RoomState {
+export function createRoom(
+  hostId: string,
+  isPublic = true,
+  maxPlayers = MAX_PLAYERS,
+  settings: Partial<RoomSettings> = {},
+): RoomState {
   const clamped = Math.max(MIN_PLAYERS, Math.min(MAX_PLAYERS, Math.floor(maxPlayers)));
   return {
     id: nanoid(6).toUpperCase(),
     hostId,
     isPublic,
     maxPlayers: clamped,
+    settings: { ...DEFAULT_ROOM_SETTINGS, ...settings },
     players: [],
     currentTurn: 0,
     phase: "lobby",
@@ -830,7 +838,7 @@ export function rollAndMove(
       if (p.jailTurns >= 3) {
         // Hasbro: forced $50 fine on the third turn — try liquidation
         // before declaring bankruptcy.
-        if (p.cash < JAIL_FINE) liquidateForCash(room, p, JAIL_FINE);
+        if (p.cash < JAIL_FINE && room.settings.fastMode) liquidateForCash(room, p, JAIL_FINE);
         if (p.cash >= JAIL_FINE) {
           p.cash -= JAIL_FINE;
           p.inJail = false;
@@ -944,8 +952,10 @@ function handleProperty(room: RoomState, p: Player, tile: PropertyTile, opts?: R
   const rent = calculateRent(room, tile, owned, opts);
   // Hasbro: forced liquidation before bankruptcy — sell houses and
   // mortgage holdings to try to make rent. Bankruptcy is only after
-  // there's literally nothing left.
-  if (p.cash < rent) liquidateForCash(room, p, rent);
+  // there's literally nothing left. Skipped when the room opted out of
+  // auto-liquidation (settings.fastMode=false): player goes straight
+  // to bankrupt and decides for themselves what to liquidate next time.
+  if (p.cash < rent && room.settings.fastMode) liquidateForCash(room, p, rent);
   const paid = Math.min(rent, p.cash);
   p.cash -= paid;
   owner.cash += paid;
@@ -1380,7 +1390,7 @@ function payOrBankrupt(
   amount: number,
   reason: I18nText,
 ): void {
-  if (p.cash < amount) liquidateForCash(room, p, amount);
+  if (p.cash < amount && room.settings.fastMode) liquidateForCash(room, p, amount);
   if (p.cash >= amount) {
     p.cash -= amount;
     log(room, { en: `${p.name}: ${reason.en}`, ru: `${p.name}: ${reason.ru}` });
@@ -1547,7 +1557,7 @@ function applyCardEffect(room: RoomState, p: Player, card: CardDef, source: "cha
     case "payEach": {
       const others = room.players.filter((pl) => !pl.bankrupt && pl.id !== p.id);
       const total = e.amount * others.length;
-      if (p.cash < total) liquidateForCash(room, p, total);
+      if (p.cash < total && room.settings.fastMode) liquidateForCash(room, p, total);
       if (p.cash < total) {
         bankruptPlayer(room, p);
         return;
