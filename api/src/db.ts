@@ -380,3 +380,139 @@ export async function getRecentCoPlayers(tgUserId: number, limit = 20): Promise<
     winRate: Number(r.games_played) > 0 ? Number(r.games_won) / Number(r.games_played) : 0,
   }));
 }
+
+// ───── Admin dashboard queries ────────────────────────────────────────
+// Read-only and tolerant of an empty/fresh DB — admin panel renders
+// even before the first user signs in.
+
+export interface AdminStats {
+  totalUsers: number;
+  newUsersToday: number;
+  totalMatches: number;
+  matchesToday: number;
+  totalPurchases: number;
+  purchasesToday: number;
+  starsToday: number;
+  starsTotal: number;
+}
+
+export async function getAdminStats(): Promise<AdminStats> {
+  const { rows } = await pool.query(`
+    SELECT
+      (SELECT COUNT(*) FROM users) AS total_users,
+      (SELECT COUNT(*) FROM users WHERE created_at >= NOW() - INTERVAL '24 hours') AS new_users_today,
+      (SELECT COUNT(*) FROM match_history) AS total_matches,
+      (SELECT COUNT(*) FROM match_history WHERE ended_at >= NOW() - INTERVAL '24 hours') AS matches_today,
+      (SELECT COUNT(*) FROM stars_purchases) AS total_purchases,
+      (SELECT COUNT(*) FROM stars_purchases WHERE created_at >= NOW() - INTERVAL '24 hours') AS purchases_today,
+      (SELECT COALESCE(SUM(stars), 0) FROM stars_purchases WHERE created_at >= NOW() - INTERVAL '24 hours') AS stars_today,
+      (SELECT COALESCE(SUM(stars), 0) FROM stars_purchases) AS stars_total
+  `);
+  const r = rows[0] ?? {};
+  return {
+    totalUsers: Number(r.total_users ?? 0),
+    newUsersToday: Number(r.new_users_today ?? 0),
+    totalMatches: Number(r.total_matches ?? 0),
+    matchesToday: Number(r.matches_today ?? 0),
+    totalPurchases: Number(r.total_purchases ?? 0),
+    purchasesToday: Number(r.purchases_today ?? 0),
+    starsToday: Number(r.stars_today ?? 0),
+    starsTotal: Number(r.stars_total ?? 0),
+  };
+}
+
+export interface AdminUserRow {
+  tgUserId: number;
+  name: string;
+  gamesPlayed: number;
+  gamesWon: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export async function listAdminUsers(
+  sort: "recent" | "active" | "wins" = "recent",
+  limit = 50,
+): Promise<AdminUserRow[]> {
+  const orderBy =
+    sort === "active" ? "updated_at DESC" :
+    sort === "wins" ? "games_won DESC, games_played DESC" :
+    "created_at DESC";
+  const { rows } = await pool.query(
+    `SELECT tg_user_id, name, games_played, games_won, created_at, updated_at
+       FROM users
+       ORDER BY ${orderBy}
+       LIMIT $1`,
+    [limit],
+  );
+  return rows.map((r) => ({
+    tgUserId: Number(r.tg_user_id),
+    name: r.name,
+    gamesPlayed: Number(r.games_played),
+    gamesWon: Number(r.games_won),
+    createdAt: r.created_at instanceof Date ? r.created_at.toISOString() : String(r.created_at),
+    updatedAt: r.updated_at instanceof Date ? r.updated_at.toISOString() : String(r.updated_at),
+  }));
+}
+
+export interface AdminMatchRow {
+  roomId: string;
+  endedAt: string;
+  winnerName: string | null;
+  winnerId: number | null;
+  playerCount: number;
+}
+
+export async function listAdminMatches(limit = 50): Promise<AdminMatchRow[]> {
+  // Group rows by room (each match writes one row per player). Pick the
+  // winner's id+name for the headline; player count is the row count.
+  const { rows } = await pool.query(
+    `SELECT
+       mh.room_id,
+       MAX(mh.ended_at) AS ended_at,
+       MAX(CASE WHEN mh.won THEN mh.tg_user_id END) AS winner_id,
+       MAX(CASE WHEN mh.won THEN u.name END) AS winner_name,
+       COUNT(*) AS player_count
+     FROM match_history mh
+     LEFT JOIN users u ON u.tg_user_id = mh.tg_user_id
+     GROUP BY mh.room_id
+     ORDER BY MAX(mh.ended_at) DESC
+     LIMIT $1`,
+    [limit],
+  );
+  return rows.map((r) => ({
+    roomId: r.room_id,
+    endedAt: r.ended_at instanceof Date ? r.ended_at.toISOString() : String(r.ended_at),
+    winnerId: r.winner_id == null ? null : Number(r.winner_id),
+    winnerName: r.winner_name ?? null,
+    playerCount: Number(r.player_count),
+  }));
+}
+
+export interface AdminPurchaseRow {
+  id: number;
+  tgUserId: number;
+  userName: string | null;
+  itemId: string;
+  stars: number;
+  createdAt: string;
+}
+
+export async function listAdminPurchases(limit = 50): Promise<AdminPurchaseRow[]> {
+  const { rows } = await pool.query(
+    `SELECT sp.id, sp.tg_user_id, u.name, sp.item_id, sp.stars, sp.created_at
+       FROM stars_purchases sp
+       LEFT JOIN users u ON u.tg_user_id = sp.tg_user_id
+       ORDER BY sp.created_at DESC
+       LIMIT $1`,
+    [limit],
+  );
+  return rows.map((r) => ({
+    id: Number(r.id),
+    tgUserId: Number(r.tg_user_id),
+    userName: r.name ?? null,
+    itemId: r.item_id,
+    stars: Number(r.stars),
+    createdAt: r.created_at instanceof Date ? r.created_at.toISOString() : String(r.created_at),
+  }));
+}

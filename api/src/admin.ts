@@ -17,6 +17,12 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import { allRooms, getRoom } from "./rooms/manager";
 import { config } from "./config";
+import {
+  getAdminStats,
+  listAdminMatches,
+  listAdminPurchases,
+  listAdminUsers,
+} from "./db";
 
 const LOG_TAIL = 80;
 
@@ -57,6 +63,53 @@ export function registerAdminRoutes(app: FastifyInstance): void {
     }));
     rooms.sort((a, b) => b.createdAt - a.createdAt);
     return { rooms, total: rooms.length };
+  });
+
+  app.get("/admin/stats", async (req, reply) => {
+    if (!authorized(req)) return reject(reply);
+    try {
+      const dbStats = await getAdminStats();
+      const rooms = allRooms();
+      return {
+        ...dbStats,
+        activeRooms: rooms.length,
+        activeRoomsInGame: rooms.filter((r) => r.phase !== "lobby" && r.phase !== "ended").length,
+        playersOnline: rooms.reduce((n, r) => n + r.players.filter((p) => !p.bankrupt && !p.isBot).length, 0),
+      };
+    } catch (err) {
+      reply.code(500).send({ error: String(err) });
+    }
+  });
+
+  app.get<{ Querystring: { sort?: string; limit?: string } }>("/admin/users", async (req, reply) => {
+    if (!authorized(req)) return reject(reply);
+    const sort = (req.query.sort === "active" || req.query.sort === "wins") ? req.query.sort : "recent";
+    const limit = Math.min(200, Math.max(1, Number(req.query.limit ?? 50)));
+    try {
+      return { users: await listAdminUsers(sort, limit) };
+    } catch (err) {
+      reply.code(500).send({ error: String(err) });
+    }
+  });
+
+  app.get<{ Querystring: { limit?: string } }>("/admin/history", async (req, reply) => {
+    if (!authorized(req)) return reject(reply);
+    const limit = Math.min(200, Math.max(1, Number(req.query.limit ?? 50)));
+    try {
+      return { matches: await listAdminMatches(limit) };
+    } catch (err) {
+      reply.code(500).send({ error: String(err) });
+    }
+  });
+
+  app.get<{ Querystring: { limit?: string } }>("/admin/purchases", async (req, reply) => {
+    if (!authorized(req)) return reject(reply);
+    const limit = Math.min(200, Math.max(1, Number(req.query.limit ?? 50)));
+    try {
+      return { purchases: await listAdminPurchases(limit) };
+    } catch (err) {
+      reply.code(500).send({ error: String(err) });
+    }
   });
 
   app.get<{ Params: { id: string } }>("/admin/rooms/:id", async (req, reply) => {
@@ -116,7 +169,17 @@ const DASHBOARD_HTML = String.raw`<!doctype html>
   th { color: #9cb0ff; font-weight: 600; }
   tr:hover { background: #131a36; cursor: pointer; }
   tr.selected { background: #1c2752; }
-  .grid { display: grid; grid-template-columns: 360px 1fr; gap: 16px; }
+  .grid { display: grid; grid-template-columns: 360px 1fr; gap: 16px; margin-bottom: 16px; }
+  .grid--3 { grid-template-columns: 1fr 1fr 1fr; }
+  .stats { display: grid; grid-template-columns: repeat(8, 1fr); gap: 14px; margin-bottom: 16px; padding: 14px 16px; }
+  .stat { text-align: center; }
+  .stat__num { font-size: 22px; font-weight: 700; color: #fff; font-variant-numeric: tabular-nums; }
+  .stat__label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.6px; color: #9cb0ff; margin-top: 2px; }
+  .inline-select { background: #08091a; color: #fff; border: 1px solid #1f2745; padding: 2px 6px; border-radius: 3px; font: inherit; font-size: 11px; margin-left: 8px; }
+  @media (max-width: 1100px) {
+    .stats { grid-template-columns: repeat(4, 1fr); }
+    .grid, .grid--3 { grid-template-columns: 1fr; }
+  }
   .panel { background: #11172f; border: 1px solid #1f2745; border-radius: 6px; padding: 12px; }
   .pill { display: inline-block; padding: 2px 8px; border-radius: 100px; font-size: 11px; background: #1f2745; }
   .pill--ok { background: #14532d; color: #bbf7d0; }
@@ -149,6 +212,16 @@ const DASHBOARD_HTML = String.raw`<!doctype html>
   </label>
   <button id="reload">reload now</button>
 </div>
+<div class="stats panel" id="statsPanel">
+  <div class="stat"><div class="stat__num">—</div><div class="stat__label">active rooms</div></div>
+  <div class="stat"><div class="stat__num">—</div><div class="stat__label">in-game</div></div>
+  <div class="stat"><div class="stat__num">—</div><div class="stat__label">players online</div></div>
+  <div class="stat"><div class="stat__num">—</div><div class="stat__label">users total</div></div>
+  <div class="stat"><div class="stat__num">—</div><div class="stat__label">new 24h</div></div>
+  <div class="stat"><div class="stat__num">—</div><div class="stat__label">matches 24h</div></div>
+  <div class="stat"><div class="stat__num">—</div><div class="stat__label">stars 24h</div></div>
+  <div class="stat"><div class="stat__num">—</div><div class="stat__label">stars all-time</div></div>
+</div>
 <div class="grid">
   <div class="panel">
     <h2>Rooms <span id="roomCount" class="muted"></span></h2>
@@ -160,6 +233,26 @@ const DASHBOARD_HTML = String.raw`<!doctype html>
   <div class="panel">
     <h2>Detail <span id="detailHeader" class="muted">— pick a room</span></h2>
     <div id="detail"></div>
+  </div>
+</div>
+<div class="grid grid--3">
+  <div class="panel">
+    <h2>Users
+      <select id="userSort" class="inline-select">
+        <option value="recent">newest</option>
+        <option value="active">recently active</option>
+        <option value="wins">most wins</option>
+      </select>
+    </h2>
+    <div id="usersBody" class="muted">loading…</div>
+  </div>
+  <div class="panel">
+    <h2>Recent matches</h2>
+    <div id="historyBody" class="muted">loading…</div>
+  </div>
+  <div class="panel">
+    <h2>Stars purchases</h2>
+    <div id="purchasesBody" class="muted">loading…</div>
   </div>
 </div>
 <script>
@@ -257,8 +350,79 @@ async function loadDetail() {
   }
 }
 
+async function loadStats() {
+  try {
+    const s = await fetchJson('/admin/stats');
+    const nums = [
+      s.activeRooms, s.activeRoomsInGame, s.playersOnline,
+      s.totalUsers, s.newUsersToday, s.matchesToday,
+      s.starsToday, s.starsTotal,
+    ];
+    const cells = document.querySelectorAll('#statsPanel .stat__num');
+    nums.forEach((v, i) => { if (cells[i]) cells[i].textContent = String(v); });
+  } catch (e) {
+    // Stats panel staying at "—" is fine; surface in status bar instead of stomping the rooms view.
+  }
+}
+
+async function loadUsers() {
+  const body = document.getElementById('usersBody');
+  const sort = document.getElementById('userSort').value;
+  try {
+    const r = await fetchJson('/admin/users?sort=' + sort + '&limit=50');
+    if (!r.users.length) { body.innerHTML = '<span class="muted">no users yet</span>'; return; }
+    const rows = r.users.map((u) =>
+      '<tr><td>' + escape(u.name) + '</td>' +
+      '<td class="num muted">' + u.tgUserId + '</td>' +
+      '<td class="num">' + u.gamesWon + '/' + u.gamesPlayed + '</td>' +
+      '<td class="muted">' + fmtAge(new Date(sort === "active" ? u.updatedAt : u.createdAt).getTime()) + '</td></tr>'
+    ).join('');
+    body.innerHTML = '<table><thead><tr><th>name</th><th>tg id</th><th>W/P</th><th>' + (sort === 'active' ? 'last seen' : 'joined') + '</th></tr></thead><tbody>' + rows + '</tbody></table>';
+  } catch (e) {
+    body.innerHTML = '<span class="err">' + e.message + '</span>';
+  }
+}
+
+async function loadHistory() {
+  const body = document.getElementById('historyBody');
+  try {
+    const r = await fetchJson('/admin/history?limit=30');
+    if (!r.matches.length) { body.innerHTML = '<span class="muted">no finished matches yet</span>'; return; }
+    const rows = r.matches.map((m) =>
+      '<tr><td class="muted num">' + escape(m.roomId) + '</td>' +
+      '<td>' + (m.winnerName ? escape(m.winnerName) + ' 🏆' : '<span class="muted">none</span>') + '</td>' +
+      '<td class="num">' + m.playerCount + 'p</td>' +
+      '<td class="muted">' + fmtAge(new Date(m.endedAt).getTime()) + '</td></tr>'
+    ).join('');
+    body.innerHTML = '<table><thead><tr><th>room</th><th>winner</th><th>players</th><th>ended</th></tr></thead><tbody>' + rows + '</tbody></table>';
+  } catch (e) {
+    body.innerHTML = '<span class="err">' + e.message + '</span>';
+  }
+}
+
+async function loadPurchases() {
+  const body = document.getElementById('purchasesBody');
+  try {
+    const r = await fetchJson('/admin/purchases?limit=30');
+    if (!r.purchases.length) { body.innerHTML = '<span class="muted">no purchases yet</span>'; return; }
+    const rows = r.purchases.map((p) =>
+      '<tr><td>' + escape(p.userName ?? String(p.tgUserId)) + '</td>' +
+      '<td>' + escape(p.itemId) + '</td>' +
+      '<td class="num">⭐ ' + p.stars + '</td>' +
+      '<td class="muted">' + fmtAge(new Date(p.createdAt).getTime()) + '</td></tr>'
+    ).join('');
+    body.innerHTML = '<table><thead><tr><th>buyer</th><th>item</th><th>stars</th><th>when</th></tr></thead><tbody>' + rows + '</tbody></table>';
+  } catch (e) {
+    body.innerHTML = '<span class="err">' + e.message + '</span>';
+  }
+}
+
 function tick() {
+  loadStats();
   loadRooms();
+  loadUsers();
+  loadHistory();
+  loadPurchases();
   if (selected) loadDetail();
 }
 
@@ -270,6 +434,7 @@ function setupRefresh() {
 
 document.getElementById('refresh').onchange = setupRefresh;
 document.getElementById('reload').onclick = tick;
+document.getElementById('userSort').onchange = loadUsers;
 tick();
 setupRefresh();
 </script>
