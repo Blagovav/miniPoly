@@ -1571,6 +1571,8 @@ void t;
       :on-propose-trade="openTradeFromTile"
       :on-mortgage="mortgage"
       :on-unmortgage="unmortgage"
+      :on-buy="buy"
+      :on-auction="skipBuy"
     />
     <PlayerProfileModal
       :player="profilePlayer"

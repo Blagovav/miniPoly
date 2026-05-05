@@ -12,6 +12,11 @@ const props = defineProps<{
   onProposeTrade?: (tileIndex: number) => void;
   onMortgage?: (tileIndex: number) => void;
   onUnmortgage?: (tileIndex: number) => void;
+  // Buy / send-to-auction. Same handlers the bottom action bar uses;
+  // showing them in the modal too saves the player a tap when the
+  // server is in buyPrompt and the card has just popped up.
+  onBuy?: () => void;
+  onAuction?: () => void;
 }>();
 
 const { locale } = useI18n();
@@ -285,6 +290,35 @@ const canPropose = computed(() => {
 });
 function openPropose() { if (tile.value) props.onProposeTrade?.(tile.value.index); }
 
+// Buy / Auction CTAs inside the modal (Figma matches what's already in
+// the bottom action bar). Show only when the server is in buyPrompt for
+// my turn AND the displayed tile is the one I just landed on AND it's
+// still unclaimed — anything else and these buttons would be confusing
+// or non-functional.
+const isUnclaimedProperty = computed(() => {
+  const t = tile.value;
+  if (!t) return false;
+  if (t.kind !== "street" && t.kind !== "railroad" && t.kind !== "utility") return false;
+  return !owned.value;
+});
+const buyPrice = computed(() => {
+  const t = tile.value;
+  if (!t || (t.kind !== "street" && t.kind !== "railroad" && t.kind !== "utility")) return 0;
+  return t.price;
+});
+const showBuyAuction = computed(() => {
+  if (!game.isMyTurn) return false;
+  if (game.room?.phase !== "buyPrompt") return false;
+  if (!isUnclaimedProperty.value) return false;
+  // Only the tile the player has actually landed on can be bought —
+  // selecting another tile from the board shouldn't show buy buttons.
+  const t = tile.value;
+  return !!t && !!game.me && t.index === game.me.position;
+});
+const canAffordBuy = computed(() => (game.me?.cash ?? 0) >= buyPrice.value);
+function buyClick()     { props.onBuy?.(); close(); }
+function auctionClick() { props.onAuction?.(); close(); }
+
 const isMineProperty = computed(() => {
   const t = tile.value;
   const o = owned.value;
@@ -404,6 +438,31 @@ const ownerCapSrc = computed(() => `/figma/shop/caps/${capTypeFor(owner.value?.t
           <!-- Owner state -->
           <div v-if="isProperty && !owner" class="info-free">
             {{ isRu ? "Владельца нет" : "Unclaimed land" }}
+          </div>
+
+          <!-- Buy / Auction CTAs — same handlers the bottom action bar
+               uses, surfaced inside the modal so the player can act
+               without dismissing it first (playtester request 2026-05-05). -->
+          <div v-if="showBuyAuction" class="buy-grid">
+            <button
+              type="button"
+              class="action-btn action-btn--buy"
+              :disabled="!canAffordBuy"
+              @click="buyClick"
+            >
+              <span class="action-btn__label">{{ isRu ? "Купить" : "Buy" }}</span>
+              <span class="action-btn__cost">
+                <img src="/figma/room/icon-money.webp" alt="" />
+                <b>{{ buyPrice }}</b>
+              </span>
+            </button>
+            <button
+              type="button"
+              class="action-btn action-btn--auction"
+              @click="auctionClick"
+            >
+              <span class="action-btn__label">{{ isRu ? "На аукцион" : "Auction" }}</span>
+            </button>
           </div>
           <div v-else-if="owner" class="info-owner">
             <div class="info-owner__label">{{ isRu ? "Владелец" : "Owner" }}</div>
@@ -841,6 +900,17 @@ const ownerCapSrc = computed(() => `/figma/shop/caps/${capTypeFor(owner.value?.t
 }
 .action-btn__cost img { width: 24px; height: 24px; object-fit: contain; }
 .action-btn__cost b { font-weight: 900; }
+
+/* Buy / Auction grid — two big buttons stacked on the unclaimed-tile
+   card. Same colour language as the bottom action bar (green buy,
+   amber auction) so the affordance reads consistently. */
+.buy-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.action-btn--buy { background: #43c22d; }
+.action-btn--auction { background: #d69e36; }
 
 /* Sell-confirm sheet — sits on top of the property card so a misclick
    on the swap "Продать" button can't quietly demolish a building. */
