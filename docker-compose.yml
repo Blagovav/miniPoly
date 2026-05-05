@@ -73,32 +73,23 @@ services:
       - ./bot/src:/app/bot/src
 
   web:
+    # Multi-stage build: vite build → static dist → nginx :80. VITE_TURN_*
+    # are baked into the bundle as build args (must be present at build
+    # time, not runtime — changes to .env need a `--build` deploy). API
+    # and WS URLs intentionally not passed: the bundle uses same-origin
+    # paths (`/api/*`, `/ws`) which Caddy proxies to api:3000.
     build:
       context: .
       dockerfile: web/Dockerfile
+      args:
+        VITE_BOT_USERNAME: ${BOT_USERNAME:-poly_mini_bot}
+        VITE_TURN_URL: ${VITE_TURN_URL:-}
+        VITE_TURN_USER: ${VITE_TURN_USER:-}
+        VITE_TURN_PASS: ${VITE_TURN_PASS:-}
     restart: unless-stopped
-    environment:
-      # Empty default → client falls back to same-origin (`/api/*`, `/ws`)
-      # which Caddy proxies to api:3000. The previous `http://localhost:3000`
-      # default leaked into prod fetches when the env var wasn't set in
-      # .env, causing CORS-blocked browser requests (incident 2026-05-05).
-      VITE_API_URL: ${VITE_API_URL:-}
-      VITE_WS_URL: ${VITE_WS_URL:-}
-      # WebRTC voice chat needs the TURN relay reachable from the browser.
-      # Without these vars buildIceServers() falls back to STUN-only, which
-      # breaks voice between players on different NATs (incident 2026-05-05:
-      # playtester reported voice silently broke even though .env had the
-      # values — compose just wasn't forwarding them into the container).
-      VITE_TURN_URL: ${VITE_TURN_URL:-}
-      VITE_TURN_USER: ${VITE_TURN_USER:-}
-      VITE_TURN_PASS: ${VITE_TURN_PASS:-}
-    ports:
-      - "5174:5173"
-    volumes:
-      - ./web/src:/app/web/src
-      - ./web/public:/app/web/public
-      - ./web/index.html:/app/web/index.html
-      - ./shared:/app/shared
+    # Caddy reaches web on the internal docker network at web:80 — no
+    # external port mapping needed and exposing one would just be an
+    # unsecured backdoor around the reverse-proxy.
 
 volumes:
   pg_data:
