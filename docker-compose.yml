@@ -75,8 +75,12 @@ services:
       dockerfile: web/Dockerfile
     restart: unless-stopped
     environment:
-      VITE_API_URL: ${VITE_API_URL:-http://localhost:3000}
-      VITE_WS_URL: ${VITE_WS_URL:-ws://localhost:3000/ws}
+      # Empty default → client falls back to same-origin (`/api/*`, `/ws`)
+      # which Caddy proxies to api:3000. The previous `http://localhost:3000`
+      # default leaked into prod fetches when the env var wasn't set in
+      # .env, causing CORS-blocked browser requests (incident 2026-05-05).
+      VITE_API_URL: ${VITE_API_URL:-}
+      VITE_WS_URL: ${VITE_WS_URL:-}
     ports:
       - "5174:5173"
     volumes:
