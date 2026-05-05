@@ -621,42 +621,12 @@ watch(
   flex-shrink: 0;
   position: relative;
 }
-.cor-row--rank-1 {
-  background: linear-gradient(
-    180deg,
-    #fcc101 0%,
-    rgba(255, 242, 199, 0.6) 50%,
-    #fcc101 50.4%,
-    #fcc101 100%
-  );
-}
-.cor-row--rank-2 {
-  background: linear-gradient(
-    180deg,
-    #c3d6ed 0%,
-    rgba(255, 255, 255, 0.6) 50%,
-    #c3d6ed 50.4%,
-    #c3d6ed 100%
-  );
-}
-.cor-row--rank-3 {
-  background: linear-gradient(
-    180deg,
-    #cd7f32 0%,
-    rgba(255, 255, 255, 0.4) 50%,
-    #cd7f32 50.4%,
-    #cd7f32 100%
-  );
-}
-.cor-row--rank-4 {
-  background: linear-gradient(
-    180deg,
-    #4a4a52 0%,
-    rgba(255, 255, 255, 0.18) 50%,
-    #4a4a52 50.4%,
-    #4a4a52 100%
-  );
-}
+/* Flat fills — playtester (2026-05-05) called the gradient bands
+   "тени" and asked for plain plates instead. */
+.cor-row--rank-1 { background: #fcc101; }
+.cor-row--rank-2 { background: #c3d6ed; }
+.cor-row--rank-3 { background: #cd7f32; }
+.cor-row--rank-4 { background: #4a4a52; }
 .cor-row--me {
   outline: 2px solid #fff;
   outline-offset: -1px;
