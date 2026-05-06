@@ -256,6 +256,15 @@ export interface RoomState {
   // it — one player rolling twice is still one turn. Used by the
   // mortgage-foreclosure rule (see FORECLOSURE_TURNS).
   turnCount: number;
+  /**
+   * Wall-clock ms when the current turn timer fires. The server resets
+   * it on every turn change / phase transition (resetTurnTimer in
+   * manager.ts); the client uses it to render the countdown next to
+   * "ВАШ ХОД!" so players can see how long they have left before the
+   * server forces an action. Null when no timer is active (lobby /
+   * ended).
+   */
+  turnDeadline: number | null;
   players: Player[];
   currentTurn: number;
   phase: GamePhase;
