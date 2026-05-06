@@ -161,6 +161,24 @@ watch(
     }, 700);
   },
 );
+
+// Re-announce foreground state on every (re)connect. `visibilitychange`
+// only fires on a transition, so when the WebApp reloads while visible
+// (e.g. user reopens Mini Poly from the home tab) the server never
+// learned the player is back in the foreground and kept pinging «ваш
+// ход» pushes despite an active session. Playtester 2026-05-06: «я
+// играю а мне сыпятся уведомления что мой ход; после возвращения в игру
+// чет не учитывает». Fires once both the WS and our playerId are in
+// place so handleForeground on the server can attribute it correctly.
+watch(
+  () => [ws.connected.value, game.myPlayerId] as const,
+  ([conn, pid]) => {
+    if (conn && pid) {
+      ws.send({ type: "wsForeground", foreground: !document.hidden });
+    }
+  },
+  { immediate: true },
+);
 onUnmounted(() => {
   if (connectionLostTimer !== null) clearTimeout(connectionLostTimer);
   connectionLost.value = false;
