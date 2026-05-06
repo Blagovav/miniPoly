@@ -242,7 +242,14 @@ const isPreRoll = computed(() => phase.value === "preRoll");
 watch(
   () => phase.value,
   (p) => {
-    const inLobby = !p || p === "lobby";
+    // Don't treat "phase not loaded yet" as lobby — that paints the
+    // body cream during the WS state round-trip when the player just
+    // tapped ВЕРНУТЬСЯ from Home, and they see a beige flash before
+    // the green in-game theme lands. With explicit equality both
+    // classes stay off until the server-confirmed phase arrives;
+    // App.vue's blue Telegram-chrome holds until then. Playtester
+    // 2026-05-06: «после вернуться бежевый фон».
+    const inLobby = p === "lobby";
     const inActiveGame = !!p && p !== "lobby" && p !== "ended";
     setClosingConfirmation(inActiveGame);
     // Toggle the figma-green body class so Telegram's safe-area strips
