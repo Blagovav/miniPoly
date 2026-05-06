@@ -1,8 +1,13 @@
 import Fastify from "fastify";
 import cors from "@fastify/cors";
+import multipart from "@fastify/multipart";
+import fastifyStatic from "@fastify/static";
+import { mkdirSync } from "node:fs";
 import { config } from "./config";
 import { registerWebSocket } from "./ws/server";
 import { registerAdminRoutes } from "./admin";
+import { registerAdminShopRoutes, UPLOAD_ROOT } from "./admin-shop";
+import { initShopDb, listCaps, listChests, listMaps } from "./shop-db";
 import { allRooms, getRoom } from "./rooms/manager";
 import { BOARD } from "../../shared/board";
 import {
@@ -23,9 +28,37 @@ await app.register(cors, {
   credentials: true,
 });
 
+// Multipart for shop image uploads from the admin panel. Limit chosen
+// generously enough for 4K webp/png chest art (typical < 1 MB) without
+// allowing accidental video uploads.
+await app.register(multipart, {
+  limits: { fileSize: 5 * 1024 * 1024, files: 1 },
+});
+
+// Persistent dir for shop uploads — the docker-compose volume
+// `shop_uploads` mounts here, so artwork survives `--build` redeploys.
+// Created at boot so @fastify/static doesn't 404 the route on a fresh
+// install before the first upload.
+mkdirSync(UPLOAD_ROOT, { recursive: true });
+await app.register(fastifyStatic, {
+  root: UPLOAD_ROOT,
+  prefix: "/api/uploads/",
+  decorateReply: false,
+});
+
 app.get("/health", async () => ({ ok: true, rooms: allRooms().length }));
 
 app.get("/api/board", async () => ({ board: BOARD }));
+
+// Public shop catalog — caps + maps + chests with their price tiers
+// and drop tables. Read by the web client at boot to replace the
+// previously-hardcoded SHOP_CAPS/SHOP_MAPS/SHOP_CHESTS constants.
+// Fast (3 selects, < 50 rows total); no auth required because the
+// catalog is what the storefront already shows publicly.
+app.get("/api/shop/catalog", async () => {
+  const [caps, maps, chests] = await Promise.all([listCaps(), listMaps(), listChests()]);
+  return { caps, maps, chests };
+});
 
 app.get("/api/rooms/public", async () => {
   // "Viable seat" = a connected human or a bot. Offline humans inside
@@ -185,12 +218,14 @@ app.post<{ Body: { tgUserId: number; itemId: string; stars: number; chargeId: st
 // Инициализация БД — ждём postgres
 try {
   await initDb();
+  await initShopDb();
   app.log.info("DB schema ready");
 } catch (err) {
   app.log.error({ err }, "DB init failed — stats will not persist");
 }
 
 registerAdminRoutes(app);
+registerAdminShopRoutes(app);
 
 await registerWebSocket(app);
 

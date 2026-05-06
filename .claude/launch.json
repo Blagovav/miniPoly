@@ -11,9 +11,10 @@
     {
       "name": "web-local",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "dev", "--", "--port", "5175"],
+      "runtimeArgs": ["run", "dev", "--"],
       "cwd": "web",
-      "port": 5175
+      "port": 5175,
+      "autoPort": true
     }
   ]
 }

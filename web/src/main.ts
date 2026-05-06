@@ -6,6 +6,7 @@ import { i18n } from "./i18n";
 import "./style.css";
 import { ROUTE_ASSETS, allAssetsCached, preloadAll } from "./utils/assets";
 import { useRouteLoader } from "./composables/useRouteLoader";
+import { loadShopCatalog } from "./shop/cosmetics";
 
 import HomeView from "./views/HomeView.vue";
 import RoomView from "./views/RoomView.vue";
@@ -66,6 +67,12 @@ router.beforeEach(async (to, from) => {
     routeLoading.value = false;
   }
 });
+
+// Pull the admin-managed shop catalog (caps / maps / chests with drop
+// rates and prices) from the API. Fire-and-forget — the seeded defaults
+// in cosmetics.ts stay live until the response lands, then the reactive
+// arrays swap in place and any iterating computed re-runs automatically.
+void loadShopCatalog();
 
 const app = createApp(App);
 app.use(createPinia());

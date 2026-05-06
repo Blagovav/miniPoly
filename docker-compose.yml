@@ -48,6 +48,12 @@ services:
       ADMIN_TOKEN: ${ADMIN_TOKEN:-}
     ports:
       - "3000:3000"
+    volumes:
+      # Shop image uploads from the admin panel land here. Volume is
+      # required — without it, every `docker compose up --build` wipes
+      # uploaded chest/cap/map artwork. Served back through
+      # /api/uploads/<file> via @fastify/static.
+      - shop_uploads:/app/api/uploads
     depends_on:
       postgres:
         condition: service_healthy
@@ -106,3 +112,4 @@ services:
 
 volumes:
   pg_data:
+  shop_uploads:
