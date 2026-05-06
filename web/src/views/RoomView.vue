@@ -2476,7 +2476,10 @@ void t;
   left: 0;
   right: 0;
   bottom: 0;
-  z-index: 5;
+  /* Above the TileInfoModal scrim (z-index 130) so the bar is always
+     interactive even when the must-buy info card is open on top. The
+     scrim still paints below the bar; only event capture matters. */
+  z-index: 200;
   padding: 10px 16px calc(10px + var(--tg-safe-area-inset-bottom, 0px));
   background: linear-gradient(to bottom, rgba(0, 0, 0, 0), rgba(0, 0, 0, 0.4));
   display: flex;
