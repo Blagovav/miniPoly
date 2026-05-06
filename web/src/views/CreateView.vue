@@ -103,7 +103,7 @@ function createRoom() {
     name: userName.value,
     isPublic: isPublic.value,
     maxPlayers: maxPlayers.value,
-    settings: { fastMode: fastPace.value },
+    settings: { fastMode: fastPace.value, auctions: auctionsOn.value },
   });
 }
 

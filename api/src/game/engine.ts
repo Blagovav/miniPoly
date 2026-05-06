@@ -952,7 +952,13 @@ function handleProperty(room: RoomState, p: Player, tile: PropertyTile, opts?: R
       // up to whatever cash they actually have. Without this the player
       // was just left with "End Turn" and the tile sat unsold.
       log(room, { en: `${p.name} can't afford ${tile.name.en}`, ru: `${p.name} не может купить ${tile.name.ru}` });
-      startAuction(room, tile.index);
+      if (room.settings.auctions) {
+        startAuction(room, tile.index);
+      } else {
+        // Auctions off: tile stays unclaimed, next landing gets a fresh
+        // buy prompt. Player skips straight to action so they can end turn.
+        room.phase = "action";
+      }
     }
     return;
   }
@@ -1065,6 +1071,17 @@ export function skipBuy(room: RoomState): void {
   if (!p) { room.phase = "action"; return; }
   const tile = BOARD[p.position];
   if (tile.kind !== "street" && tile.kind !== "railroad" && tile.kind !== "utility") {
+    room.phase = "action";
+    return;
+  }
+  // Casual variant: with settings.auctions=false the declined tile just
+  // stays unclaimed; the next player who lands on it gets a fresh buy
+  // prompt. Hasbro default is auction-on-decline.
+  if (!room.settings.auctions) {
+    log(room, {
+      en: `${p.name} skipped ${tile.name.en} (auction disabled)`,
+      ru: `${p.name} отказался от ${tile.name.ru}`,
+    });
     room.phase = "action";
     return;
   }
