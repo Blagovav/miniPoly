@@ -788,6 +788,15 @@ const statusPopupSub = computed(() =>
 .home-v2__nav {
   margin-top: auto;
   padding-top: 32px;
+  /* Each .home-v2__nav-icon img is positioned at -13,-13 with a 98px
+     bleed (history/profile) or -20,-20 with a 112px bleed (shop), so
+     the artwork overflows the 72×72 tap target by 13-20px on every
+     side. Without left/right padding here, the rightmost (Профиль)
+     icon's right-edge bleed gets clipped by .home-v2__content's
+     `overflow-x: hidden` on narrow viewports — playtester 2026-05-06:
+     «здесь не влезает». 20px (the largest bleed) leaves room for the
+     shop's icon too if the layout shifts. */
+  padding: 32px 20px 0;
   display: flex;
   justify-content: space-between;
   align-items: flex-end;
