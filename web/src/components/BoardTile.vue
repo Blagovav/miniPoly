@@ -53,7 +53,10 @@ function specialArt(kind: string, index: number): string | null {
   switch (kind) {
     case "chance":   return "/figma/room/tile-chest2.webp";       // red ?
     case "chest":    return "/figma/room/tile-question.webp";     // chest
-    case "tax":      return "/figma/room/tile-bag.webp";          // money stack
+    // Tax: reuse the live money icon (PR #81) so the tile shows the
+    // same sticker as the rest of the UI. tile-bag.webp is the legacy
+    // green-dollar PNG and stayed behind during the icon refresh.
+    case "tax":      return "/figma/room/icon-money.webp";
     case "railroad": return "/figma/room/tile-chest.webp";        // train
     case "utility":
       // Index 12 is the Electric Company, 28 is the Water Works.
