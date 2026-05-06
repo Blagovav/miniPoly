@@ -233,9 +233,17 @@ export interface AuctionState {
  */
 export interface RoomSettings {
   fastMode: boolean;
+  /**
+   * Hasbro rule: when a player declines to buy a tile they landed on,
+   * the tile is auctioned to all players. With auctions=false the tile
+   * just stays unclaimed and the next player who lands on it gets a
+   * fresh buy prompt — a casual variant some playgroups prefer because
+   * it removes the high-stakes auction pressure. Default true.
+   */
+  auctions: boolean;
 }
 
-export const DEFAULT_ROOM_SETTINGS: RoomSettings = { fastMode: true };
+export const DEFAULT_ROOM_SETTINGS: RoomSettings = { fastMode: true, auctions: true };
 
 export interface RoomState {
   id: string;
