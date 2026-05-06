@@ -472,6 +472,12 @@ const statusPopupSub = computed(() =>
   width: 190px;
   height: 140px;
   object-fit: cover;
+  /* Soft fade-to-transparent on the bottom 30% of the mascot to
+     match the Figma macete (playtester 2026-05-06: «у него внизу
+     размытие на макете, а у нас нету»). The mask is alpha-only so
+     the welcome card's blue background bleeds through naturally. */
+  -webkit-mask-image: linear-gradient(to bottom, #000 60%, rgba(0, 0, 0, 0) 100%);
+  mask-image: linear-gradient(to bottom, #000 60%, rgba(0, 0, 0, 0) 100%);
   object-position: 0 0;
   pointer-events: none;
 }
