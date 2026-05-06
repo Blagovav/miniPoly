@@ -951,13 +951,12 @@ const primaryButtons = computed<ActionButton[] | null>(() => {
   }
 
   if (r.phase === "buyPrompt") {
-    const me = game.me;
-    const tile = me ? BOARD[me.position] : null;
-    const price = tile && "price" in tile ? (tile as { price: number }).price : 0;
-    return [
-      { variant: "auction", label: isRu ? "НА АУКЦИОН" : "AUCTION", handler: skipBuy },
-      { variant: "buy",     label: isRu ? "КУПИТЬ" : "BUY", price, handler: buy },
-    ];
+    // TileInfoModal auto-pops on buyPrompt for me and renders the same
+    // Buy / Auction primary buttons inside the card itself (playtester
+    // 2026-05-06: «не модалка классическая, вывести информацию вместе
+    // с этими кнопками»). Returning null here keeps the bottom bar
+    // hidden so we don't show the same actions twice.
+    return null;
   }
 
   if (r.phase === "action") {
