@@ -951,12 +951,19 @@ const primaryButtons = computed<ActionButton[] | null>(() => {
   }
 
   if (r.phase === "buyPrompt") {
-    // TileInfoModal auto-pops on buyPrompt for me and renders the same
-    // Buy / Auction primary buttons inside the card itself (playtester
-    // 2026-05-06: «не модалка классическая, вывести информацию вместе
-    // с этими кнопками»). Returning null here keeps the bottom bar
-    // hidden so we don't show the same actions twice.
-    return null;
+    // Buttons stay on the bottom bar — same fixed slot as "БРОСИТЬ
+    // КУБИКИ" / "ЗАВЕРШИТЬ ХОД" so the thumb always hits the same
+    // place (playtester 2026-05-06: «должна быть ровно в том же
+    // месте, чтобы палец тыкал в одно место»). The TileInfoModal
+    // floats above as info-only — it auto-pops and can't be closed
+    // until the player picks one of these two actions.
+    const me = game.me;
+    const tile = me ? BOARD[me.position] : null;
+    const price = tile && "price" in tile ? (tile as { price: number }).price : 0;
+    return [
+      { variant: "auction", label: isRu ? "НА АУКЦИОН" : "AUCTION", handler: skipBuy },
+      { variant: "buy",     label: isRu ? "КУПИТЬ" : "BUY", price, handler: buy },
+    ];
   }
 
   if (r.phase === "action") {
@@ -1570,8 +1577,6 @@ void t;
       :on-propose-trade="openTradeFromTile"
       :on-mortgage="mortgage"
       :on-unmortgage="unmortgage"
-      :on-buy="buy"
-      :on-auction="skipBuy"
     />
     <PlayerProfileModal
       :player="profilePlayer"
