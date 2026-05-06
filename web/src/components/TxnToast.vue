@@ -36,7 +36,8 @@ type Toast = {
     | "sell-house"
     | "sell-hotel"
     | "mortgage"
-    | "unmortgage";
+    | "unmortgage"
+    | "tax";
   // Sub-kind for player-lifecycle "system" toasts so the same dir can
   // render distinct titles for "left" vs "went bankrupt".
   systemKind?: "left" | "bankrupt";
@@ -88,6 +89,20 @@ function entryToToast(entry: GameLogEntry): Toast | null {
       amount: t.amount,
       tileName: tileName(t.tileIndex),
       counterparty: playerName(t.actorId),
+    };
+  }
+  // Tax tile (Luxury / Income) — only fires for the actor on the tile,
+  // so any tax txn arriving with me as actor is "my landing". Surfaces
+  // as a red "Налог" toast — playtester 2026-05-05 hit a 400 luxury
+  // tile and saw nothing happen.
+  if (t.kind === "tax" && t.actorId === me) {
+    return {
+      id: entry.id,
+      dir: "out",
+      amount: t.amount,
+      tileName: tileName(t.tileIndex),
+      counterparty: "",
+      infoKind: "tax",
     };
   }
   // Forced sale / mortgage on the player's own property — surface as a
@@ -324,6 +339,14 @@ const label = computed(() => {
     };
   }
   if (t.dir === "out") {
+    if (t.infoKind === "tax") {
+      return {
+        title: isRu ? "Налог" : "Tax",
+        sub: t.tileName,
+        amount: `◈ ${t.amount}`,
+        sign: "-" as const,
+      };
+    }
     return {
       title: isRu ? `Аренда → ${t.counterparty}` : `Rent → ${t.counterparty}`,
       sub: t.tileName,

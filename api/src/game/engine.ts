@@ -918,7 +918,16 @@ function resolveTile(room: RoomState, p: Player, opts?: ResolveOpts): void {
       sendToJail(room, p);
       break;
     case "tax":
-      payOrBankrupt(room, p, tile.amount, { en: `Tax -$${tile.amount}`, ru: `Налог -$${tile.amount}` });
+      // Surface as a structured txn so TxnToast picks it up — without
+      // this the tax just deducted cash silently (no banner), which
+      // playtester noted was confusing on a $400 luxury tax.
+      payOrBankrupt(
+        room,
+        p,
+        tile.amount,
+        { en: `Tax -$${tile.amount}`, ru: `Налог -$${tile.amount}` },
+        { kind: "tax", amount: tile.amount, actorId: p.id, tileIndex: tile.index },
+      );
       break;
     case "chance":
     case "chest":
@@ -1423,11 +1432,12 @@ function payOrBankrupt(
   p: Player,
   amount: number,
   reason: I18nText,
+  txn?: TxnInfo,
 ): void {
   if (p.cash < amount && room.settings.fastMode) liquidateForCash(room, p, amount);
   if (p.cash >= amount) {
     p.cash -= amount;
-    log(room, { en: `${p.name}: ${reason.en}`, ru: `${p.name}: ${reason.ru}` });
+    log(room, { en: `${p.name}: ${reason.en}`, ru: `${p.name}: ${reason.ru}` }, txn);
   } else {
     bankruptPlayer(room, p);
   }
