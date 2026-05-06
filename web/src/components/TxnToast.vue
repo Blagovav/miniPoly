@@ -37,7 +37,8 @@ type Toast = {
     | "sell-hotel"
     | "mortgage"
     | "unmortgage"
-    | "tax";
+    | "tax"
+    | "jail";
   // Sub-kind for player-lifecycle "system" toasts so the same dir can
   // render distinct titles for "left" vs "went bankrupt".
   systemKind?: "left" | "bankrupt";
@@ -96,13 +97,15 @@ function entryToToast(entry: GameLogEntry): Toast | null {
   // as a red "Налог" toast — playtester 2026-05-05 hit a 400 luxury
   // tile and saw nothing happen.
   if (t.kind === "tax" && t.actorId === me) {
+    // Jail bail reuses the "tax" txn kind on the server (no tileIndex);
+    // distinguish here so the toast title matches the action.
     return {
       id: entry.id,
       dir: "out",
       amount: t.amount,
       tileName: tileName(t.tileIndex),
       counterparty: "",
-      infoKind: "tax",
+      infoKind: t.tileIndex == null ? "jail" : "tax",
     };
   }
   // Forced sale / mortgage on the player's own property — surface as a
@@ -343,6 +346,14 @@ const label = computed(() => {
       return {
         title: isRu ? "Налог" : "Tax",
         sub: t.tileName,
+        amount: `◈ ${t.amount}`,
+        sign: "-" as const,
+      };
+    }
+    if (t.infoKind === "jail") {
+      return {
+        title: isRu ? "Выкуп из тюрьмы" : "Bail",
+        sub: "",
         amount: `◈ ${t.amount}`,
         sign: "-" as const,
       };
