@@ -615,9 +615,16 @@ const ownerCapSrc = computed(() => `/figma/shop/caps/${capTypeFor(owner.value?.t
 /* While the player is forced to choose Buy or Auction the bottom
    primary-bar shows two stacked CTAs (~140px tall). Lift the card up
    so it doesn't overlap them — the card is info-only here, the action
-   stays in its fixed thumb-position slot. */
+   stays in its fixed thumb-position slot.
+   Also: the scrim itself goes pointer-events:none so taps reach the
+   primary-bar buttons underneath; only the card body catches taps so
+   selectTile / propose-trade etc. inside it still work. */
 .info-scrim--must-buy {
   padding-bottom: calc(160px + var(--sab, 0px));
+  pointer-events: none;
+}
+.info-scrim--must-buy .info-wrap {
+  pointer-events: auto;
 }
 
 .info-wrap {
