@@ -344,25 +344,37 @@ watch(
   },
   { immediate: true },
 );
+// Optimistic "action just fired" flag. The bottom primary-bar checks
+// this and renders null while it's true, so КУПИТЬ / НА АУКЦИОН /
+// ЗАВЕРШИТЬ ХОД disappear instantly on tap instead of lingering for
+// the 100-300ms WS round-trip until the server flips phase. The
+// watcher below clears it the moment any state update arrives, so a
+// rejected action (rare — the engine almost never refuses these from
+// a valid client) just snaps the bar back. Playtester 2026-05-06:
+// «после покупки кнопки зависают на время; завершить ход пропадает
+// в 2 раза быстрее».
+const actionInFlight = ref(false);
+watch(
+  () => [game.room?.phase, game.room?.currentTurn] as const,
+  () => { actionInFlight.value = false; },
+);
+
 function buy() {
   haptic("medium");
   ws.send({ type: "buy" });
-  // Close the floating property card the moment the action goes out —
-  // playtester 2026-05-06: «после покупки надо все убирать». Server's
-  // phase flip would close it shortly anyway, but the click-to-close
-  // feels instant.
   game.selectTile(null);
+  actionInFlight.value = true;
 }
 function skipBuy() {
   haptic("light");
   ws.send({ type: "skipBuy" });
-  // Same: the auction modal will own the next state; close the info
-  // card immediately so it doesn't linger behind the auction sheet.
   game.selectTile(null);
+  actionInFlight.value = true;
 }
 function endTurn() {
   haptic("light");
   ws.send({ type: "endTurn" });
+  actionInFlight.value = true;
 }
 function payJail() {
   haptic("medium");
@@ -890,6 +902,12 @@ const primaryButtons = computed<ActionButton[] | null>(() => {
   const r = game.room;
   if (!r) return null;
   const isRu = locale.value === "ru";
+
+  // Hide the bar while an action's WS round-trip is in flight — feels
+  // instant on tap instead of "frozen" for 100-300ms. Cleared as soon
+  // as the server's state arrives (see watcher above the buy/skipBuy
+  // functions).
+  if (actionInFlight.value) return null;
 
   if (r.phase === "ended") {
     return [{
