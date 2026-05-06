@@ -347,10 +347,18 @@ watch(
 function buy() {
   haptic("medium");
   ws.send({ type: "buy" });
+  // Close the floating property card the moment the action goes out —
+  // playtester 2026-05-06: «после покупки надо все убирать». Server's
+  // phase flip would close it shortly anyway, but the click-to-close
+  // feels instant.
+  game.selectTile(null);
 }
 function skipBuy() {
   haptic("light");
   ws.send({ type: "skipBuy" });
+  // Same: the auction modal will own the next state; close the info
+  // card immediately so it doesn't linger behind the auction sheet.
+  game.selectTile(null);
 }
 function endTurn() {
   haptic("light");
@@ -1340,8 +1348,10 @@ void t;
           @click="btn.handler()"
         >
           <span class="primary-btn__label">{{ btn.label }}</span>
+          <!-- Just the number — playtester 2026-05-06: «на кнопке
+               купить убрать иконку денег». The label «КУПИТЬ» already
+               implies cost, the icon was redundant clutter. -->
           <span v-if="btn.variant === 'buy' && btn.price" class="primary-btn__price">
-            <img src="/figma/room/icon-money.webp" alt="" />
             {{ btn.price }}
           </span>
           <!-- Same 98×32.5 white-vector "shine" decoration as lobby-cta /
