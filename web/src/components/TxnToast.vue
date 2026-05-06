@@ -38,7 +38,9 @@ type Toast = {
     | "mortgage"
     | "unmortgage"
     | "tax"
-    | "jail";
+    | "jail"
+    | "trade-accept"
+    | "trade-decline";
   // Sub-kind for player-lifecycle "system" toasts so the same dir can
   // render distinct titles for "left" vs "went bankrupt".
   systemKind?: "left" | "bankrupt";
@@ -146,6 +148,23 @@ function entryToToast(entry: GameLogEntry): Toast | null {
       counterparty: playerName(t.counterpartyId),
       actorName: playerName(t.actorId),
       infoKind: "rent",
+    };
+  }
+  // Trade resolution — both parties get a banner so the proposer
+  // knows whether their offer was taken (playtester 2026-05-06: «после
+  // принял нет никакого статуса что произошло»). Render to either side
+  // of the deal; the title flips based on which one is me.
+  if (t.kind === "tradeAccepted" || t.kind === "tradeDeclined") {
+    if (t.actorId !== me && t.counterpartyId !== me) return null;
+    const otherId = t.actorId === me ? t.counterpartyId : t.actorId;
+    return {
+      id: entry.id,
+      dir: "info",
+      amount: 0,
+      tileName: "",
+      counterparty: "",
+      actorName: playerName(otherId),
+      infoKind: t.kind === "tradeAccepted" ? "trade-accept" : "trade-decline",
     };
   }
   // Opponent build/sell/mortgage actions — playtester 2026-05-05 wanted
@@ -437,6 +456,22 @@ const label = computed(() => {
         title: isRu ? `${t.actorName} выкупил` : `${t.actorName} redeemed`,
         sub: t.tileName,
         amount: `◈ ${t.amount}`,
+        sign: "" as const,
+      };
+    }
+    if (t.infoKind === "trade-accept") {
+      return {
+        title: isRu ? "Обмен принят" : "Trade accepted",
+        sub: t.actorName ? (isRu ? `с ${t.actorName}` : `with ${t.actorName}`) : "",
+        amount: "",
+        sign: "" as const,
+      };
+    }
+    if (t.infoKind === "trade-decline") {
+      return {
+        title: isRu ? "Обмен отклонён" : "Trade declined",
+        sub: t.actorName ? (isRu ? `от ${t.actorName}` : `by ${t.actorName}`) : "",
+        amount: "",
         sign: "" as const,
       };
     }
