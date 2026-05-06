@@ -553,15 +553,15 @@ const L = computed(() => isRu.value
 .trade-cols {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 4px;
+  gap: 8px;
   flex: 1 1 auto;
-  min-height: 180px;
+  min-height: 220px;
 }
 .trade-col {
   background: #fff;
   border: 1px solid rgba(0, 0, 0, 0.1);
   border-radius: 18px;
-  padding: 16px 8px;
+  padding: 16px 12px;
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -571,17 +571,17 @@ const L = computed(() => isRu.value
 .trade-col__label {
   font-family: 'Unbounded', sans-serif;
   font-weight: 700;
-  font-size: 14px;
-  line-height: 16px;
+  font-size: 16px;
+  line-height: 18px;
   color: #000;
   padding: 0 4px;
   flex-shrink: 0;
 }
 .trade-col__empty {
-  padding: 6px 4px;
+  padding: 8px 4px;
   font-family: 'Unbounded', sans-serif;
   font-weight: 500;
-  font-size: 11px;
+  font-size: 13px;
   color: rgba(0, 0, 0, 0.55);
   flex-shrink: 0;
 }
@@ -591,7 +591,7 @@ const L = computed(() => isRu.value
   overflow-y: auto;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 6px;
   scrollbar-width: thin;
 }
 .trade-col__list::-webkit-scrollbar { width: 3px; }
@@ -600,14 +600,17 @@ const L = computed(() => isRu.value
   border-radius: 2px;
 }
 
+/* Tile rows in the trade columns. Playtester 2026-05-06: «очень мелкие
+   поля где что я отдаю / получаю» — bumped padding/font/dot so each
+   row is a comfortable tap target instead of a 24px sliver. */
 .trade-row {
   display: flex;
   align-items: center;
-  gap: 4px;
-  padding: 8px;
+  gap: 8px;
+  padding: 11px 10px;
   background: #fff;
   border: 1px solid rgba(0, 0, 0, 0.1);
-  border-radius: 8px;
+  border-radius: 10px;
   cursor: pointer;
   text-align: left;
   flex-shrink: 0;
@@ -620,8 +623,8 @@ const L = computed(() => isRu.value
 }
 .trade-row--locked { opacity: 0.45; cursor: not-allowed; }
 .trade-row__dot {
-  width: 6px;
-  height: 6px;
+  width: 9px;
+  height: 9px;
   border-radius: 50%;
   flex-shrink: 0;
 }
@@ -630,8 +633,8 @@ const L = computed(() => isRu.value
   min-width: 0;
   font-family: 'Golos UI', 'Unbounded', sans-serif;
   font-weight: 700;
-  font-size: 12px;
-  line-height: 14px;
+  font-size: 14px;
+  line-height: 16px;
   color: #484337;
   white-space: nowrap;
   overflow: hidden;
@@ -641,12 +644,12 @@ const L = computed(() => isRu.value
 .trade-input {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 6px;
   flex-shrink: 0;
 }
 .trade-input__icon {
-  width: 24px;
-  height: 24px;
+  width: 28px;
+  height: 28px;
   flex-shrink: 0;
   object-fit: contain;
   pointer-events: none;
@@ -654,15 +657,15 @@ const L = computed(() => isRu.value
 .trade-input__field {
   flex: 1;
   min-width: 0;
-  height: 32px;
-  padding: 0 12px;
+  height: 40px;
+  padding: 0 14px;
   background: #fff;
   border: 1px solid rgba(0, 0, 0, 0.16);
   border-radius: 12px;
   font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, sans-serif;
   font-weight: 500;
-  font-size: 14px;
-  line-height: 16px;
+  font-size: 16px;
+  line-height: 18px;
   color: #000;
   text-align: right;
   outline: none;
@@ -678,8 +681,8 @@ const L = computed(() => isRu.value
 .trade-input__max {
   font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, sans-serif;
   font-weight: 500;
-  font-size: 12px;
-  line-height: 14px;
+  font-size: 14px;
+  line-height: 16px;
   color: #000;
   flex-shrink: 0;
 }
