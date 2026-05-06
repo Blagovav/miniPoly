@@ -525,7 +525,11 @@ const label = computed(() => {
   white-space: nowrap;
   flex-shrink: 0;
 }
-.txn-toast--buy     .txn-toast__badge { background: #43c22d; }
+/* Buy is "money leaving the wallet" — playtester 2026-05-06: «когда
+   покупаешь землю деньги же списываются, а здесь зелёное». Same red
+   palette as the rent-paid (out) toast; the «Куплено» title is enough
+   to distinguish the two. */
+.txn-toast--buy     .txn-toast__badge { background: #e84b3e; }
 .txn-toast--out     .txn-toast__badge { background: #e84b3e; }
 .txn-toast--in      .txn-toast__badge { background: #2283f3; }
 .txn-toast--forced  .txn-toast__badge { background: #f97316; }
@@ -567,7 +571,7 @@ const label = computed(() => {
 }
 .txn-toast--out .txn-toast__amt    { color: #b32c2c; }
 .txn-toast--in .txn-toast__amt     { color: #2d7a4f; }
-.txn-toast--buy .txn-toast__amt    { color: #2d7a4f; }
+.txn-toast--buy .txn-toast__amt    { color: #b32c2c; }
 .txn-toast--forced .txn-toast__amt { color: #c2410c; }
 .txn-toast--auction .txn-toast__amt { color: #b45309; }
 .txn-toast--info    .txn-toast__amt { color: #374151; }
