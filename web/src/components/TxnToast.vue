@@ -551,7 +551,11 @@ const label = computed(() => {
    greyer hue keeps "someone else paid someone else" from competing with
    the saturated green/red/blue toasts that fire when the player is
    personally involved. */
-.txn-toast--info    .txn-toast__badge { background: #6b7280; }
+/* Slate was reading as "disabled / muted" — playtester 2026-05-06:
+   «не понимаю почему серый диалог когда другой покупает». Bumped to
+   a steely blue (#475ec1) so it reads as "informational, but a real
+   event" and stands clear of the saturated buy/rent/auction badges. */
+.txn-toast--info    .txn-toast__badge { background: #475ec1; }
 /* Darker slate for player-lifecycle events (left / bankrupt). Reads as
    "out of the running" without being alarmist red. */
 .txn-toast--system  .txn-toast__badge { background: #4b5563; }
@@ -585,7 +589,7 @@ const label = computed(() => {
 .txn-toast--buy .txn-toast__amt    { color: #b32c2c; }
 .txn-toast--forced .txn-toast__amt { color: #c2410c; }
 .txn-toast--auction .txn-toast__amt { color: #b45309; }
-.txn-toast--info    .txn-toast__amt { color: #374151; }
+.txn-toast--info    .txn-toast__amt { color: #2c3a85; }
 .txn-toast__sign {
   font-weight: 900;
 }
