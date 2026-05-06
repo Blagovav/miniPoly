@@ -86,6 +86,7 @@ export function allRooms(): RoomState[] {
 export function onStateChange(room: RoomState): void {
   if (room.phase === "lobby" || room.phase === "ended") {
     clearTurnTimer(room.id);
+    room.turnDeadline = null;
     return;
   }
 
@@ -97,6 +98,7 @@ export function onStateChange(room: RoomState): void {
   const anyHumanOnline = room.players.some((p) => p.connected && !p.isBot);
   if (!anyHumanOnline) {
     clearTurnTimer(room.id);
+    room.turnDeadline = null;
     clearAuctionTimer(room.id);
     return;
   }
@@ -177,6 +179,20 @@ function resetTurnTimer(room: RoomState): void {
     room.phase === "preRoll" ? preRollCurrentPlayer(room) : currentPlayer(room);
   // Bots act almost immediately; disconnected humans get the full 180s grace.
   const delay = current?.isBot ? BOT_TURN_DELAY_MS : config.turnTimeoutSec * 1000;
+  // Stamp the wall-clock deadline so the client can render a countdown
+  // next to "ВАШ ХОД!" — bots get such a tight delay (≈800ms) that
+  // there's no point showing a timer for them, so we skip those.
+  const newDeadline = current?.isBot ? null : Date.now() + delay;
+  if (room.turnDeadline !== newDeadline) {
+    room.turnDeadline = newDeadline;
+    // The upstream WS handler already broadcast the state with the
+    // OLD deadline before invoking onStateChange (which called us).
+    // Push another broadcast so the client's countdown picks up the
+    // new value immediately — without this the timer drifts by a
+    // whole turn cycle. Cheap; only fires when the deadline actually
+    // changed.
+    if (broadcastState) broadcastState(room.id);
+  }
   const timer = setTimeout(async () => {
     const fresh = getRoom(room.id);
     if (!fresh) return;

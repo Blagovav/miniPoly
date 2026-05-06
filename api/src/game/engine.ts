@@ -55,6 +55,7 @@ export function createRoom(
     players: [],
     currentTurn: 0,
     turnCount: 0,
+    turnDeadline: null,
     phase: "lobby",
     dice: null,
     doublesInARow: 0,

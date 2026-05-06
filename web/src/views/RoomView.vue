@@ -876,18 +876,19 @@ function propCountFor(playerId: string): number {
 
 // Turn timer — mirrors the server's 180s AFK countdown so the "234s"
 // badge in the Figma has live data.
-const TURN_TIMEOUT_SEC = 180;
+// Countdown next to «ВАШ ХОД!» pulled from the server-stamped deadline
+// in room.turnDeadline. The server resets the timer on every turn AND
+// every phase transition (rolling → buyPrompt → action), so reading
+// from the room state instead of a local stopwatch keeps the display
+// honest even if a phase change burns part of the budget. Bots have
+// their own ≈800ms tick and ship turnDeadline=null → timer hides.
 const now = ref(Date.now());
-const turnStartedAt = ref(Date.now());
-watch(
-  () => game.room?.currentTurn,
-  () => { turnStartedAt.value = Date.now(); },
-);
 const tickHandle = setInterval(() => { now.value = Date.now(); }, 1000);
 onUnmounted(() => clearInterval(tickHandle));
 const turnRemainingSec = computed(() => {
-  const elapsed = (now.value - turnStartedAt.value) / 1000;
-  return Math.max(0, Math.ceil(TURN_TIMEOUT_SEC - elapsed));
+  const dl = game.room?.turnDeadline;
+  if (!dl) return 0;
+  return Math.max(0, Math.ceil((dl - now.value) / 1000));
 });
 
 type ActionVariant = "roll" | "buy" | "auction" | "endturn";
@@ -1192,7 +1193,7 @@ void t;
             <div v-else-if="game.currentPlayer" class="board-hud__turn board-hud__turn--other">
               {{ game.currentPlayer.name?.toUpperCase() || '…' }}
             </div>
-            <div class="board-hud__timer">
+            <div v-if="turnRemainingSec > 0" class="board-hud__timer">
               <img src="/figma/room/icon-stopwatch.webp" alt="" />
               <span>{{ turnRemainingSec }}</span>
             </div>
