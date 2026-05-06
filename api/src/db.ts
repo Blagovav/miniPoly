@@ -1,7 +1,7 @@
 import pg from "pg";
 import { config } from "./config";
 
-const pool = new pg.Pool({ connectionString: config.databaseUrl });
+export const pool = new pg.Pool({ connectionString: config.databaseUrl });
 
 export async function initDb(): Promise<void> {
   await pool.query(`
