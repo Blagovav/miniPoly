@@ -405,13 +405,13 @@ export function leaveActiveGame(room: RoomState, playerId: string): void {
       } while (room.players[room.currentTurn].bankrupt);
     }
   }
-  // проверка победы
-  const alive = room.players.filter((pl) => !pl.bankrupt);
-  if (alive.length <= 1 && room.players.length > 1) {
-    room.phase = "ended";
-    room.winnerId = alive[0]?.id ?? null;
-    if (alive[0]) log(room, { en: `${alive[0].name} wins!`, ru: `${alive[0].name} победил!` });
-  }
+  // Win check — go through checkWinCondition (not the inline duplicate we
+  // had before) so the same `recordMatch` + DB write path that fires on
+  // a bankrupt-driven win also fires when the leaver is the second-to-
+  // last alive. Playtester 2026-05-06: «я победил с темычем он вышел —
+  // в истории нет». Without this the room ended cleanly but no row
+  // landed in match_history.
+  checkWinCondition(room);
   reassignHostIfNeeded(room);
 }
 

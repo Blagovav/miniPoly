@@ -636,9 +636,14 @@ const L = computed(() => isRu.value
   font-size: 14px;
   line-height: 16px;
   color: #484337;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  /* Wrap long tile names instead of clipping with «…». Playtester
+     2026-05-06: «что такое рединг?» — the truncated «Рединг» turned
+     out to be «Ридинг-роуд» and was unreadable. Two-line wrap is fine
+     because the column scrolls; rows are flex children so they grow
+     to fit. */
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .trade-input {

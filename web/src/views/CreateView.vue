@@ -25,9 +25,10 @@ const startingCash = ref(1500);
 const auctionsOn = ref(true);
 // Auto-liquidate when a player can't cover rent / tax / a fine — server
 // sells houses + mortgages property on their behalf before declaring
-// bankruptcy. ON by default so existing playstyle is unchanged; host can
-// flip OFF for a stricter "you decide what to sell" classic mode.
-const fastPace = ref(true);
+// bankruptcy. Default OFF (playtester 2026-05-06: «давай тогда по
+// умолчанию уберем автопродажу») so new rooms ship the strict
+// "you decide what to sell" classic mode unless the host opts in.
+const fastPace = ref(false);
 const entryFee = ref(100);
 
 function cycle<T>(arr: readonly T[], current: T): T {
