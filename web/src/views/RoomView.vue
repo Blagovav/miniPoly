@@ -1205,7 +1205,13 @@ void t;
               <span>{{ turnRemainingSec }}</span>
             </div>
             </template>
-            <div v-if="game.me && !isPreRoll" class="board-hud__budget">
+            <button
+              v-if="game.me && !isPreRoll"
+              type="button"
+              class="board-hud__budget"
+              @click="openProfile(game.me)"
+              :aria-label="locale === 'ru' ? 'Открыть профиль' : 'Open profile'"
+            >
               <div class="board-hud__budget-row">
                 <span>{{ locale === 'ru' ? 'Ваш бюджет' : 'Your budget' }}</span>
                 <span class="board-hud__budget-val">
@@ -1220,7 +1226,7 @@ void t;
                   {{ propCountFor(game.me.id) }}
                 </span>
               </div>
-            </div>
+            </button>
           </div>
         </div>
 
@@ -2098,6 +2104,19 @@ void t;
   padding: 4px 12px;
   width: min(245px, 90%);
   box-shadow: 0 4px 8px rgba(0, 0, 0, 0.18);
+  /* Tappable: opens own profile so the player can see what they own
+     (playtester 2026-05-06: «постоянно пытаюсь тыкнуть сюда чтобы
+     посмотреть что у меня»). Reset button defaults so the cell still
+     looks like the static card it always was. */
+  border: 0;
+  font: inherit;
+  text-align: inherit;
+  cursor: pointer;
+  transition: transform 80ms ease, box-shadow 80ms ease;
+}
+.board-hud__budget:active {
+  transform: scale(0.98);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.18);
 }
 .board-hud__budget-row {
   display: flex;

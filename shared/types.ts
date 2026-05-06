@@ -170,7 +170,9 @@ export type TxnKind =
   | "build"        // built a house or hotel — see TxnInfo.subKind for which
   | "sell"         // sold a house or hotel
   | "mortgage"
-  | "unmortgage";
+  | "unmortgage"
+  | "tradeAccepted" // counterpartyId = the other player in the deal
+  | "tradeDeclined";
 export interface TxnInfo {
   kind: TxnKind;
   amount: number; // always positive; client derives sign from my role

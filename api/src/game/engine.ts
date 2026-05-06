@@ -689,10 +689,19 @@ export function resolveTrade(
   room.pendingTrade = null;
 
   if (!accept) {
-    log(room, {
-      en: `${to?.name ?? "?"} declined the trade from ${from?.name ?? "?"}`,
-      ru: `${to?.name ?? "?"} отклонил обмен от ${from?.name ?? "?"}`,
-    });
+    log(
+      room,
+      {
+        en: `${to?.name ?? "?"} declined the trade from ${from?.name ?? "?"}`,
+        ru: `${to?.name ?? "?"} отклонил обмен от ${from?.name ?? "?"}`,
+      },
+      // Surface to both sides — playtester 2026-05-06: «после принял
+      // нет никакого статуса что произошло». actorId = responder
+      // (the one who decided), counterpartyId = the proposer.
+      to && from
+        ? { kind: "tradeDeclined", amount: 0, actorId: to.id, counterpartyId: from.id }
+        : undefined,
+    );
     return { ok: true };
   }
 
@@ -750,10 +759,15 @@ export function resolveTrade(
   for (const idx of t.giveTiles) room.properties[idx].ownerId = to.id;
   for (const idx of t.takeTiles) room.properties[idx].ownerId = from.id;
 
-  log(room, {
-    en: `${from.name} and ${to.name} completed a trade`,
-    ru: `${from.name} и ${to.name} совершили обмен`,
-  });
+  log(
+    room,
+    {
+      en: `${from.name} and ${to.name} completed a trade`,
+      ru: `${from.name} и ${to.name} совершили обмен`,
+    },
+    // Both sides see a banner; actorId = responder, counterpartyId = proposer.
+    { kind: "tradeAccepted", amount: 0, actorId: to.id, counterpartyId: from.id },
+  );
   return { ok: true };
 }
 
