@@ -12,11 +12,6 @@ const props = defineProps<{
   onProposeTrade?: (tileIndex: number) => void;
   onMortgage?: (tileIndex: number) => void;
   onUnmortgage?: (tileIndex: number) => void;
-  // Buy / send-to-auction. Same handlers the bottom action bar uses;
-  // showing them in the modal too saves the player a tap when the
-  // server is in buyPrompt and the card has just popped up.
-  onBuy?: () => void;
-  onAuction?: () => void;
 }>();
 
 const { locale } = useI18n();
@@ -297,34 +292,27 @@ const canPropose = computed(() => {
 });
 function openPropose() { if (tile.value) props.onProposeTrade?.(tile.value.index); }
 
-// Buy / Auction CTAs inside the modal (Figma matches what's already in
-// the bottom action bar). Show only when the server is in buyPrompt for
-// my turn AND the displayed tile is the one I just landed on AND it's
-// still unclaimed — anything else and these buttons would be confusing
-// or non-functional.
+// Mandatory-choice gate: while the server is in buyPrompt for my turn
+// on a tile I just landed on AND it's still unclaimed, the card is
+// info-only — closing it would orphan the player. Hides the X /
+// disables scrim-click and lifts the card above the bottom-bar CTAs.
+// Buttons themselves (Купить / На аукцион) live on the bottom primary
+// bar so the thumb hits the same place every turn (playtester
+// 2026-05-06: «должна быть ровно в том же месте, чтобы палец тыкал
+// в одно место»).
 const isUnclaimedProperty = computed(() => {
   const t = tile.value;
   if (!t) return false;
   if (t.kind !== "street" && t.kind !== "railroad" && t.kind !== "utility") return false;
   return !owned.value;
 });
-const buyPrice = computed(() => {
-  const t = tile.value;
-  if (!t || (t.kind !== "street" && t.kind !== "railroad" && t.kind !== "utility")) return 0;
-  return t.price;
-});
 const showBuyAuction = computed(() => {
   if (!game.isMyTurn) return false;
   if (game.room?.phase !== "buyPrompt") return false;
   if (!isUnclaimedProperty.value) return false;
-  // Only the tile the player has actually landed on can be bought —
-  // selecting another tile from the board shouldn't show buy buttons.
   const t = tile.value;
   return !!t && !!game.me && t.index === game.me.position;
 });
-const canAffordBuy = computed(() => (game.me?.cash ?? 0) >= buyPrice.value);
-function buyClick()     { props.onBuy?.(); close(); }
-function auctionClick() { props.onAuction?.(); close(); }
 
 const isMineProperty = computed(() => {
   const t = tile.value;
@@ -416,7 +404,12 @@ const ownerCapSrc = computed(() => `/figma/shop/caps/${capTypeFor(owner.value?.t
 
 <template>
   <transition name="info-fade">
-    <div v-if="tile" class="info-scrim" @click="onScrimClick">
+    <div
+      v-if="tile"
+      class="info-scrim"
+      :class="{ 'info-scrim--must-buy': showBuyAuction }"
+      @click="onScrimClick"
+    >
       <div class="info-wrap" @click.stop>
         <div class="info-card">
           <!-- Hero house art — figma 150:2318 isometric render that
@@ -528,63 +521,6 @@ const ownerCapSrc = computed(() => `/figma/shop/caps/${capTypeFor(owner.value?.t
           <!-- Hint (why Дом is disabled) -->
           <p v-if="buildHint" class="info-hint">{{ buildHint }}</p>
 
-          <!-- Mandatory choice — by Hasbro rules a player who lands on
-               an unclaimed property must either buy it or send it to
-               auction. Playtester 2026-05-06: «это окно нельзя закрыть,
-               пока не купил или не отправил на аукцион». We render the
-               same "primary" buttons the bottom action bar uses
-               (full-width, big, 3D press affordance) so this card *is*
-               the action surface, and hide the bottom bar in RoomView
-               while the modal is up. The X / scrim-click are also
-               disabled below in this state. -->
-          <div v-if="showBuyAuction" class="primary-stack">
-            <button
-              type="button"
-              class="primary-btn primary-btn--buy"
-              :disabled="!canAffordBuy"
-              @click="buyClick"
-            >
-              <span class="primary-btn__label">{{ isRu ? "КУПИТЬ" : "BUY" }}</span>
-              <span class="primary-btn__price">
-                <img src="/figma/room/icon-money.webp" alt="" />
-                {{ buyPrice }}
-              </span>
-              <svg
-                class="primary-btn__deco"
-                viewBox="0 0 98 32.5"
-                preserveAspectRatio="none"
-                fill="none"
-                aria-hidden="true"
-              >
-                <path
-                  opacity="0.2"
-                  d="M98 9.5V32.5C98 32.5 97 6 89.5 4C82 2 0 0 0 0H88.5C96 0 98 3.5 98 9.5Z"
-                  fill="white"
-                />
-              </svg>
-            </button>
-            <button
-              type="button"
-              class="primary-btn primary-btn--auction"
-              @click="auctionClick"
-            >
-              <span class="primary-btn__label">{{ isRu ? "НА АУКЦИОН" : "AUCTION" }}</span>
-              <svg
-                class="primary-btn__deco"
-                viewBox="0 0 98 32.5"
-                preserveAspectRatio="none"
-                fill="none"
-                aria-hidden="true"
-              >
-                <path
-                  opacity="0.2"
-                  d="M98 9.5V32.5C98 32.5 97 6 89.5 4C82 2 0 0 0 0H88.5C96 0 98 3.5 98 9.5Z"
-                  fill="white"
-                />
-              </svg>
-            </button>
-          </div>
-
           <!-- Propose trade (non-owner) -->
           <button
             v-if="canPropose && game.isMyTurn"
@@ -674,6 +610,14 @@ const ownerCapSrc = computed(() => `/figma/shop/caps/${capTypeFor(owner.value?.t
   justify-content: flex-end;
   padding: 16px;
   padding-bottom: max(16px, var(--sab, 0px));
+}
+
+/* While the player is forced to choose Buy or Auction the bottom
+   primary-bar shows two stacked CTAs (~140px tall). Lift the card up
+   so it doesn't overlap them — the card is info-only here, the action
+   stays in its fixed thumb-position slot. */
+.info-scrim--must-buy {
+  padding-bottom: calc(160px + var(--sab, 0px));
 }
 
 .info-wrap {
@@ -942,65 +886,6 @@ const ownerCapSrc = computed(() => `/figma/shop/caps/${capTypeFor(owner.value?.t
 }
 .action-btn__cost img { width: 24px; height: 24px; object-fit: contain; }
 .action-btn__cost b { font-weight: 900; }
-
-/* Primary CTA stack — the same buttons the bottom action bar uses,
-   pinned at the bottom of the unclaimed-tile card. Markup mirrors
-   .primary-bar / .primary-btn in RoomView.vue (RoomView hides the
-   bottom bar entirely while this card is up — see RoomView's
-   primaryButtons gate). Keep both stylesheets in sync if either side
-   changes. */
-.primary-stack {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-.primary-btn {
-  position: relative;
-  width: 100%;
-  height: 56px;
-  border: 2px solid #000;
-  border-radius: 18px;
-  color: #fff;
-  font-family: 'Golos Text', 'Unbounded', sans-serif;
-  font-weight: 900;
-  font-size: 22px;
-  line-height: 26px;
-  letter-spacing: 0.02em;
-  text-shadow: 1px 1px 0 rgba(0, 0, 0, 0.6);
-  cursor: pointer;
-  box-shadow: inset 0 -6px 0 rgba(0, 0, 0, 0.2);
-  transition: transform 120ms ease;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
-  overflow: hidden;
-}
-.primary-btn:active:not(:disabled) {
-  transform: translateY(2px);
-  box-shadow: inset 0 -2px 0 rgba(0, 0, 0, 0.2);
-}
-.primary-btn:disabled { opacity: 0.55; cursor: not-allowed; }
-.primary-btn--buy     { background: #4ed636; }
-.primary-btn--auction { background: #d69e36; }
-.primary-btn__label   { position: relative; z-index: 1; }
-.primary-btn__price {
-  position: relative;
-  z-index: 1;
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  font-weight: 900;
-}
-.primary-btn__price img { width: 24px; height: 24px; object-fit: contain; }
-.primary-btn__deco {
-  position: absolute;
-  top: 4px;
-  right: 8px;
-  width: 98px;
-  height: 32.5px;
-  pointer-events: none;
-}
 
 /* Sell-confirm sheet — sits on top of the property card so a misclick
    on the swap "Продать" button can't quietly demolish a building. */
