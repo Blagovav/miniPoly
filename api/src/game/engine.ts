@@ -1085,7 +1085,15 @@ export function payJailFine(room: RoomState, playerId: string): { ok: boolean; e
   p.cash -= JAIL_FINE;
   p.inJail = false;
   p.jailTurns = 0;
-  log(room, { en: `${p.name} paid $${JAIL_FINE} and left jail`, ru: `${p.name} заплатил $${JAIL_FINE} и вышел из тюрьмы` });
+  log(
+    room,
+    { en: `${p.name} paid $${JAIL_FINE} and left jail`, ru: `${p.name} заплатил $${JAIL_FINE} и вышел из тюрьмы` },
+    // Surface as a "tax-like" txn so TxnToast renders the «Налог -50»
+    // banner — playtester 2026-05-06: «когда выкупаешься из тюрьмы нет
+    // окошка списано 50». Reusing the tax kind keeps client code
+    // simple; the title wording covers both cases.
+    { kind: "tax", amount: JAIL_FINE, actorId: p.id },
+  );
   return { ok: true };
 }
 
@@ -1147,6 +1155,14 @@ export function placeBid(
   if (!p || p.bankrupt) return { ok: false, error: "bankrupt" };
   if (room.auction.passedIds.includes(playerId)) return { ok: false, error: "passed" };
   if (!Number.isFinite(amount) || amount <= 0) return { ok: false, error: "bad amount" };
+  // Floor on opening bid: mortgage value of the tile. Without it a
+  // player could win a $400 Boardwalk for $75 and immediately mortgage
+  // it for $200 — instant +$125 (playtester 2026-05-06: «бродвей купил
+  // за 75 вместо 400, а ещё и заложить можно — купил, заложил в плюсе»).
+  const tile = BOARD[room.auction.tileIndex];
+  if (tile.kind === "street" || tile.kind === "railroad" || tile.kind === "utility") {
+    if (amount < tile.mortgage) return { ok: false, error: "below mortgage floor" };
+  }
   if (amount <= room.auction.highBid) return { ok: false, error: "bid too low" };
   if (amount > p.cash) return { ok: false, error: "not enough cash" };
 
