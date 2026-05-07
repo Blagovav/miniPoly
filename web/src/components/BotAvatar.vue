@@ -1,14 +1,25 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import { botAvatarColor } from "../utils/palette";
+import { useGameStore } from "../stores/game";
 
 const props = defineProps<{
   seed: string;
   size?: number;
 }>();
 
+const game = useGameStore();
+// Pass the in-room bot seeds so two bots whose names hash to the same
+// colour don't end up wearing the same pink. Order matches room.players
+// so a returning bot keeps its assigned colour as long as no earlier bot
+// in the list joined/left.
+const peerSeeds = computed(() =>
+  (game.room?.players ?? [])
+    .filter((p) => p.isBot)
+    .map((p) => p.name || p.id),
+);
 const dim = computed(() => props.size ?? 40);
-const bg = computed(() => botAvatarColor(props.seed));
+const bg = computed(() => botAvatarColor(props.seed, peerSeeds.value));
 // Figma framing is a 61×61 mascot in a 40×40 circle, offset by 7.5px down
 // and 0.5px right. Scale both proportionally so any size keeps the same
 // crop (head/torso centered, boots clipped).

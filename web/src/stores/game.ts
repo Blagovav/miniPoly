@@ -44,6 +44,19 @@ export const useGameStore = defineStore("game", () => {
   // уже не перезатирает текущее.
   const landedTile = ref<{ tileIndex: number; playerId: string; ts: number } | null>(null);
   const passedGo = ref<{ playerId: string; ts: number } | null>(null);
+  // Cash freeze: snapshot of player cash captured the moment dice roll
+  // begins, restored to UI throughout the dice tumble + walk animation
+  // so balances don't visibly tick down BEFORE the pawn reaches the
+  // resolving tile — playtester 2026-05-08 «баланс меняется сразу хотя
+  // фигурка еще не дошла до нужной». Cleared at landing so the toast
+  // pop and balance update happen together with the visual stop.
+  const frozenCash = ref<Record<string, number> | null>(null);
+  function cashFor(playerId: string): number {
+    const frozen = frozenCash.value;
+    if (frozen && playerId in frozen) return frozen[playerId];
+    const p = room.value?.players.find((pl) => pl.id === playerId);
+    return p?.cash ?? 0;
+  }
 
   function selectTile(idx: number | null) {
     selectedTileIndex.value = idx;
@@ -123,6 +136,10 @@ export const useGameStore = defineStore("game", () => {
           const next = { ...animatedPositions.value };
           delete next[playerId];
           animatedPositions.value = next;
+          // Release the cash freeze together with the landing so the
+          // budget panel and toast both update at the moment the pawn
+          // visually stops.
+          frozenCash.value = null;
         }, 250);
         return;
       }
@@ -207,6 +224,16 @@ export const useGameStore = defineStore("game", () => {
         // перебегает на клетку, а потом начинает ходить".
         animatingPlayerId.value = by;
         animatedPositions.value = { ...animatedPositions.value, [by]: from };
+        // Snapshot every player's cash NOW so the UI keeps showing the
+        // pre-roll balance until the pawn lands — the server has already
+        // resolved the destination tile and is about to broadcast the
+        // post-rent / post-tax state, but the player should see those
+        // updates synced with the visual landing, not 1.5s ahead of it.
+        if (room.value) {
+          const snap: Record<string, number> = {};
+          for (const pl of room.value.players) snap[pl.id] = pl.cash;
+          frozenCash.value = snap;
+        }
         // Hold the rolling phase for the full duration of the dice mp3
         // so the visual tumble lands together with the audio thud.
         // Falls back to 900ms when the asset is still loading or audio
@@ -298,6 +325,7 @@ export const useGameStore = defineStore("game", () => {
     passedGo.value = null;
     animatedPositions.value = {};
     animatingPlayerId.value = null;
+    frozenCash.value = null;
   }
 
   function markChatRead() {
@@ -316,6 +344,7 @@ export const useGameStore = defineStore("game", () => {
     animatingPlayerId,
     landedTile,
     passedGo,
+    cashFor,
     selectedTileIndex,
     selectTile,
     friendIds,

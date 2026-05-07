@@ -44,13 +44,35 @@ export const BOT_AVATAR_COLORS: string[] = [
   "#9be072", // lime
 ];
 
+function botAvatarHashIdx(seed: string): number {
+  let h = 0;
+  for (let i = 0; i < seed.length; i++) h = (h * 31 + seed.charCodeAt(i)) | 0;
+  return Math.abs(h) % BOT_AVATAR_COLORS.length;
+}
+
 // Stable hash → BOT_AVATAR_COLORS index. Same bot name (or id) always
 // gets the same background, so a returning bot looks consistent across
 // rejoins and across the lobby/in-game views.
-export function botAvatarColor(seed: string): string {
-  let h = 0;
-  for (let i = 0; i < seed.length; i++) h = (h * 31 + seed.charCodeAt(i)) | 0;
-  return BOT_AVATAR_COLORS[Math.abs(h) % BOT_AVATAR_COLORS.length];
+//
+// `peerSeeds` (optional, ordered) lets the caller dedupe within a room:
+// if two bots hash to the same colour, the second one walks forward to
+// the next free slot. With ≤6 bots in BOT_AVATAR_COLORS.length=6 this
+// guarantees uniqueness — playtester 2026-05-08 «2 раза розовый» when
+// the pure hash collided across 5 lobby bots (birthday paradox).
+export function botAvatarColor(seed: string, peerSeeds: string[] = []): string {
+  if (peerSeeds.length === 0) return BOT_AVATAR_COLORS[botAvatarHashIdx(seed)];
+  const list = peerSeeds.includes(seed) ? peerSeeds : [...peerSeeds, seed];
+  const used = new Set<number>();
+  const assigned = new Map<string, number>();
+  for (const s of list) {
+    let idx = botAvatarHashIdx(s);
+    while (used.has(idx) && used.size < BOT_AVATAR_COLORS.length) {
+      idx = (idx + 1) % BOT_AVATAR_COLORS.length;
+    }
+    used.add(idx);
+    assigned.set(s, idx);
+  }
+  return BOT_AVATAR_COLORS[assigned.get(seed) ?? botAvatarHashIdx(seed)];
 }
 
 export function lighten(hex: string, amt: number): string {
