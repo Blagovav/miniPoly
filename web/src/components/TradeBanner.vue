@@ -6,6 +6,7 @@ import type { Locale, StreetTile } from "../../../shared/types";
 import { useGameStore } from "../stores/game";
 import Icon from "./Icon.vue";
 import { capTypeFor } from "../shop/cosmetics";
+import BotAvatar from "./BotAvatar.vue";
 
 const props = defineProps<{
   onRespond: (accept: boolean) => void;
@@ -104,7 +105,13 @@ void props;
 
       <!-- Sender row: cap avatar + name -->
       <div class="trade-banner__from">
-        <span class="trade-banner__cap" :style="{ background: fromColor }">
+        <BotAvatar
+          v-if="fromPlayer?.isBot"
+          class="trade-banner__cap trade-banner__cap--bot"
+          :seed="fromPlayer.name || String(fromPlayer.id)"
+          :size="36"
+        />
+        <span v-else class="trade-banner__cap" :style="{ background: fromColor }">
           <img :src="fromCapSrc" alt="" draggable="false"/>
         </span>
         <span class="trade-banner__from-name">{{ fromPlayer?.name }}</span>

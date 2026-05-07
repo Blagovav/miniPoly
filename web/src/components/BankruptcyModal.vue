@@ -13,6 +13,7 @@ import { useI18n } from "vue-i18n";
 import type { Player } from "../../../shared/types";
 import { useGameStore } from "../stores/game";
 import { capTypeFor } from "../shop/cosmetics";
+import BotAvatar from "./BotAvatar.vue";
 
 const game = useGameStore();
 const { locale } = useI18n();
@@ -84,7 +85,13 @@ function placeLabel(n: number): string {
     <div v-if="visible && subject" class="bk-scrim" @click="close">
       <div class="bk-card" @click.stop role="dialog" aria-modal="true">
         <div class="bk-cap-wrap">
-          <span class="bk-cap" :style="{ background: subject.color }">
+          <BotAvatar
+            v-if="subject.isBot"
+            class="bk-cap bk-cap--bot"
+            :seed="subject.name || String(subject.id)"
+            :size="64"
+          />
+          <span v-else class="bk-cap" :style="{ background: subject.color }">
             <img class="bk-cap__img" :src="subjectCapSrc" alt="" draggable="false" />
           </span>
         </div>
