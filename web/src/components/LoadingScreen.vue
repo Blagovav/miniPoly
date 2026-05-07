@@ -31,6 +31,19 @@ onUnmounted(() => {
   overflow: hidden;
   padding-top: max(var(--sat, 0px), var(--csat, 0px));
   padding-bottom: max(var(--sab, 0px), var(--csab, 0px));
+  /* Paint the bg directly on .splash too — the body class trick alone
+     leaks the parent view's color (e.g. RoomView .room → var(--bg)
+     parchment) when LoadingScreen mounts INSIDE that view. Playtester
+     2026-05-07 «фон везде уродский, должен быть наш лоудинг скрин».
+     Mirrors the splash-figma-root rule below verbatim so the visual
+     stays the same when used at root level. */
+  background-color: #0d68db;
+  background-image:
+    linear-gradient(rgba(13, 104, 219, 0.55), rgba(13, 104, 219, 0.55)),
+    url('/figma/home/bg-pattern.webp');
+  background-size: auto, cover;
+  background-position: center, center;
+  background-repeat: no-repeat, no-repeat;
 }
 .splash__logo {
   /* Figma 52:5051 — logo image is 418px wide on a 393px frame, i.e. ~106vw,
