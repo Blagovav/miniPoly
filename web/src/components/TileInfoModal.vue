@@ -61,8 +61,17 @@ const bandColor = computed<string | null>(() => {
 const houseAssetUrl = computed<string>(() => {
   const t = tile.value;
   if (!t) return "/figma/houses/house-neutral.webp";
-  if (t.kind === "railroad") return "/figma/houses/house-brown-1.webp";
-  if (t.kind === "utility") return "/figma/houses/house-yellow-1.webp";
+  // Railroads / utilities show their own iconography (train / lightning /
+  // drop) — same asset family as the on-board tile so the modal hero
+  // matches what the player sees on the board. Playtester 2026-05-07
+  // «вместо домика давай сделаем железную дорогу» — the brown house
+  // didn't tell the player anything about WHAT this property is.
+  if (t.kind === "railroad") return "/figma/room/tile-chest.webp";
+  if (t.kind === "utility") {
+    return t.index === 12
+      ? "/figma/room/tile-money-stack.webp"
+      : "/figma/room/tile-coin.webp";
+  }
   if (t.kind !== "street") return "/figma/houses/house-neutral.webp";
   const group = (t as StreetTile).group;
   const o = owned.value;
@@ -98,22 +107,49 @@ const DARK_GROUPS: ColorGroup[] = ["brown", "red", "green", "darkBlue"];
 
 const groupLabel = computed<string | null>(() => {
   const t = tile.value;
-  if (!t || t.kind !== "street") return null;
-  const g = (t as StreetTile).group;
-  return (isRu.value ? GROUP_LABEL_RU[g] : GROUP_LABEL_EN[g]) ?? null;
+  if (!t) return null;
+  if (t.kind === "street") {
+    const g = (t as StreetTile).group;
+    return (isRu.value ? GROUP_LABEL_RU[g] : GROUP_LABEL_EN[g]) ?? null;
+  }
+  // Railroad / utility never had a coloured "квартал" chip — playtester
+  // 2026-05-07 «нужно вместо серого цвета у рединга добавит значок жд,
+  // также у электростанции». Surface a kind-specific icon badge so RR
+  // and utility cards read in the same visual family as streets.
+  if (t.kind === "railroad") {
+    return isRu.value ? "🚂 Железная дорога" : "🚂 Railroad";
+  }
+  if (t.kind === "utility") {
+    if (t.index === 12) {
+      return isRu.value ? "⚡ Электростанция" : "⚡ Electric Company";
+    }
+    return isRu.value ? "💧 Водопровод" : "💧 Water Works";
+  }
+  return null;
 });
 const groupBadgeStyle = computed(() => {
   const t = tile.value;
-  if (!t || t.kind !== "street") {
-    return { background: "#7dd3fc", color: "#000", textShadow: "none" };
+  if (t?.kind === "street") {
+    const g = (t as StreetTile).group;
+    const dark = DARK_GROUPS.includes(g);
+    return {
+      background: GROUP_COLORS[g] ?? "#7dd3fc",
+      color: dark ? "#fff" : "#000",
+      textShadow: dark ? "0.4px 0.4px 0 rgba(0,0,0,0.6)" : "none",
+    };
   }
-  const g = (t as StreetTile).group;
-  const dark = DARK_GROUPS.includes(g);
-  return {
-    background: GROUP_COLORS[g] ?? "#7dd3fc",
-    color: dark ? "#fff" : "#000",
-    textShadow: dark ? "0.4px 0.4px 0 rgba(0,0,0,0.6)" : "none",
-  };
+  if (t?.kind === "railroad") {
+    // Slate-on-cream — railroads in Hasbro printing are black-on-white;
+    // soften to a deep slate so it sits beside the parchment card cleanly.
+    return { background: "#1f2937", color: "#fff", textShadow: "0.4px 0.4px 0 rgba(0,0,0,0.6)" };
+  }
+  if (t?.kind === "utility") {
+    if (t.index === 12) {
+      return { background: "#f59e0b", color: "#000", textShadow: "none" };
+    }
+    return { background: "#0ea5e9", color: "#fff", textShadow: "0.4px 0.4px 0 rgba(0,0,0,0.6)" };
+  }
+  return { background: "#7dd3fc", color: "#000", textShadow: "none" };
 });
 
 interface RentRow { label: string; value: number }
@@ -595,9 +631,12 @@ const ownerCapSrc = computed(() => `/figma/shop/caps/${capTypeFor(owner.value?.t
   position: fixed;
   inset: 0;
   background: rgba(0, 0, 0, 0.4);
-  /* Above Chat (120) so a chat tap mid-modal doesn't cover the
-     property card. RouteLoader is 90, modal sits above. */
-  z-index: 130;
+  /* Above the primary-bar (z-index 200) so the «БРОСИТЬ КУБИКИ» button
+     doesn't poke through the property card — playtester 2026-05-07
+     «кнопка бросит кубики вылезла на верхний слой, спрятать под».
+     In must-buy mode primaryButtons is null and the bar isn't rendered
+     anyway, so the bar staying interactive is no longer a concern. */
+  z-index: 210;
   /* Bottom-anchored per Figma 75:5661 (designer feedback 2026-05-02
      #5.18), but only with the safe-area inset — NOT the +76 px the
      previous version added. With the long-rent street card (Базовая
@@ -896,7 +935,7 @@ const ownerCapSrc = computed(() => `/figma/shop/caps/${capTypeFor(owner.value?.t
 
 /* Sell-confirm sheet — sits on top of the property card so a misclick
    on the swap "Продать" button can't quietly demolish a building. */
-.info-scrim--confirm { z-index: 140; }
+.info-scrim--confirm { z-index: 220; }
 .sell-confirm-card {
   width: 100%;
   max-width: 345px;
