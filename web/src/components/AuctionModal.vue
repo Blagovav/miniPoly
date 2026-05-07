@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from "vue";
+import { computed, onUnmounted, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { BOARD, GROUP_COLORS } from "../../../shared/board";
 import type { Locale, StreetTile } from "../../../shared/types";
@@ -101,12 +101,72 @@ const activeBidders = computed(() => {
  * explicit pass (myPassed) or when the auction itself ends server-
  * side (auction === null after the winner is announced). */
 const visible = computed(() => open.value && !!tile.value && !!auction.value && !myPassed.value);
+
+// Auction-specific countdown — server stamps `auction.deadline` when the
+// auction starts and refreshes it after every bid. Local tick keeps the
+// rendered value in sync without spamming WS broadcasts. Falls back to
+// hidden if the server hasn't shipped a deadline yet (older builds, or
+// auctions that pre-date the field). Playtester 2026-05-07 «нужно
+// сделать таймер аукциона».
+const nowMs = ref(Date.now());
+const tickHandle = window.setInterval(() => { nowMs.value = Date.now(); }, 250);
+onUnmounted(() => window.clearInterval(tickHandle));
+const auctionRemainingSec = computed(() => {
+  const d = auction.value?.deadline;
+  if (!d) return 0;
+  return Math.max(0, Math.ceil((d - nowMs.value) / 1000));
+});
+
+// Reason the auction was opened — surfaces "X отказался от покупки" or
+// "X обанкротился, улицы продаются с аукциона" inside the modal so the
+// other players know WHY the modal popped. Playtester 2026-05-07
+// «подписать почему открылся аукцион».
+const reasonLabel = computed(() => {
+  const r = auction.value?.reason;
+  if (!r) return null;
+  const player = game.room?.players.find((p) => p.id === r.playerId);
+  const name = player?.name ?? (loc.value === "ru" ? "Игрок" : "Player");
+  if (r.kind === "declined") {
+    return loc.value === "ru"
+      ? `${name} отказался от покупки`
+      : `${name} declined to buy`;
+  }
+  if (r.kind === "bankBankruptcy") {
+    return loc.value === "ru"
+      ? `${name} банкрот — улицы продаются с аукциона`
+      : `${name} went bankrupt — properties at auction`;
+  }
+  return null;
+});
+
+const leadingBg = computed<string>(() => {
+  const c = highBidder.value?.color;
+  return c || "#e2776e";
+});
 </script>
 
 <template>
   <transition name="auction-fade">
     <div v-if="visible && tile && auction" class="auction-scrim">
       <div class="auction-card" @click.stop>
+        <!-- Header strip: timer (left) + my balance (right). Anchors the
+             card so players know how long they have to bid AND what they
+             can afford without scrolling down to the input. -->
+        <div class="auction-header">
+          <div v-if="auctionRemainingSec > 0" class="auction-timer">
+            <img src="/figma/room/icon-stopwatch.webp" alt="" />
+            <span>{{ auctionRemainingSec }}</span>
+          </div>
+          <span v-else class="auction-timer auction-timer--off"></span>
+          <div v-if="me" class="auction-balance">
+            <span class="auction-balance__label">
+              {{ loc === "ru" ? "У меня" : "Mine" }}
+            </span>
+            <img src="/figma/room/icon-money.webp" alt="" />
+            <b>{{ me.cash }}</b>
+          </div>
+        </div>
+
         <!-- Title block -->
         <div class="auction-title">
           <div class="auction-title__name">{{ tile.name[loc] }}</div>
@@ -121,13 +181,14 @@ const visible = computed(() => open.value && !!tile.value && !!auction.value && 
               <b>{{ tilePrice }}</b>
             </span>
           </div>
+          <div v-if="reasonLabel" class="auction-reason">{{ reasonLabel }}</div>
         </div>
 
         <!-- Bid display: empty vs leading -->
         <div v-if="auction.highBid === 0" class="bid-empty">
           {{ loc === "ru" ? "Ставок пока нет" : "No bids yet" }}
         </div>
-        <div v-else class="bid-leading">
+        <div v-else class="bid-leading" :style="{ background: leadingBg }">
           <div class="bid-leading__label">
             {{ loc === "ru" ? "Ведущая ставка" : "Leading bid" }}
           </div>
@@ -198,8 +259,16 @@ const visible = computed(() => open.value && !!tile.value && !!auction.value && 
           </button>
         </div>
 
-        <!-- Pass -->
-        <button class="btn-3d btn-3d--red pass-btn" @click="onPass">
+        <!-- Pass — disabled while I'm the leading bidder. Passing on my
+             own bid would be a no-op (server keeps my bid valid until
+             I'm out-bid), and the button looking "active" while doing
+             nothing confused playtester 2026-05-07 «если сделал ставку
+             то спасовать не должна быть активна». -->
+        <button
+          class="btn-3d btn-3d--red pass-btn"
+          :disabled="iAmLeading"
+          @click="onPass"
+        >
           {{ loc === "ru" ? "Спасовать" : "Pass" }}
         </button>
       </div>
@@ -239,6 +308,52 @@ const visible = computed(() => open.value && !!tile.value && !!auction.value && 
   overflow-y: auto;
   font-family: 'Unbounded', sans-serif;
   color: #000;
+}
+
+/* ── Header strip (timer + balance) ── */
+.auction-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-family: 'Unbounded', sans-serif;
+  font-weight: 700;
+  font-size: 14px;
+  color: #1a0f05;
+}
+.auction-timer {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 20px;
+}
+.auction-timer img { width: 18px; height: 18px; object-fit: contain; }
+.auction-timer--off { visibility: hidden; }
+.auction-balance {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  background: #fff;
+  border-radius: 100px;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+}
+.auction-balance__label {
+  font-weight: 500;
+  font-size: 12px;
+  color: rgba(0, 0, 0, 0.55);
+}
+.auction-balance img { width: 18px; height: 18px; object-fit: contain; }
+
+/* Reason chip — single line under the title metadata. */
+.auction-reason {
+  margin-top: 4px;
+  font-family: 'Golos UI', 'Unbounded', sans-serif;
+  font-weight: 500;
+  font-size: 13px;
+  line-height: 18px;
+  color: rgba(0, 0, 0, 0.65);
+  text-align: center;
 }
 
 /* ── Title block ── */
@@ -319,10 +434,19 @@ const visible = computed(() => open.value && !!tile.value && !!auction.value && 
   align-items: center;
   gap: 10px;
   padding: 10px;
+  /* Background is inline-styled to highBidder.color so the strip echoes
+     the leader's player colour — playtester 2026-05-07 «фон ведущей
+     ставки должен подхватывать цвет игрока». #e2776e is the fallback
+     for the (rare) state where the bidder colour is missing. */
   background: #e2776e;
   border-radius: 12px;
   color: #fff;
   text-shadow: 0.2px 0.2px 0 #000;
+}
+.pass-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  filter: saturate(0.5);
 }
 .bid-leading__label {
   font-family: 'Unbounded', sans-serif;

@@ -90,7 +90,7 @@ const L = computed(() => isRu.value
       holdings: "Владения",
       ownedTitle: "Владения игрока",
       empty: "У игрока нет владений",
-      trade: "ОТПРАВИТЬ ГОНЦА",
+      trade: "ПРЕДЛОЖИТЬ ОБМЕН",
     }
   : {
       cash: "Coin",
@@ -98,7 +98,7 @@ const L = computed(() => isRu.value
       holdings: "Holdings",
       ownedTitle: "Player holdings",
       empty: "Player owns nothing yet",
-      trade: "SEND MESSENGER",
+      trade: "PROPOSE A TRADE",
     });
 </script>
 
@@ -181,9 +181,12 @@ const L = computed(() => isRu.value
             {{ L.empty }}
           </div>
 
-          <!-- CTA -->
+          <!-- CTA — hidden when this is my own profile. Trading with
+               yourself isn't a real action (server rejects it anyway,
+               but the empty button confused playtesters who tapped
+               their own row in the leaderboard). -->
           <button
-            v-if="onOfferTrade && !player.bankrupt"
+            v-if="onOfferTrade && !player.bankrupt && player.id !== game.myPlayerId"
             class="profile-cta"
             @click="onOfferTrade(player.id)"
           >

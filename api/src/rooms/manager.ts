@@ -33,6 +33,12 @@ const turnTimers = new Map<string, NodeJS.Timeout>();
 // across multiple bots who aren't the current turn — each needs to be
 // nudged into placing a bid or passing, otherwise the auction freezes.
 const auctionTimers = new Map<string, NodeJS.Timeout>();
+// Wall-clock deadline for the auction itself. Without this, an auction
+// sits indefinitely if every active bidder is a human and nobody bids
+// — playtester 2026-05-07 «нужно сделать таймер аукциона». Fires when
+// AuctionState.deadline elapses, force-passes all non-leading active
+// players to trigger engine.maybeEndAuction.
+const auctionDeadlineTimers = new Map<string, NodeJS.Timeout>();
 // Pending bot-trade resolve timers, one per room. We dedup so a fast
 // chain of state changes (which all re-enter onStateChange) doesn't
 // pile up multiple resolves for the same pendingTrade.
@@ -69,6 +75,9 @@ export function deleteRoom(id: string): void {
   const at = auctionTimers.get(id);
   if (at) clearTimeout(at);
   auctionTimers.delete(id);
+  const ad = auctionDeadlineTimers.get(id);
+  if (ad) clearTimeout(ad);
+  auctionDeadlineTimers.delete(id);
   const tt = tradeTimers.get(id);
   if (tt) clearTimeout(tt);
   tradeTimers.delete(id);
@@ -120,8 +129,10 @@ export function onStateChange(room: RoomState): void {
   // every non-bankrupt player.
   if (room.auction && room.phase === "auction") {
     scheduleAuctionBotTick(room);
+    scheduleAuctionDeadlineTick(room);
   } else {
     clearAuctionTimer(room.id);
+    clearAuctionDeadlineTimer(room.id);
   }
 
   // Pre-roll: current roller lives in the first bracket's pending queue, not
@@ -177,8 +188,17 @@ function resetTurnTimer(room: RoomState): void {
   clearTurnTimer(room.id);
   const current =
     room.phase === "preRoll" ? preRollCurrentPlayer(room) : currentPlayer(room);
-  // Bots act almost immediately; disconnected humans get the full 180s grace.
-  const delay = current?.isBot ? BOT_TURN_DELAY_MS : config.turnTimeoutSec * 1000;
+  // Bots act almost immediately. Connected humans get the per-room
+  // turnTimeoutSec (default 180s). Disconnected humans get DOUBLE the
+  // grace before AI takes over their turn — playtester 2026-05-07
+  // «крит — блокировка экрана банкротит игрока». Brief screen lock
+  // (phone fade-out, swipe to chat) shouldn't lose them a tile to a
+  // mistimed AI auction bid. Tradeoff: longer pause for the rest of
+  // the table when someone genuinely walks away, but a one-step AI
+  // bankruptcy is far worse than a 3-min wait.
+  const baseDelayMs = config.turnTimeoutSec * 1000;
+  const humanDelay = current?.connected ? baseDelayMs : baseDelayMs * 2;
+  const delay = current?.isBot ? BOT_TURN_DELAY_MS : humanDelay;
   // Stamp the wall-clock deadline so the client can render a countdown
   // next to "ВАШ ХОД!" — bots get such a tight delay (≈800ms) that
   // there's no point showing a timer for them, so we skip those.
@@ -259,7 +279,13 @@ function resetTurnTimer(room: RoomState): void {
     // that declines to buy effectively gifts every tile to the human for
     // free. Willingness is 50-85% of tile price, capped so the bot keeps
     // a $300 reserve for rents + jail fines.
-    if (aiMode && fresh.auction && !fresh.auction.passedIds.includes(p.id)) {
+    //
+    // Disconnected HUMANS (screen lock, signal drop) just pass — bidding
+    // on their behalf risks burning cash they can't actively defend.
+    // Playtester 2026-05-07 «блокировка экрана банкротит игрока»: the
+    // AI takeover used to bid aggressively on Boardwalk for a player
+    // who'd just stepped away.
+    if (aiMode && fresh.auction && !fresh.auction.passedIds.includes(p.id) && p.isBot) {
       const { placeBid: engPlaceBid } = await import("../game/engine");
       const a = fresh.auction;
       const tile = BOARD[a.tileIndex];
@@ -337,6 +363,56 @@ function clearAuctionTimer(roomId: string): void {
   const t = auctionTimers.get(roomId);
   if (t) clearTimeout(t);
   auctionTimers.delete(roomId);
+}
+
+function clearAuctionDeadlineTimer(roomId: string): void {
+  const t = auctionDeadlineTimers.get(roomId);
+  if (t) clearTimeout(t);
+  auctionDeadlineTimers.delete(roomId);
+}
+
+/**
+ * Wall-clock auction deadline. When room.auction.deadline elapses, we
+ * force-pass every active bidder who isn't the high bidder so engine.
+ * maybeEndAuction resolves the auction in favour of the leader (or with
+ * no winner if there were zero bids). Re-armed on every onStateChange
+ * so a fresh bid that pushed the deadline forward extends the timer.
+ */
+function scheduleAuctionDeadlineTick(room: RoomState): void {
+  if (!room.auction || !room.auction.deadline) {
+    clearAuctionDeadlineTimer(room.id);
+    return;
+  }
+  const ms = Math.max(0, room.auction.deadline - Date.now());
+  clearAuctionDeadlineTimer(room.id);
+  const timer = setTimeout(async () => {
+    auctionDeadlineTimers.delete(room.id);
+    const fresh = getRoom(room.id);
+    if (!fresh || !fresh.auction) return;
+    if (fresh.phase !== "auction") return;
+    // Deadline drifted forward (a fresh bid arrived) — re-arm instead
+    // of resolving on the stale schedule.
+    if (fresh.auction.deadline && fresh.auction.deadline > Date.now() + 50) {
+      scheduleAuctionDeadlineTick(fresh);
+      return;
+    }
+    const a = fresh.auction;
+    // Force-pass every still-in player except the current leader. With
+    // only the leader left active engine.maybeEndAuction finishes the
+    // auction in their favour. If there's no leader (no bids at all),
+    // passing the last active player triggers the no-winner branch.
+    for (const p of fresh.players) {
+      if (p.bankrupt) continue;
+      if (a.passedIds.includes(p.id)) continue;
+      if (a.highBidderId === p.id) continue;
+      passAuction(fresh, p.id);
+      // passAuction may have ended the auction mid-loop — bail out.
+      if (!fresh.auction || fresh.phase !== "auction") break;
+    }
+    if (broadcastState) broadcastState(fresh.id);
+    onStateChange(fresh);
+  }, ms);
+  auctionDeadlineTimers.set(room.id, timer);
 }
 
 function clearTradeTimer(roomId: string): void {
