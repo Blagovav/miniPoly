@@ -201,16 +201,12 @@ const readyHint = computed(() => {
 });
 
 function onPlayAgainClick() {
-  // Host's "СЫГРАТЬ СНОВА" jumps straight into ready-check. The choice
-  // popup ("Партия готова") only matters once everyone is ready — see
-  // the watcher below. Non-host falls back to the legacy onPlayAgain
-  // emit so the existing /rooms route still fires for them.
-  if (isHost.value) {
-    allReadyPromptDismissed.value = false;
-    allReadyPromptShown.value = false;
-    uiState.value = "ready-check";
-    return;
-  }
+  // Host's "СЫГРАТЬ СНОВА" fires onPlayAgain straight away — parent
+  // (RoomView) sends a `restartRoom` WS message that resets the room
+  // back to phase=lobby with the same player list. The new lobby's
+  // ready-up UI takes over; we don't need an intermediate ready-check
+  // baked into this modal anymore. Button itself is host-only via the
+  // template `v-if="isHost"`, so non-host never reaches this path.
   if (props.onPlayAgain) props.onPlayAgain();
   else props.onClose();
 }

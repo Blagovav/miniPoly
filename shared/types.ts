@@ -356,6 +356,11 @@ export type ClientMessage =
   | { type: "selectToken"; tokenId: string }
   | { type: "leave" }
   | { type: "destroyRoom" }
+  // Host-only: end-of-game «СЫГРАТЬ СНОВА» — the room stays put with
+  // the same players + settings, every per-game piece of state
+  // (cash, position, properties, decks, etc.) resets, phase flips
+  // back to "lobby" so players ready up and start a fresh round.
+  | { type: "restartRoom" }
   | { type: "buildHouse"; tileIndex: number }
   | { type: "sellHouse"; tileIndex: number }
   | {
