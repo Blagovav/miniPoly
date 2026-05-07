@@ -48,6 +48,7 @@ const tg = shallowRef<TgWebApp | null>(null);
 const initData = ref<string>("");
 const userId = ref<number | null>(null);
 const userName = ref<string>("");
+const userPhoto = ref<string>("");
 
 export function useTelegram() {
   function init() {
@@ -99,6 +100,7 @@ export function useTelegram() {
     if (tgUser?.id) {
       userId.value = tgUser.id;
       userName.value = tgUser.first_name ?? "Player";
+      userPhoto.value = tgUser.photo_url ?? "";
     } else {
       // Telegram WebApp есть, но пользователя нет (dev-preview, broken launch) —
       // падаем на стабильный devId, чтобы профиль/друзья/инвайты работали.
@@ -185,5 +187,5 @@ export function useTelegram() {
     } catch { return null; }
   }
 
-  return { tg, initData, userId, userName, init, haptic, notify, close, setClosingConfirmation, setUserName, fetchProfile, setBgColor };
+  return { tg, initData, userId, userName, userPhoto, init, haptic, notify, close, setClosingConfirmation, setUserName, fetchProfile, setBgColor };
 }
