@@ -290,11 +290,17 @@ function resetTurnTimer(room: RoomState): void {
       const a = fresh.auction;
       const tile = BOARD[a.tileIndex];
       const price = (tile as { price?: number }).price ?? 0;
+      const mortgage = (tile as { mortgage?: number }).mortgage ?? 0;
       const reserve = 300;
       const willingness = Math.floor(price * (0.5 + Math.random() * 0.35));
       const affordable = Math.max(0, p.cash - reserve);
       const myCap = Math.min(willingness, affordable);
-      const nextBid = a.highBid + Math.floor(10 + Math.random() * 20);
+      // Honor the engine's mortgage-floor on the opening bid (see
+      // scheduleAuctionBotTick for the full rationale).
+      const raise = Math.floor(10 + Math.random() * 20);
+      const nextBid = a.highBid === 0
+        ? Math.max(mortgage, raise)
+        : a.highBid + raise;
       if (myCap > 0 && nextBid > a.highBid && nextBid <= myCap && a.highBidderId !== p.id) {
         engPlaceBid(fresh, p.id, nextBid);
       } else {
@@ -497,11 +503,22 @@ function scheduleAuctionBotTick(room: RoomState): void {
     // tile price, capped to keep a $300 reserve.
     const tile = BOARD[auction.tileIndex];
     const price = (tile as { price?: number }).price ?? 0;
+    const mortgage = (tile as { mortgage?: number }).mortgage ?? 0;
     const reserve = 300;
     const willingness = Math.floor(price * (0.5 + Math.random() * 0.35));
     const affordable = Math.max(0, bot.cash - reserve);
     const myCap = Math.min(willingness, affordable);
-    const nextBid = auction.highBid + Math.floor(10 + Math.random() * 20);
+    // Engine enforces a mortgage-value floor on the OPENING bid (anti
+    // buy-cheap-mortgage-back exploit). Without honoring it, the bot's
+    // raise of $10–30 at highBid=0 is silently rejected by placeBid →
+    // bot tick re-enters with the same state → auction freezes
+    // (playtester 2026-05-07 «выставил на аукцион улицу... сразу пас.
+    // далее ничего не аroизошло. игра повисла»). On a fresh auction
+    // the bot bids the mortgage floor; subsequent raises are +$10–30.
+    const raise = Math.floor(10 + Math.random() * 20);
+    const nextBid = auction.highBid === 0
+      ? Math.max(mortgage, raise)
+      : auction.highBid + raise;
 
     const { placeBid: engPlaceBid, passAuction: engPassAuction } = await import("../game/engine");
     if (myCap > 0 && nextBid > auction.highBid && nextBid <= myCap) {

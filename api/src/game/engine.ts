@@ -1008,6 +1008,26 @@ function resolveTile(room: RoomState, p: Player, opts?: ResolveOpts): void {
       handleProperty(room, p, tile, opts);
       break;
   }
+
+  maybeAutoRollOnDoubles(room, p);
+}
+
+// Hasbro doubles rule: the rolling player rolls AGAIN, doesn't end turn.
+// The "ЗАВЕРШИТЬ ХОД" → "БРОСИТЬ КУБИКИ" flicker users saw between rolls
+// was a no-op tap — playtester 2026-05-07 «при ввбрасывании дубля
+// показывается кнопка завершить ход, а потом сразу бросить кубики снова...
+// правильная работа сразу показывать бросить кубики». Skip the action
+// phase entirely and re-arm rolling when the dice-roller's tile is fully
+// resolved on a doubles turn. Third-doubles-to-jail and jail-stay leave
+// p.inJail=true so the inJail guard below preserves the manual end-turn
+// for those edge cases.
+function maybeAutoRollOnDoubles(room: RoomState, p: Player): void {
+  if (room.phase !== "action") return;
+  if (p.inJail || p.bankrupt) return;
+  if (!room.dice || room.dice[0] !== room.dice[1]) return;
+  if (room.doublesInARow <= 0 || room.doublesInARow >= 3) return;
+  room.phase = "rolling";
+  room.dice = null;
 }
 
 function handleProperty(room: RoomState, p: Player, tile: PropertyTile, opts?: ResolveOpts): void {
@@ -1131,6 +1151,7 @@ export function buyCurrentProperty(room: RoomState): boolean {
     { kind: "buy", amount: tile.price, actorId: p.id, tileIndex: tile.index },
   );
   room.phase = "action";
+  maybeAutoRollOnDoubles(room, p);
   return true;
 }
 
@@ -1141,6 +1162,7 @@ export function skipBuy(room: RoomState): void {
   const tile = BOARD[p.position];
   if (tile.kind !== "street" && tile.kind !== "railroad" && tile.kind !== "utility") {
     room.phase = "action";
+    maybeAutoRollOnDoubles(room, p);
     return;
   }
   // Casual variant: with settings.auctions=false the declined tile just
@@ -1152,6 +1174,7 @@ export function skipBuy(room: RoomState): void {
       ru: `${p.name} отказался от ${tile.name.ru}`,
     });
     room.phase = "action";
+    maybeAutoRollOnDoubles(room, p);
     return;
   }
   startAuction(room, tile.index, { kind: "declined", playerId: p.id });
@@ -1326,6 +1349,8 @@ function maybeEndAuction(room: RoomState): void {
     room.auction = null;
     room.phase = "action";
     startNextBankAuctionIfPending(room);
+    const cur = currentPlayer(room);
+    if (cur) maybeAutoRollOnDoubles(room, cur);
     return;
   }
 
@@ -1340,6 +1365,8 @@ function finishAuction(room: RoomState): void {
     room.auction = null;
     room.phase = "action";
     startNextBankAuctionIfPending(room);
+    const cur0 = currentPlayer(room);
+    if (cur0) maybeAutoRollOnDoubles(room, cur0);
     return;
   }
   const winner = room.players.find((pl) => pl.id === a.highBidderId);
@@ -1374,6 +1401,8 @@ function finishAuction(room: RoomState): void {
   room.phase = "action";
   // If a bankrupt player queued more tiles for auction, advance the chain.
   startNextBankAuctionIfPending(room);
+  const cur = currentPlayer(room);
+  if (cur) maybeAutoRollOnDoubles(room, cur);
 }
 
 export function endTurn(room: RoomState): boolean {
