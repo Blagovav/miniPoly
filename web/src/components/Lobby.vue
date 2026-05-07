@@ -20,6 +20,7 @@ import BoardPreview from "./BoardPreview.vue";
 import BoardSelectModal from "./BoardSelectModal.vue";
 import { findBoard } from "../utils/boards";
 import { ORDERED_PLAYER_COLORS } from "../utils/palette";
+import BotAvatar from "./BotAvatar.vue";
 
 const props = defineProps<{
   room: RoomState;
@@ -468,13 +469,12 @@ const L = computed(() => isRu.value
         class="player-row"
         :class="{ 'player-row--me': p.id === myPlayerId }"
       >
-        <span
+        <BotAvatar
           v-if="p.isBot"
-          class="player-row__avatar player-row__avatar--bot"
-          aria-hidden="true"
-        >
-          <Icon name="users" :size="22" color="#fff"/>
-        </span>
+          class="player-row__avatar"
+          :seed="p.name || String(p.id)"
+          :size="40"
+        />
         <img
           v-else-if="p.avatar"
           class="player-row__avatar player-row__avatar--photo"
@@ -964,10 +964,6 @@ const L = computed(() => isRu.value
   display: grid;
   place-items: center;
   overflow: hidden;
-}
-.player-row__avatar--bot {
-  background: #31e4c9;
-  box-shadow: inset 0 -2px 2px rgba(0, 0, 0, 0.18);
 }
 .player-row__avatar--photo {
   object-fit: cover;

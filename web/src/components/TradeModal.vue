@@ -6,6 +6,7 @@ import type { Locale, Player, StreetTile } from "../../../shared/types";
 import { useGameStore } from "../stores/game";
 import { capTypeFor } from "../shop/cosmetics";
 import Icon from "./Icon.vue";
+import BotAvatar from "./BotAvatar.vue";
 
 export interface TradePayload {
   toId: string;
@@ -228,7 +229,13 @@ const L = computed(() => isRu.value
                 :style="{ background: playerColor(p) }"
                 @click="targetId = p.id"
               >
-                <span class="trade-pill__sigil">
+                <BotAvatar
+                  v-if="p.isBot"
+                  class="trade-pill__sigil trade-pill__sigil--bot"
+                  :seed="p.name || String(p.id)"
+                  :size="24"
+                />
+                <span v-else class="trade-pill__sigil">
                   <img :src="playerCapSrc(p)" alt="" draggable="false"/>
                 </span>
                 <span class="trade-pill__body">

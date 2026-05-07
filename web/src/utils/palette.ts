@@ -32,6 +32,27 @@ export const ORDERED_PLAYER_COLORS: string[] = [
   PLAYER_COLORS.finn,
 ];
 
+// Bright, distinct backgrounds for bot avatar circles. The teal (#31e4c9)
+// is the canonical one from the designer's Figma; the rest mirror its
+// saturation/brightness so any bot in a roster reads as a friendly mascot.
+export const BOT_AVATAR_COLORS: string[] = [
+  "#31e4c9", // mint/teal
+  "#ffb648", // amber
+  "#ff7aa8", // pink
+  "#7ec8ff", // sky
+  "#b48cff", // lavender
+  "#9be072", // lime
+];
+
+// Stable hash → BOT_AVATAR_COLORS index. Same bot name (or id) always
+// gets the same background, so a returning bot looks consistent across
+// rejoins and across the lobby/in-game views.
+export function botAvatarColor(seed: string): string {
+  let h = 0;
+  for (let i = 0; i < seed.length; i++) h = (h * 31 + seed.charCodeAt(i)) | 0;
+  return BOT_AVATAR_COLORS[Math.abs(h) % BOT_AVATAR_COLORS.length];
+}
+
 export function lighten(hex: string, amt: number): string {
   const c = hex.replace("#", "");
   const n = parseInt(c, 16);

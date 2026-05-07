@@ -16,6 +16,7 @@ import { useWs } from "../composables/useWs";
 import { useGameStore } from "../stores/game";
 import Board from "../components/Board.vue";
 import Lobby from "../components/Lobby.vue";
+import BotAvatar from "../components/BotAvatar.vue";
 import GameHud from "../components/GameHud.vue";
 import Dice from "../components/Dice.vue";
 import Chat from "../components/Chat.vue";
@@ -864,7 +865,7 @@ function openCurrentTileInfo() {
 // metric for sort and display fixes that.
 const leaderboard = computed(() => {
   const r = game.room;
-  if (!r) return [] as { id: string; name: string; cash: number; color: string; avatar?: string; token: string }[];
+  if (!r) return [] as { id: string; name: string; cash: number; color: string; avatar?: string; token: string; isBot?: boolean }[];
   return r.players
     .map((p) => ({
       id: p.id,
@@ -873,6 +874,7 @@ const leaderboard = computed(() => {
       avatar: p.avatar,
       token: p.token,
       color: p.color,
+      isBot: p.isBot,
     }))
     .sort((a, b) => b.cash - a.cash);
 });
@@ -1359,8 +1361,14 @@ void t;
               :style="{ background: p.color }"
             >
               <div class="leaderboard__pill-left">
+                <BotAvatar
+                  v-if="p.isBot"
+                  class="leaderboard__avatar leaderboard__avatar--bot"
+                  :seed="p.name || String(p.id)"
+                  :size="24"
+                />
                 <img
-                  v-if="p.avatar"
+                  v-else-if="p.avatar"
                   class="leaderboard__avatar"
                   :src="p.avatar"
                   alt=""

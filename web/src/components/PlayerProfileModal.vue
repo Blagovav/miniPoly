@@ -5,6 +5,7 @@ import { BOARD, GROUP_COLORS } from "../../../shared/board";
 import type { Locale, Player, StreetTile } from "../../../shared/types";
 import { useGameStore } from "../stores/game";
 import { capTypeFor } from "../shop/cosmetics";
+import BotAvatar from "./BotAvatar.vue";
 import Icon from "./Icon.vue";
 
 const props = defineProps<{
@@ -112,7 +113,14 @@ const L = computed(() => isRu.value
                equipped token (capTypeFor) so it matches the on-board pawn
                and leaderboard chip rather than a static placeholder. -->
           <div class="profile-head">
+            <BotAvatar
+              v-if="player.isBot"
+              class="profile-avatar profile-avatar--bot"
+              :seed="player.name || String(player.id)"
+              :size="56"
+            />
             <div
+              v-else
               class="profile-avatar"
               :style="{ background: player.color }"
             >

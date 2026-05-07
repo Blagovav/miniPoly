@@ -5,6 +5,7 @@ import { BOARD, GROUP_COLORS } from "../../../shared/board";
 import type { Locale, StreetTile } from "../../../shared/types";
 import { useGameStore } from "../stores/game";
 import { capTypeFor } from "../shop/cosmetics";
+import BotAvatar from "./BotAvatar.vue";
 
 const props = defineProps<{
   onBid: (amount: number) => void;
@@ -211,7 +212,13 @@ const leadingBg = computed<string>(() => {
             class="bidder-chip"
             :style="{ background: p.color }"
           >
-            <span class="bidder-chip__token">
+            <BotAvatar
+              v-if="p.isBot"
+              class="bidder-chip__token bidder-chip__token--bot"
+              :seed="p.name || String(p.id)"
+              :size="24"
+            />
+            <span v-else class="bidder-chip__token">
               <img
                 class="bidder-chip__cap"
                 :src="chipCapSrc(p.token)"

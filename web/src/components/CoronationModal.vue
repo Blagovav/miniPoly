@@ -19,6 +19,7 @@ import type { OwnedProperty, Player } from "../../../shared/types";
 import { capTypeFor, SHOP_CAPS } from "../shop/cosmetics";
 import type { Rarity } from "./RarityGlow.vue";
 import CosmeticsCaps from "./CosmeticsCaps.vue";
+import BotAvatar from "./BotAvatar.vue";
 
 const props = defineProps<{
   open: boolean;
@@ -367,7 +368,13 @@ watch(
               >
                 <!-- Token (cap) -->
                 <div class="cor-row__cap">
+                  <BotAvatar
+                    v-if="entry.player.isBot"
+                    :seed="entry.player.name || String(entry.player.id)"
+                    :size="32"
+                  />
                   <CosmeticsCaps
+                    v-else
                     :type="capTypeFor(entry.player.token)"
                     :rarity="capRarityFor(entry.player.token)"
                     :size="32"
