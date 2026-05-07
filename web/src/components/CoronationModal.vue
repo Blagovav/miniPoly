@@ -481,7 +481,13 @@ watch(
             <button class="cor-btn cor-btn--menu" @click="onCloseClick">
               {{ isRu ? "ВЫЙТИ В МЕНЮ" : "BACK TO MENU" }}
             </button>
-            <button class="cor-btn cor-btn--again" @click="onPlayAgainClick">
+            <!-- Recreate-match button is host-only — only the host can
+                 re-arm the room. For non-hosts the button used to route
+                 to /rooms (the «search a match» menu), which felt like
+                 a dead-end. Playtester 2026-05-07 «доступна только
+                 хосту, должна идти в лобби». Host's flow re-uses the
+                 same room and flips phase back to lobby in-place. -->
+            <button v-if="isHost" class="cor-btn cor-btn--again" @click="onPlayAgainClick">
               {{ isRu ? "СЫГРАТЬ СНОВА" : "PLAY AGAIN" }}
             </button>
           </template>

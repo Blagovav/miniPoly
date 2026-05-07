@@ -1255,13 +1255,16 @@ void t;
             />
           </svg>
           <TransitionGroup tag="div" name="turn" class="turn-rail">
-            <div
+            <button
+              type="button"
               v-for="slot in turnSlots"
               :key="slot.key"
               :class="['turn-card', `turn-card--${slot.role}`]"
               :style="slot.role === 'current'
                 ? { background: slot.player.color }
                 : undefined"
+              @click="openProfile(slot.player)"
+              :aria-label="locale === 'ru' ? `Открыть профиль ${slot.player.name}` : `Open ${slot.player.name} profile`"
             >
               <span class="turn-card__avatar">
                 <!-- Always show the cap figurine here — playtester
@@ -1285,7 +1288,7 @@ void t;
                   <span><img src="/figma/room/icon-chair.webp" alt=""/>{{ propCountFor(slot.player.id) }}</span>
                 </div>
               </div>
-            </div>
+            </button>
           </TransitionGroup>
         </div>
 
@@ -1453,10 +1456,16 @@ void t;
         :on-friend-request="sendFriendRequest"
         :on-profile-open="openProfile"
         :on-close="() => router.replace({ name: 'home' })"
-        :on-play-again="() => router.replace({ name: 'rooms' })"
+        :on-play-again="() => router.replace({ name: 'create' })"
         :on-configure="() => router.replace({ name: 'create' })"
         :on-ready-toggle="ready"
       />
+      <!-- Both onPlayAgain / onConfigure route to /create so the host
+           lands on the match-config screen rather than the «join an
+           existing room» list — playtester 2026-05-07 «должна идти в
+           лобби, не в меню поиска». A real in-place restart RPC (same
+           room, reset phase=lobby) is a separate piece of work; for
+           now /create at least avoids the search dead-end. -->
     </template>
 
     <!-- ── Initial load spinner (sigil, matches mockup) ── -->
@@ -2207,7 +2216,16 @@ void t;
   background: #fff;
   border-radius: 14px;
   min-width: 0;
-  cursor: default;
+  cursor: pointer;
+  /* Reset the native <button> defaults — we promoted the card from a
+     <div> for the «open profile on tap» path, but the browser-stock
+     border / font / shadow ruined the existing card look. */
+  border: 0;
+  font: inherit;
+  color: inherit;
+  text-align: inherit;
+  appearance: none;
+  -webkit-tap-highlight-color: transparent;
   /* Role swap (prev → current → next) animates background + padding so the
      card shape morphs instead of snapping when the slider shifts. */
   transition:

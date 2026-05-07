@@ -220,6 +220,16 @@ export interface AuctionState {
   highBidderId: string | null;
   passedIds: string[];
   startedAt: number;
+  // Wall-clock deadline (ms) — auction auto-resolves to the highest
+  // bidder when this passes. Refreshed on every bid so a hot back-and-
+  // forth doesn't time out. Null means the room is on a build that
+  // pre-dates the field; client falls back to hiding the timer.
+  deadline?: number | null;
+  // Why the auction was opened. The client surfaces this as a one-line
+  // banner inside the modal so spectators understand what triggered
+  // the popup (declined purchase vs. bank seizure after bankruptcy) —
+  // playtester 2026-05-07 «подписать почему открылся аукцион».
+  reason?: { kind: "declined" | "bankBankruptcy"; playerId: string } | null;
 }
 
 /**
@@ -306,6 +316,10 @@ export interface RoomState {
   // queue sequentially via finishAuction → startNextBankAuction so we
   // never have two auctions running at once.
   pendingBankAuctionTiles: number[];
+  // Whose bankruptcy triggered the current bank-auction chain. Carried
+  // through to AuctionState.reason on each chained auction so the modal
+  // can name the bankrupt player. Null between chains.
+  pendingBankAuctionInitiatorId?: string | null;
 }
 
 export interface PublicRoomSummary {

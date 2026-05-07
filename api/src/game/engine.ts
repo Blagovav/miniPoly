@@ -968,7 +968,7 @@ function handleProperty(room: RoomState, p: Player, tile: PropertyTile, opts?: R
       // was just left with "End Turn" and the tile sat unsold.
       log(room, { en: `${p.name} can't afford ${tile.name.en}`, ru: `${p.name} не может купить ${tile.name.ru}` });
       if (room.settings.auctions) {
-        startAuction(room, tile.index);
+        startAuction(room, tile.index, { kind: "declined", playerId: p.id });
       } else {
         // Auctions off: tile stays unclaimed, next landing gets a fresh
         // buy prompt. Player skips straight to action so they can end turn.
@@ -1100,7 +1100,7 @@ export function skipBuy(room: RoomState): void {
     room.phase = "action";
     return;
   }
-  startAuction(room, tile.index);
+  startAuction(room, tile.index, { kind: "declined", playerId: p.id });
 }
 
 /**
@@ -1158,16 +1158,25 @@ function returnJailCardToDeck(room: RoomState, source: "chance" | "chest"): void
 }
 
 /** Аукцион Hasbro: когда игрок отказался покупать клетку — она уходит с молотка. */
-export function startAuction(room: RoomState, tileIndex: number): void {
+export function startAuction(
+  room: RoomState,
+  tileIndex: number,
+  reason?: { kind: "declined" | "bankBankruptcy"; playerId: string },
+): void {
   const tile = BOARD[tileIndex];
   if (tile.kind !== "street" && tile.kind !== "railroad" && tile.kind !== "utility") return;
   if (room.properties[tileIndex]) return;
+  const startedAt = Date.now();
   room.auction = {
     tileIndex,
     highBid: 0,
     highBidderId: null,
     passedIds: [],
-    startedAt: Date.now(),
+    startedAt,
+    // 30s opening window. Refreshed on every bid in placeBid below so
+    // a hot back-and-forth doesn't time out mid-bidding war.
+    deadline: startedAt + AUCTION_DURATION_MS,
+    reason: reason ?? null,
   };
   room.phase = "auction";
   log(room, {
@@ -1176,6 +1185,11 @@ export function startAuction(room: RoomState, tileIndex: number): void {
   });
   maybeEndAuction(room);
 }
+
+/** How long an auction stays open with no bid (and how long bidders
+ *  have between bids before the auction auto-resolves to the leader). */
+const AUCTION_DURATION_MS = 30 * 1000;
+const AUCTION_BID_REFRESH_MS = 15 * 1000;
 
 export function placeBid(
   room: RoomState,
@@ -1200,6 +1214,15 @@ export function placeBid(
 
   room.auction.highBid = Math.floor(amount);
   room.auction.highBidderId = playerId;
+  // Refresh the resolve-deadline so the auction extends every time
+  // someone bids — a tight back-and-forth shouldn't time out just
+  // because the original 30s opening window elapsed. Only extend when
+  // the new deadline is FURTHER than the existing one (a quick bid
+  // shouldn't shorten the window).
+  const refreshed = Date.now() + AUCTION_BID_REFRESH_MS;
+  if (!room.auction.deadline || refreshed > room.auction.deadline) {
+    room.auction.deadline = refreshed;
+  }
   log(room, {
     en: `${p.name} bids $${room.auction.highBid}`,
     ru: `${p.name} ставит $${room.auction.highBid}`,
@@ -1522,6 +1545,7 @@ function bankruptPlayer(room: RoomState, p: Player, to?: Player): void {
       delete room.properties[idx];
       if (!wasMortgaged) {
         room.pendingBankAuctionTiles.push(idx);
+        room.pendingBankAuctionInitiatorId = p.id;
       }
     }
   }
@@ -1548,8 +1572,18 @@ function bankruptPlayer(room: RoomState, p: Player, to?: Player): void {
 function startNextBankAuctionIfPending(room: RoomState): void {
   if (room.auction) return;
   const next = room.pendingBankAuctionTiles.shift();
-  if (next === undefined) return;
-  startAuction(room, next);
+  if (next === undefined) {
+    // Chain finished — clear the initiator marker so a fresh
+    // bankruptcy down the line carries its own attribution.
+    room.pendingBankAuctionInitiatorId = null;
+    return;
+  }
+  const initiatorId = room.pendingBankAuctionInitiatorId;
+  startAuction(
+    room,
+    next,
+    initiatorId ? { kind: "bankBankruptcy", playerId: initiatorId } : undefined,
+  );
 }
 
 function returnBuildingsToBank(room: RoomState, prop: OwnedProperty): void {

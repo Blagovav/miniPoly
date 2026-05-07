@@ -177,7 +177,12 @@ function submit() {
 
 const L = computed(() => isRu.value
   ? {
-      eyebrow: "Отправка гонца",
+      // Unified «Обмен» language across the app — playtester 2026-05-07
+      // «привести к единому знаменателю предложить обмен и отправить
+      // гонца, один стейт». The «гонец» metaphor was a stale artefact
+      // from the v0 medieval theme; surface buttons everywhere now read
+      // «ПРЕДЛОЖИТЬ ОБМЕН» so it's clear the two flows are the same one.
+      eyebrow: "Обмен",
       title: "Предложение обмена",
       addressee: "Адресат",
       noCandidates: "Нет игроков для обмена",
@@ -188,7 +193,7 @@ const L = computed(() => isRu.value
       confirm: "ПОДТВЕРДИТЬ",
     }
   : {
-      eyebrow: "Send messenger",
+      eyebrow: "Trade",
       title: "Trade offer",
       addressee: "To",
       noCandidates: "No players to trade with",
