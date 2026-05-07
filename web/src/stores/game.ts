@@ -114,32 +114,6 @@ export const useGameStore = defineStore("game", () => {
         setTimeout(() => {
           if (landedTile.value?.ts === landTs) landedTile.value = null;
         }, 800);
-
-        // Chance / Community Chest "Advance to X" cards: the server
-        // resolves the card the instant the dice tile is hit, so by
-        // the time we land here room.players[me].position is already
-        // past `to`. Chain another walk forward so the visual matches —
-        // playtester 2026-05-07 «фишка перепрыгивает через все поле,
-        // должна как обычная прыгать». Backward-only cards (back-3,
-        // jail) snap to keep the Hasbro semantics intact.
-        const player = room.value?.players.find((pl) => pl.id === playerId);
-        const finalPos = player?.position;
-        const lastCard = room.value?.lastCard;
-        const cardEffect = lastCard && lastCard.by === playerId
-          ? findCardEffect(lastCard.cardId)
-          : null;
-        const isForwardCard = !!cardEffect && (
-          cardEffect.kind === "advance" ||
-          cardEffect.kind === "nearestRailroad" ||
-          cardEffect.kind === "nearestUtility"
-        );
-        if (finalPos !== undefined && finalPos !== to && isForwardCard) {
-          // Hold animatingPlayerId set across the pause so the toast
-          // and CardModal wait for the FULL chained walk.
-          setTimeout(() => animateMove(playerId, to, finalPos), 600);
-          return;
-        }
-
         // Buffer the animatingPlayerId clear so the result toast pops
         // AFTER the visual landing settles instead of concurrently with
         // the final hop — playtester 2026-05-07 «результат показывается
@@ -241,7 +215,34 @@ export const useGameStore = defineStore("game", () => {
         setTimeout(() => {
           rolling.value = false;
           if (by === myPlayerId.value) haptic("heavy");
-          animateMove(by, from, to);
+          // Chance / Community Chest "Advance to X" cards: by the time
+          // the dice settle, the server's already resolved the card and
+          // pushed the player to the final tile. Walk straight from
+          // `from` to that final position so the chance tile is just a
+          // visual passthrough — playtester 2026-05-07 «фишка
+          // перекидывается, потом резко возвращается, потом идёт
+          // пополям». The previous chained-animation approach split
+          // the walk into two segments with a pause, which read as
+          // teleport+snap+walk in some cases. Single-segment walk is
+          // smoother and matches normal-roll feel. Backward / jail
+          // cards keep the dice-tile target so the snap-back semantic
+          // matches Hasbro (no-GO).
+          let target = to;
+          const player = room.value?.players.find((pl) => pl.id === by);
+          const finalPos = player?.position;
+          const lastCard = room.value?.lastCard;
+          const cardEffect = lastCard && lastCard.by === by
+            ? findCardEffect(lastCard.cardId)
+            : null;
+          const isForwardCard = !!cardEffect && (
+            cardEffect.kind === "advance" ||
+            cardEffect.kind === "nearestRailroad" ||
+            cardEffect.kind === "nearestUtility"
+          );
+          if (finalPos !== undefined && finalPos !== to && isForwardCard) {
+            target = finalPos;
+          }
+          animateMove(by, from, target);
         }, dur);
         break;
       }
