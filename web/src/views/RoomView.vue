@@ -31,6 +31,7 @@ import FriendRequestModal from "../components/FriendRequestModal.vue";
 import TradeBanner from "../components/TradeBanner.vue";
 import TradeModal, { type TradePayload } from "../components/TradeModal.vue";
 import TxnToast from "../components/TxnToast.vue";
+import BankruptcyModal from "../components/BankruptcyModal.vue";
 import Icon from "../components/Icon.vue";
 import LoadingScreen from "../components/LoadingScreen.vue";
 import CoronationModal from "../components/CoronationModal.vue";
@@ -252,6 +253,15 @@ watch(
     const inLobby = p === "lobby";
     const inActiveGame = !!p && p !== "lobby" && p !== "ended";
     setClosingConfirmation(inActiveGame);
+    // Match is over — drop the rejoin marker so the Home «Активная партия»
+    // banner doesn't keep offering to ВЕРНУТЬСЯ to a finished game.
+    // Playtester 2026-05-07 «я победил а все еще есть возврат в партию».
+    if (p === "ended") {
+      try {
+        localStorage.removeItem("activeRoomId");
+        localStorage.removeItem("activeRoomTs");
+      } catch {}
+    }
     // Toggle the figma-green body class so Telegram's safe-area strips
     // above/below the board don't leak the parchment var(--bg). Same trick
     // HomeView uses with home-figma-root. The lobby variant paints the
@@ -1653,6 +1663,7 @@ void t;
       :on-submit="submitTrade"
     />
     <TxnToast v-if="game.room" />
+    <BankruptcyModal v-if="game.room" />
     <FriendRequestModal
       v-if="game.incomingFriendRequests.length > 0"
       :request="game.incomingFriendRequests[0]"

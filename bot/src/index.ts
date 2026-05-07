@@ -35,7 +35,7 @@ if (bot) {
       lang === "ru"
         ? roomId
           ? `Тебя пригласили в комнату <b>${roomId}</b>. Жми «Играть»!`
-          : "Привет! Minipoly — Монополия в Telegram 🎲\n\nЖми кнопку ниже и стартуй игру — приглашай друзей, кидай кости, скупай города.\n\n✅ Бот будет пинговать, когда твой ход."
+          : "Привет! Minipoly — экономическая игра в Telegram 🎲\n\nПриглашай друзей, кидай кости, покупай города и строй свою империю.\n\n✅ Бот будет пинговать, когда твой ход."
         : roomId
           ? `You've been invited to room <b>${roomId}</b>. Tap to join!`
           : "Welcome to Minipoly on Telegram 🎲\n\nTap below to play. Invite friends, roll dice, buy streets.\n\n✅ Bot will ping you when it's your turn.";

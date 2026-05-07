@@ -587,7 +587,12 @@ const L = computed(() => isRu.value
 }
 .trade-col__list {
   flex: 1 1 0;
-  min-height: 0;
+  /* Ensure the list shows ~3-4 rows even when cash + jail inputs are
+     present below. With min-height: 0 the inputs (~76px combined) ate
+     most of a 220px column and the list collapsed to ~52px — only one
+     row visible — playtester 2026-05-07 «не могу добавить несколько».
+     180px gives the list real estate for 3 properties + the rest scroll. */
+  min-height: 180px;
   overflow-y: auto;
   display: flex;
   flex-direction: column;

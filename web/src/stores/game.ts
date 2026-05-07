@@ -1,8 +1,16 @@
 import { defineStore } from "pinia";
 import { computed, ref } from "vue";
 import type { RoomState, ServerMessage } from "../../../shared/types";
+import type { CardEffect } from "../../../shared/cards";
+import { CHANCE_CARDS, CHEST_CARDS } from "../../../shared/cards";
 import { useTelegram } from "../composables/useTelegram";
 import { diceDurationMs, startStep, stopStep } from "./../composables/useSounds";
+
+function findCardEffect(cardId: string): CardEffect | null {
+  const c = CHANCE_CARDS.find((x) => x.id === cardId)
+    ?? CHEST_CARDS.find((x) => x.id === cardId);
+  return c ? c.effect : null;
+}
 
 export interface ChatMessage {
   id: string;
@@ -100,16 +108,48 @@ export const useGameStore = defineStore("game", () => {
     const tick = () => {
       if (current === to) {
         stopStep();
-        animatingPlayerId.value = null;
-        const next = { ...animatedPositions.value };
-        delete next[playerId];
-        animatedPositions.value = next;
         if (isMe) haptic("medium");
         const landTs = Date.now();
         landedTile.value = { tileIndex: to, playerId, ts: landTs };
         setTimeout(() => {
           if (landedTile.value?.ts === landTs) landedTile.value = null;
         }, 800);
+
+        // Chance / Community Chest "Advance to X" cards: the server
+        // resolves the card the instant the dice tile is hit, so by
+        // the time we land here room.players[me].position is already
+        // past `to`. Chain another walk forward so the visual matches —
+        // playtester 2026-05-07 «фишка перепрыгивает через все поле,
+        // должна как обычная прыгать». Backward-only cards (back-3,
+        // jail) snap to keep the Hasbro semantics intact.
+        const player = room.value?.players.find((pl) => pl.id === playerId);
+        const finalPos = player?.position;
+        const lastCard = room.value?.lastCard;
+        const cardEffect = lastCard && lastCard.by === playerId
+          ? findCardEffect(lastCard.cardId)
+          : null;
+        const isForwardCard = !!cardEffect && (
+          cardEffect.kind === "advance" ||
+          cardEffect.kind === "nearestRailroad" ||
+          cardEffect.kind === "nearestUtility"
+        );
+        if (finalPos !== undefined && finalPos !== to && isForwardCard) {
+          // Hold animatingPlayerId set across the pause so the toast
+          // and CardModal wait for the FULL chained walk.
+          setTimeout(() => animateMove(playerId, to, finalPos), 600);
+          return;
+        }
+
+        // Buffer the animatingPlayerId clear so the result toast pops
+        // AFTER the visual landing settles instead of concurrently with
+        // the final hop — playtester 2026-05-07 «результат показывается
+        // до того как фишка встнет на клетку».
+        setTimeout(() => {
+          animatingPlayerId.value = null;
+          const next = { ...animatedPositions.value };
+          delete next[playerId];
+          animatedPositions.value = next;
+        }, 250);
         return;
       }
       current = (current + 1) % BOARD_LEN;

@@ -279,15 +279,10 @@ watch(
     for (const [id, prev] of lifecycleSnap) {
       if (!next.has(id)) emitSystemToast(prev.name, "left");
     }
-    // Bankruptcies — bankrupt flag flipped false → true. Skipped if me
-    // is the bankrupted player; the existing bankruptcy / coronation
-    // modals already cover that case more emphatically than a toast.
-    for (const [id, cur] of next) {
-      const prev = lifecycleSnap.get(id);
-      if (prev && !prev.bankrupt && cur.bankrupt && id !== game.myPlayerId) {
-        emitSystemToast(cur.name, "bankrupt");
-      }
-    }
+    // Bankruptcies are now surfaced by BankruptcyModal (a prominent
+    // overlay) — playtester 2026-05-07 felt the slate-grey toast was
+    // too quiet and asked for a separate window. The toast path is
+    // intentionally skipped here so we don't double-notify.
     lifecycleSnap.clear();
     for (const [k, v] of next) lifecycleSnap.set(k, v);
   },
