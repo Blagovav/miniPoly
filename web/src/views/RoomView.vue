@@ -475,6 +475,16 @@ function leaveRoom() {
   setTimeout(() => router.replace({ name: "home" }), 100);
 }
 
+function restartRoom() {
+  // Host taps СЫГРАТЬ СНОВА on the end-of-game CoronationModal — fire
+  // a `restartRoom` WS message; server resets per-game state and flips
+  // phase=lobby. CoronationModal's open prop is gated on phase==='ended'
+  // (driven by isEnded above), so the modal closes itself once the new
+  // state arrives. No routing needed — players stay in the same room.
+  haptic("medium");
+  ws.send({ type: "restartRoom" });
+}
+
 function openLeaveConfirm() {
   haptic("light");
   leaveConfirmOpen.value = true;
@@ -1456,16 +1466,17 @@ void t;
         :on-friend-request="sendFriendRequest"
         :on-profile-open="openProfile"
         :on-close="() => router.replace({ name: 'home' })"
-        :on-play-again="() => router.replace({ name: 'create' })"
-        :on-configure="() => router.replace({ name: 'create' })"
+        :on-play-again="restartRoom"
+        :on-configure="restartRoom"
         :on-ready-toggle="ready"
       />
-      <!-- Both onPlayAgain / onConfigure route to /create so the host
-           lands on the match-config screen rather than the «join an
-           existing room» list — playtester 2026-05-07 «должна идти в
-           лобби, не в меню поиска». A real in-place restart RPC (same
-           room, reset phase=lobby) is a separate piece of work; for
-           now /create at least avoids the search dead-end. -->
+      <!-- onPlayAgain / onConfigure both fire `restartRoom` over WS,
+           which the server runs through engine.restartRoom: same room,
+           same player list, all per-game state wiped, phase flipped to
+           "lobby". The client re-renders the existing lobby UI from
+           the broadcast state, so the host's friends are right there
+           ready to ready-up again. Playtester 2026-05-07 «надо сделать
+           как они хотят, в лобби». -->
     </template>
 
     <!-- ── Initial load spinner (sigil, matches mockup) ── -->

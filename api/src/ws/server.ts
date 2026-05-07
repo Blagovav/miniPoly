@@ -19,6 +19,7 @@ import {
   reassignHostIfNeeded,
   removePlayer,
   resolveTrade,
+  restartRoom,
   rollAndMove,
   rollForOrder,
   selectToken,
@@ -254,6 +255,8 @@ function handleMessage(conn: Conn, ws: WebSocket, msg: ClientMessage): void {
       return handleLeave(conn);
     case "destroyRoom":
       return handleDestroyRoom(conn);
+    case "restartRoom":
+      return handleRestartRoom(conn);
     case "buildHouse":
       return handleBuildHouse(conn, msg.tileIndex);
     case "sellHouse":
@@ -802,6 +805,26 @@ function handleLeave(conn: Conn): void {
   onStateChange(ctx.room);
   conn.roomId = null;
   conn.playerId = null;
+}
+
+/** Host taps СЫГРАТЬ СНОВА on the end-of-game CoronationModal — same
+ *  room, same players, fresh round. Engine.restartRoom wipes per-game
+ *  state and flips phase=lobby; we then sendState so every connected
+ *  client re-renders the lobby with the existing player list. */
+function handleRestartRoom(conn: Conn): void {
+  const ctx = getRoomAndPlayer(conn);
+  if (!ctx) return;
+  if (ctx.room.hostId !== conn.playerId) {
+    conn.send({ type: "error", message: "only host can restart room" });
+    return;
+  }
+  const res = restartRoom(ctx.room);
+  if (!res.ok) {
+    conn.send({ type: "error", message: res.error ?? "can't restart" });
+    return;
+  }
+  sendState(ctx.room.id);
+  onStateChange(ctx.room);
 }
 
 function handleDestroyRoom(conn: Conn): void {

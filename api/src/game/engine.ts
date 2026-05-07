@@ -79,6 +79,60 @@ export function createRoom(
   };
 }
 
+/**
+ * End-of-game «СЫГРАТЬ СНОВА» — host requests a fresh round in the
+ * SAME room, with the SAME players and settings. Wipes everything
+ * per-game (cash, position, jail, properties, decks, log, auction,
+ * trades, banks, deadlines, decks, etc.) and flips phase back to
+ * "lobby" so the existing ready-check flow can run again. Bots and
+ * disconnected humans stay seated — bots auto-ready on the start
+ * step, humans flip ready themselves.
+ *
+ * Bankrupt players FROM THE PREVIOUS GAME are revived: bankrupt=false,
+ * fresh starting cash, re-seated. Players who explicitly LEFT are
+ * already gone from `room.players` (leaveActiveGame removes them) and
+ * stay gone.
+ */
+export function restartRoom(room: RoomState): { ok: boolean; error?: string } {
+  if (room.phase !== "ended") return { ok: false, error: "not ended" };
+  // Per-room game state — match the freshly-built shape from createRoom.
+  room.currentTurn = 0;
+  room.turnCount = 0;
+  room.turnDeadline = null;
+  room.phase = "lobby";
+  room.dice = null;
+  room.doublesInARow = 0;
+  room.properties = {};
+  room.log = [];
+  room.lastCard = null;
+  room.cardHistory = [];
+  room.auction = null;
+  room.pendingTrade = null;
+  room.winnerId = null;
+  room.houseBank = HOUSE_BANK_SIZE;
+  room.hotelBank = HOTEL_BANK_SIZE;
+  room.startedAt = null;
+  room.preRollBrackets = [];
+  room.preRollOrder = [];
+  room.preRollRolls = {};
+  room.chanceQueue = shuffle(CHANCE_CARDS.map((_, i) => i));
+  room.chestQueue = shuffle(CHEST_CARDS.map((_, i) => i));
+  room.pendingBankAuctionTiles = [];
+  room.pendingBankAuctionInitiatorId = null;
+  // Per-player game state — keep identity (id, tgUserId, name, avatar,
+  // color, token, connected, isBot) but wipe everything earned this round.
+  for (const p of room.players) {
+    p.position = 0;
+    p.cash = STARTING_CASH;
+    p.inJail = false;
+    p.jailTurns = 0;
+    p.getOutCards = [];
+    p.bankrupt = false;
+    p.ready = false;
+  }
+  return { ok: true };
+}
+
 export function addPlayer(
   room: RoomState,
   tgUserId: number,
