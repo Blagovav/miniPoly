@@ -659,6 +659,16 @@ const ownerCapSrc = computed(() => `/figma/shop/caps/${capTypeFor(owner.value?.t
    primary-bar buttons underneath; only the card body catches taps so
    selectTile / propose-trade etc. inside it still work. */
 .info-scrim--must-buy {
+  /* Must-buy mode: the primary-bar (z 200) owns the buy / auction CTAs.
+     Drop the scrim back UNDER the bar (130 < 200) so the buttons sit
+     on top visually AND catch taps natively. The base scrim's 210 was
+     bumped above the bar for the inspect case (playtester 2026-05-07
+     «кнопка бросит кубики вылезла поверх попапа»), but in must-buy
+     that lockout made the buy/auction CTAs untappable on iOS Telegram
+     WebView — playtester 2026-05-07 «кнопки не нажать». pointer-events
+     stays none as a belt-and-suspenders fallback for any click that
+     does land on the scrim plane. */
+  z-index: 130;
   padding-bottom: calc(160px + var(--sab, 0px));
   pointer-events: none;
 }
