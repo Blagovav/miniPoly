@@ -870,7 +870,9 @@ const leaderboard = computed(() => {
     .map((p) => ({
       id: p.id,
       name: p.name,
-      cash: p.cash,
+      // cashFor honours the freeze so leaderboard rows / sort don't
+      // reshuffle while the pawn is still walking to the resolving tile.
+      cash: game.cashFor(p.id),
       avatar: p.avatar,
       token: p.token,
       color: p.color,
@@ -1238,7 +1240,7 @@ void t;
                 <span>{{ locale === 'ru' ? 'Ваш бюджет' : 'Your budget' }}</span>
                 <span class="board-hud__budget-val">
                   <img src="/figma/room/icon-money.webp" alt="" />
-                  {{ game.me.cash }}
+                  {{ game.cashFor(game.me.id) }}
                 </span>
               </div>
               <div class="board-hud__budget-row">
@@ -1296,7 +1298,7 @@ void t;
               <div class="turn-card__body">
                 <div class="turn-card__name">{{ slot.player.name }}</div>
                 <div class="turn-card__stats">
-                  <span><img src="/figma/room/icon-money.webp" alt=""/>{{ slot.player.cash }}</span>
+                  <span><img src="/figma/room/icon-money.webp" alt=""/>{{ game.cashFor(slot.player.id) }}</span>
                   <span><img src="/figma/room/icon-chair.webp" alt=""/>{{ propCountFor(slot.player.id) }}</span>
                 </div>
               </div>
@@ -2143,6 +2145,14 @@ void t;
   padding: 4px 12px;
   width: min(245px, 90%);
   box-shadow: 0 4px 8px rgba(0, 0, 0, 0.18);
+  /* Pin to the bottom of the absolute-inset .board-hud container so the
+     budget card doesn't jump vertically every time the timer flips
+     between visible (turnRemainingSec > 0) and hidden — playtester
+     2026-05-08 «изза таймера окно с собственностью и балликом прыгает
+     туда сюда. сделай на 1м месте». dice + turn-name + timer stay
+     stacked at the top with their own `gap`; budget sits anchored
+     regardless of what's above it. */
+  margin-top: auto;
   /* Tappable: opens own profile so the player can see what they own
      (playtester 2026-05-06: «постоянно пытаюсь тыкнуть сюда чтобы
      посмотреть что у меня»). Reset button defaults so the cell still

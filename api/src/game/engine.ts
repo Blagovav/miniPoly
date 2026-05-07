@@ -1387,10 +1387,18 @@ function finishAuction(room: RoomState): void {
       hotel: false,
       mortgaged: false,
     };
-    log(room, {
-      en: `${winner.name} won auction: ${tile.name.en} for $${a.highBid}`,
-      ru: `${winner.name} выиграл аукцион: ${tile.name.ru} за $${a.highBid}`,
-    });
+    // Reuse the "buy" txn so TxnToast pops «Купил X за Y» on the
+    // winner's screen — playtester 2026-05-08 «я тока что у бота
+    // выиграл аукцион и что я получил не было». Without the txn the
+    // log entry was just text and the toast skipped it.
+    log(
+      room,
+      {
+        en: `${winner.name} won auction: ${tile.name.en} for $${a.highBid}`,
+        ru: `${winner.name} выиграл аукцион: ${tile.name.ru} за $${a.highBid}`,
+      },
+      { kind: "buy", amount: a.highBid, actorId: winner.id, tileIndex: a.tileIndex },
+    );
   } else {
     log(room, {
       en: `Auction ended — winner unavailable, tile returns to bank`,
