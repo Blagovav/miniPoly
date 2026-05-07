@@ -22,7 +22,7 @@ const props = defineProps<{ defaultTab?: Tab }>();
 
 const router = useRouter();
 const { locale } = useI18n();
-const { userId, userName, haptic, notify, tg } = useTelegram();
+const { userId, userName, userPhoto, haptic, notify, tg } = useTelegram();
 const inv = useInventoryStore();
 
 const isRu = computed(() => locale.value === "ru");
@@ -397,6 +397,13 @@ function userInitial() {
   const n = (userName.value || "?").trim();
   return n.charAt(0).toUpperCase() || "?";
 }
+
+// TG photo URLs are CDN-signed and occasionally 404 between sessions —
+// fall through to the colored initial circle if the load fails so the
+// hero never shows a broken-image icon.
+function onAvatarError() {
+  userPhoto.value = "";
+}
 </script>
 
 <template>
@@ -418,7 +425,15 @@ function userInitial() {
       <!-- Hero: avatar, name, stats. Hidden behind sticky header on scroll. -->
       <div class="profile__hero">
         <div class="profile__avatar" :style="{ background: avatarBg }">
-          <span class="profile__avatar-letter">{{ userInitial() }}</span>
+          <img
+            v-if="userPhoto"
+            class="profile__avatar-photo"
+            :src="userPhoto"
+            :alt="userName"
+            referrerpolicy="no-referrer"
+            @error="onAvatarError"
+          />
+          <span v-else class="profile__avatar-letter">{{ userInitial() }}</span>
         </div>
         <h1 class="profile__name">{{ userName || (isRu ? "Игрок" : "Player") }}</h1>
 
@@ -761,6 +776,14 @@ function userInitial() {
     inset 0 1px 1px rgba(255, 255, 255, 0.25),
     inset 0 -1px 1px rgba(0, 0, 0, 0.2);
   margin-bottom: 12px;
+  overflow: hidden;
+}
+.profile__avatar-photo {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 50%;
+  display: block;
 }
 .profile__avatar-letter {
   font-family: 'SF Pro Rounded', 'Unbounded', sans-serif;
